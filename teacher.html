@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - Literary Quest</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            overflow: auto;
+            display: block;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Literary Quest — Teacher Dashboard</h1>
+        <p style="color: #888; margin-bottom: 24px;">Review student progress, typed responses, and performance data for <em>The Things They Carried</em>.</p>
+
+        <!-- Summary Stats -->
+        <div class="stats-grid" id="stats-grid"></div>
+
+        <!-- Controls -->
+        <div class="dashboard-controls">
+            <select id="student-filter">
+                <option value="all">All Students</option>
+            </select>
+            <select id="zone-filter">
+                <option value="all">All Zones</option>
+                <option value="weight">The Weight of War</option>
+                <option value="truth">Story-Truth vs. Happening-Truth</option>
+                <option value="memory">Memory & Trauma</option>
+                <option value="courage">Identity & Courage</option>
+            </select>
+            <select id="type-filter">
+                <option value="all">All Response Types</option>
+                <option value="typed">Written Responses Only</option>
+            </select>
+            <button class="btn btn-primary" id="export-btn">Export to CSV</button>
+            <button class="btn btn-secondary" id="refresh-btn">Refresh Data</button>
+        </div>
+
+        <!-- Student Responses -->
+        <div id="responses-container"></div>
+
+        <!-- Empty State -->
+        <div id="empty-state" style="text-align: center; padding: 60px 20px; display: none;">
+            <p style="font-size: 1.2em; color: #555;">No student data yet.</p>
+            <p style="color: #444; margin-top: 8px;">Student responses will appear here as they complete challenges.</p>
+            <p style="color: #444; margin-top: 16px; font-size: 0.9em;">
+                Note: This prototype uses browser localStorage — data is stored on the same computer where students play.
+                For a production version, data would sync to a server.
+            </p>
+        </div>
+    </div>
+
+    <script>
+    /**
+     * Teacher Dashboard
+     * Reads student progress and typed responses from localStorage
+     * Provides filtering, review, and CSV export capabilities.
+     */
+
+    const STORAGE_KEY = 'literary_quest_progress';
+    const RESPONSES_KEY = 'literary_quest_responses';
+
+    function loadData() {
+        const progress = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        const responses = JSON.parse(localStorage.getItem(RESPONSES_KEY) || '[]');
+        return { progress, responses };
+    }
+
+    function renderDashboard() {
+        const { progress, responses } = loadData();
+
+        // Group responses by student
+        const studentMap = {};
+        responses.forEach(r => {
+            if (!studentMap[r.studentName]) {
+                studentMap[r.studentName] = [];
+            }
+            studentMap[r.studentName].push(r);
+        });
+
+        // Populate student filter
+        const studentFilter = document.getElementById('student-filter');
+        const currentFilter = studentFilter.value;
+        studentFilter.innerHTML = '<option value="all">All Students</option>';
+        Object.keys(studentMap).sort().forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            studentFilter.appendChild(opt);
+        });
+        studentFilter.value = currentFilter || 'all';
+
+        // Stats
+        const statsGrid = document.getElementById('stats-grid');
+        const totalStudents = Object.keys(studentMap).length;
+        const totalResponses = responses.length;
+        const typedResponses = responses.filter(r => r.response && r.response.length > 0).length;
+
+        let avgWords = 0;
+        if (typedResponses > 0) {
+            const totalWords = responses
+                .filter(r => r.response)
+                .reduce((sum, r) => sum + r.response.split(/\s+/).length, 0);
+            avgWords = Math.round(totalWords / typedResponses);
+        }
+
+        statsGrid.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value">${totalStudents}</div>
+                <div class="stat-label">Students</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${totalResponses}</div>
+                <div class="stat-label">Total Responses</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${typedResponses}</div>
+                <div class="stat-label">Written Responses</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${avgWords}</div>
+                <div class="stat-label">Avg Words per Response</div>
+            </div>
+        `;
+
+        // Progress data if available
+        if (progress) {
+            const completedZones = progress.zonesCompleted ? progress.zonesCompleted.length : 0;
+            const totalChallenges = Object.keys(progress.challengeResults || {}).length;
+
+            statsGrid.innerHTML += `
+                <div class="stat-card">
+                    <div class="stat-value">${completedZones}/4</div>
+                    <div class="stat-label">Zones Completed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${progress.totalScore || 0}</div>
+                    <div class="stat-label">Total Score</div>
+                </div>
+            `;
+        }
+
+        // Render responses
+        const container = document.getElementById('responses-container');
+        const emptyState = document.getElementById('empty-state');
+        const selectedStudent = studentFilter.value;
+        const selectedZone = document.getElementById('zone-filter').value;
+        const selectedType = document.getElementById('type-filter').value;
+
+        if (totalStudents === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        emptyState.style.display = 'none';
+
+        let html = '';
+        const students = selectedStudent === 'all' ? Object.keys(studentMap).sort() : [selectedStudent];
+
+        students.forEach(name => {
+            if (!studentMap[name]) return;
+            let studentResponses = studentMap[name];
+
+            // Apply zone filter
+            if (selectedZone !== 'all') {
+                studentResponses = studentResponses.filter(r =>
+                    r.challengeId && r.challengeId.startsWith(selectedZone)
+                );
+            }
+
+            // Apply type filter
+            if (selectedType === 'typed') {
+                studentResponses = studentResponses.filter(r =>
+                    r.response && r.response.length > 0
+                );
+            }
+
+            if (studentResponses.length === 0) return;
+
+            html += `<div class="student-card">`;
+            html += `<h3>${escapeHtml(name)}</h3>`;
+            html += `<p style="color: #666; font-size: 0.85em; margin-bottom: 12px;">${studentResponses.length} response(s)</p>`;
+
+            studentResponses.forEach(r => {
+                const wordCount = r.response ? r.response.split(/\s+/).filter(w => w).length : 0;
+                const date = new Date(r.timestamp).toLocaleString();
+
+                html += `<div class="response-item">`;
+                if (r.question) {
+                    html += `<div class="question">${escapeHtml(r.question)}</div>`;
+                }
+                if (r.response) {
+                    html += `<div class="answer">${escapeHtml(r.response)}</div>`;
+                }
+                html += `<div class="meta">Challenge: ${r.challengeId} | ${wordCount} words | ${date}</div>`;
+                html += `</div>`;
+            });
+
+            html += `</div>`;
+        });
+
+        container.innerHTML = html || '<p style="color: #555; text-align: center; padding: 40px;">No responses match your filters.</p>';
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function exportToCSV() {
+        const { responses } = loadData();
+        if (responses.length === 0) {
+            alert('No data to export yet.');
+            return;
+        }
+
+        const headers = ['Student Name', 'Challenge ID', 'Question', 'Response', 'Word Count', 'Timestamp'];
+        const rows = responses.map(r => [
+            r.studentName,
+            r.challengeId,
+            r.question || '',
+            r.response || '',
+            r.response ? r.response.split(/\s+/).filter(w => w).length : 0,
+            r.timestamp
+        ]);
+
+        let csv = headers.join(',') + '\n';
+        rows.forEach(row => {
+            csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `literary_quest_responses_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Event listeners
+    document.getElementById('student-filter').addEventListener('change', renderDashboard);
+    document.getElementById('zone-filter').addEventListener('change', renderDashboard);
+    document.getElementById('type-filter').addEventListener('change', renderDashboard);
+    document.getElementById('export-btn').addEventListener('click', exportToCSV);
+    document.getElementById('refresh-btn').addEventListener('click', renderDashboard);
+
+    // Initial render
+    renderDashboard();
+    </script>
+</body>
+</html>

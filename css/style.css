@@ -1,0 +1,599 @@
+/* === Base Styles === */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1a1a2e;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: #e0e0e0;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+#game-container {
+    position: relative;
+    width: 1024px;
+    height: 768px;
+}
+
+/* === Overlay System === */
+.overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+.overlay.hidden { display: none; }
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.overlay-content {
+    background: linear-gradient(135deg, #16213e, #1a1a2e);
+    border: 2px solid #e94560;
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 0 40px rgba(233, 69, 96, 0.3);
+}
+
+/* === Typography === */
+.overlay-content h2 {
+    color: #e94560;
+    font-size: 1.5em;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+    padding-bottom: 8px;
+}
+
+.overlay-content h3 {
+    color: #ffd700;
+    font-size: 1.15em;
+    margin: 16px 0 8px;
+}
+
+.overlay-content p, .overlay-content label {
+    color: #c4c4c4;
+    line-height: 1.7;
+    margin-bottom: 12px;
+    font-size: 0.95em;
+}
+
+.passage-text {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid #e94560;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-style: italic;
+    color: #d4d4d4;
+    line-height: 1.8;
+}
+
+/* === Representation Tabs (UDL: Multiple Representations) === */
+.rep-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.rep-tab {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    color: #c4c4c4;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85em;
+    transition: all 0.2s;
+}
+
+.rep-tab:hover, .rep-tab.active {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: #e94560;
+    color: #fff;
+}
+
+.rep-content { display: none; }
+.rep-content.active { display: block; }
+
+/* === Multiple Choice === */
+.mc-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.mc-option {
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #d4d4d4;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95em;
+    text-align: left;
+    transition: all 0.2s;
+    line-height: 1.5;
+}
+
+.mc-option:hover {
+    background: rgba(233, 69, 96, 0.12);
+    border-color: rgba(233, 69, 96, 0.5);
+}
+
+.mc-option.selected {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: #e94560;
+    color: #fff;
+}
+
+.mc-option.correct {
+    background: rgba(46, 204, 113, 0.2);
+    border-color: #2ecc71;
+    color: #2ecc71;
+}
+
+.mc-option.incorrect {
+    background: rgba(231, 76, 60, 0.2);
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* === Drag and Drop === */
+.drag-container {
+    display: flex;
+    gap: 24px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.drag-source-area, .drag-target-area {
+    flex: 1;
+    min-width: 250px;
+}
+
+.drag-item {
+    padding: 10px 14px;
+    background: rgba(233, 69, 96, 0.15);
+    border: 1px solid rgba(233, 69, 96, 0.4);
+    border-radius: 6px;
+    color: #e0e0e0;
+    cursor: grab;
+    margin: 6px 0;
+    font-size: 0.9em;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.drag-item:active { cursor: grabbing; }
+
+.drag-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+.drop-zone {
+    min-height: 45px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px;
+    margin: 8px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.drop-zone.drag-over {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.drop-zone-label {
+    color: #888;
+    font-size: 0.85em;
+    font-style: italic;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.drop-zone .drag-item {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.4);
+}
+
+.drop-zone.correct {
+    border-color: #2ecc71;
+    background: rgba(46, 204, 113, 0.1);
+}
+
+.drop-zone.incorrect {
+    border-color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+/* === Typed Response === */
+.typed-response-area {
+    margin: 16px 0;
+}
+
+.typed-response-area textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 0.95em;
+    line-height: 1.6;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.typed-response-area textarea:focus {
+    outline: none;
+    border-color: #e94560;
+}
+
+.typed-response-area textarea::placeholder {
+    color: #666;
+}
+
+.word-count {
+    text-align: right;
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* === Self-Reflection Panel === */
+.reflection-panel {
+    background: rgba(255, 215, 0, 0.08);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.reflection-panel h3 {
+    color: #ffd700;
+    font-size: 1em;
+    margin-bottom: 8px;
+}
+
+.reflection-panel p {
+    color: #c4a94d;
+    font-size: 0.9em;
+}
+
+.reflection-checklist {
+    list-style: none;
+    margin: 8px 0;
+}
+
+.reflection-checklist li {
+    padding: 6px 0;
+    color: #c4a94d;
+    font-size: 0.9em;
+}
+
+.reflection-checklist li::before {
+    content: '\2610 ';
+    margin-right: 8px;
+}
+
+/* === Buttons === */
+.btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 4px;
+}
+
+.btn-primary {
+    background: #e94560;
+    color: #fff;
+}
+
+.btn-primary:hover { background: #d63851; }
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #c4c4c4;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.btn-hint {
+    background: rgba(255, 215, 0, 0.15);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    font-size: 0.85em;
+    padding: 6px 14px;
+}
+
+.btn-hint:hover {
+    background: rgba(255, 215, 0, 0.25);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+/* === Hint System (UDL: Scaffolding) === */
+.hint-box {
+    background: rgba(255, 215, 0, 0.08);
+    border-left: 3px solid #ffd700;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+    animation: slideIn 0.3s ease;
+}
+
+.hint-box p {
+    color: #c4a94d;
+    font-size: 0.9em;
+    margin: 0;
+}
+
+.hint-level {
+    font-size: 0.75em;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+/* === Progress/Difficulty Indicators === */
+.difficulty-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.difficulty-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.difficulty-dot.active { background: #e94560; }
+.difficulty-dot.easy.active { background: #2ecc71; }
+.difficulty-dot.medium.active { background: #f39c12; }
+.difficulty-dot.hard.active { background: #e94560; }
+
+.difficulty-label {
+    font-size: 0.8em;
+    color: #888;
+    margin-left: 4px;
+}
+
+/* === Feedback Messages === */
+.feedback {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 12px 0;
+    animation: slideIn 0.3s ease;
+}
+
+.feedback.success {
+    background: rgba(46, 204, 113, 0.15);
+    border: 1px solid rgba(46, 204, 113, 0.3);
+    color: #2ecc71;
+}
+
+.feedback.error {
+    background: rgba(231, 76, 60, 0.15);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    color: #e74c3c;
+}
+
+.feedback.info {
+    background: rgba(52, 152, 219, 0.15);
+    border: 1px solid rgba(52, 152, 219, 0.3);
+    color: #3498db;
+}
+
+/* === Audio Toggle === */
+.audio-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #c4c4c4;
+    font-size: 1.2em;
+    cursor: pointer;
+    z-index: 999;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.audio-toggle:hover {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: #e94560;
+}
+
+/* === Zone Progress Badges === */
+.zone-progress {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0;
+}
+
+.zone-progress-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.zone-progress-dot.completed { background: #2ecc71; }
+.zone-progress-dot.current { background: #ffd700; }
+
+/* === Name Entry === */
+.name-entry {
+    text-align: center;
+    padding: 20px;
+}
+
+.name-entry input {
+    width: 300px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 1.1em;
+    text-align: center;
+    margin: 16px 0;
+}
+
+.name-entry input:focus {
+    outline: none;
+    border-color: #e94560;
+}
+
+.name-entry input::placeholder { color: #555; }
+
+/* === Scrollbar === */
+.overlay-content::-webkit-scrollbar { width: 6px; }
+.overlay-content::-webkit-scrollbar-track { background: transparent; }
+.overlay-content::-webkit-scrollbar-thumb {
+    background: rgba(233, 69, 96, 0.3);
+    border-radius: 3px;
+}
+
+/* === Teacher Dashboard Styles (teacher.html) === */
+.dashboard {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px;
+    min-height: 100vh;
+}
+
+.dashboard body { overflow: auto; }
+
+.dashboard h1 {
+    color: #e94560;
+    font-size: 1.8em;
+    margin-bottom: 24px;
+}
+
+.dashboard-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.dashboard-controls select,
+.dashboard-controls input {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-family: inherit;
+}
+
+.student-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.student-card h3 {
+    color: #e94560;
+    margin-bottom: 12px;
+}
+
+.response-item {
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 3px solid #e94560;
+    padding: 12px 16px;
+    margin: 8px 0;
+    border-radius: 0 6px 6px 0;
+}
+
+.response-item .question { color: #ffd700; font-size: 0.9em; margin-bottom: 4px; }
+.response-item .answer { color: #d4d4d4; line-height: 1.6; }
+.response-item .meta { color: #666; font-size: 0.8em; margin-top: 4px; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.stat-card .stat-value {
+    font-size: 2em;
+    color: #e94560;
+    font-weight: bold;
+}
+
+.stat-card .stat-label {
+    color: #888;
+    font-size: 0.85em;
+    margin-top: 4px;
+}

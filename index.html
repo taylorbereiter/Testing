@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Things They Carried - Literary Quest</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <!-- UI Overlays (outside Phaser, for rich HTML interactions) -->
+    <div id="overlay" class="overlay hidden">
+        <div id="overlay-content" class="overlay-content"></div>
+    </div>
+
+    <!-- Audio toggle -->
+    <button id="audio-toggle" class="audio-toggle" title="Toggle audio descriptions">
+        <span id="audio-icon">&#128266;</span>
+    </button>
+
+    <script src="js/content.js"></script>
+    <script src="js/scaffolding.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
