@@ -7,2490 +7,1228 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:monospace;overflow:hidden}
-#gameContainer{position:relative;width:800px;height:600px;image-rendering:pixelated;image-rendering:crisp-edges}
+#gc{position:relative;width:800px;height:600px;image-rendering:pixelated;image-rendering:crisp-edges}
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
 </style>
 </head>
 <body>
-<div id="gameContainer">
-<canvas id="c" width="800" height="600"></canvas>
-</div>
+<div id="gc"><canvas id="c" width="800" height="600"></canvas></div>
 <script>
 // ===================================================================
-// LEXICON LEGENDS - Full Rewrite - Pokémon Quality
+// LEXICON LEGENDS — Pokémon-Quality Literary Creature RPG
 // ===================================================================
-const C = document.getElementById('c');
-const X = C.getContext('2d');
-X.imageSmoothingEnabled = false;
+const C=document.getElementById('c'),X=C.getContext('2d');
+X.imageSmoothingEnabled=false;
+const W=800,H=600,TS=32;
+let frame=0,gameState='title',keys={},kj={};
+document.addEventListener('keydown',e=>{if(!keys[e.code])kj[e.code]=1;keys[e.code]=1;e.preventDefault()});
+document.addEventListener('keyup',e=>{keys[e.code]=0});
 
-// --- Constants ---
-const W = 800, H = 600, TS = 32;
-const FPS = 60;
-let frame = 0, dt = 0, lastTime = 0;
-let gameState = 'title';
-let keys = {}, keysJust = {};
-
-// --- Input ---
-document.addEventListener('keydown', e => {
-  if (!keys[e.code]) keysJust[e.code] = true;
-  keys[e.code] = true;
-  // Handle single-press actions
-  if (gameState==='overworld') {
-    if (e.code==='KeyM') GameMenu.toggle();
-    if (e.code==='Space'||e.code==='Enter') interact();
-  }
-  if (gameState==='dialogue') {
-    if (e.code==='Space'||e.code==='Enter'||e.code==='KeyZ') Dialogue.advance();
-  }
-  if (gameState==='menu') {
-    if (e.code==='Escape'||e.code==='KeyM') GameMenu.close();
-  }
-  e.preventDefault();
-});
-document.addEventListener('keyup', e => { keys[e.code] = false; });
-
-function justPressed(code) { return keysJust[code]; }
-
-// --- Audio Engine ---
-const Audio = {
-  ctx: null,
-  masterGain: null,
-  bgmOsc: [],
-  init() {
-    if (this.ctx) return;
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.15;
-    this.masterGain.connect(this.ctx.destination);
-  },
-  tone(freq, dur, type='square', vol=0.5, delay=0) {
-    if (!this.ctx) this.init();
-    const o = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    o.type = type;
-    o.frequency.value = freq;
-    g.gain.value = 0;
-    g.gain.setValueAtTime(vol * 0.15, this.ctx.currentTime + delay);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + dur);
-    o.connect(g); g.connect(this.masterGain);
-    o.start(this.ctx.currentTime + delay);
-    o.stop(this.ctx.currentTime + delay + dur);
-  },
-  jingle(type) {
-    this.init();
-    const j = {
-      start: [[523,0.12],[659,0.12],[784,0.12],[1047,0.25]],
-      hit: [[200,0.06,'sawtooth'],[150,0.1,'sawtooth']],
-      superHit: [[250,0.06,'sawtooth'],[200,0.08,'sawtooth'],[350,0.12,'sawtooth']],
-      miss: [[400,0.08,'sine'],[300,0.15,'sine']],
-      levelUp: [[523,0.15],[587,0.15],[659,0.15],[784,0.15],[1047,0.3]],
-      catch: [[440,0.12],[440,0.12],[440,0.12],[660,0.1],[880,0.3]],
-      catchFail: [[400,0.1],[300,0.1],[200,0.2]],
-      heal: [[523,0.1,'sine'],[659,0.1,'sine'],[784,0.1,'sine'],[1047,0.15,'sine']],
-      victory: [[523,0.12],[523,0.08],[659,0.12],[784,0.2],[659,0.08],[784,0.08],[1047,0.35]],
-      run: [[500,0.08],[400,0.08],[300,0.12]],
-      select: [[600,0.06],[800,0.06]],
-      bump: [[150,0.06,'sine']],
-      evolve: [[261,0.15],[329,0.15],[392,0.15],[523,0.15],[659,0.15],[784,0.2],[1047,0.35]],
-      encounter: [[200,0.08,'sawtooth'],[300,0.08,'sawtooth'],[200,0.08,'sawtooth'],[400,0.15,'square']],
-      step: [[80,0.03,'sine']],
-    };
-    const notes = j[type];
-    if (!notes) return;
-    let t = 0;
-    for (const n of notes) {
-      this.tone(n[0], n[1], n[2]||'square', n[3]||0.5, t);
-      t += n[1] * 0.9;
-    }
-  },
-  bgm(song) {
-    this.stopBgm();
-    if (!this.ctx) this.init();
-    // Simple looping melody
-    const songs = {
-      town: { tempo: 0.25, notes: [523,587,659,784,659,587,523,440,523,587,659,523,440,392,440,523], bass: [261,261,329,329,261,261,220,220,261,261,329,329,220,220,196,261] },
-      route: { tempo: 0.2, notes: [440,523,587,659,587,523,440,392,440,523,659,784,659,523,440,392], bass: [220,220,293,293,220,220,196,196,220,220,329,329,220,220,196,196] },
-      battle: { tempo: 0.15, notes: [659,659,784,659,523,659,784,1047,784,659,523,440,523,659,784,659], bass: [329,329,392,329,261,329,392,523,392,329,261,220,261,329,392,329] },
-    };
-    const s = songs[song]; if (!s) return;
-    let i = 0;
-    this._bgmInterval = setInterval(() => {
-      this.tone(s.notes[i % s.notes.length], s.tempo * 0.8, 'square', 0.2);
-      this.tone(s.bass[i % s.bass.length], s.tempo * 0.9, 'triangle', 0.15);
-      i++;
-    }, s.tempo * 1000);
-  },
-  stopBgm() { if (this._bgmInterval) { clearInterval(this._bgmInterval); this._bgmInterval = null; } }
+// === AUDIO ===
+const SFX={
+  ctx:null,mg:null,_bgm:null,
+  init(){if(this.ctx)return;this.ctx=new(window.AudioContext||window.webkitAudioContext)();this.mg=this.ctx.createGain();this.mg.gain.value=0.12;this.mg.connect(this.ctx.destination)},
+  t(f,d,tp='square',v=0.4,dl=0){if(!this.ctx)this.init();const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=tp;o.frequency.value=f;g.gain.setValueAtTime(v*0.12,this.ctx.currentTime+dl);g.gain.exponentialRampToValueAtTime(.001,this.ctx.currentTime+dl+d);o.connect(g);g.connect(this.mg);o.start(this.ctx.currentTime+dl);o.stop(this.ctx.currentTime+dl+d)},
+  j(n){this.init();const J={
+    start:[[523,.12],[659,.12],[784,.12],[1047,.25]],
+    hit:[[200,.06,'sawtooth'],[150,.1,'sawtooth']],
+    superHit:[[250,.06,'sawtooth'],[200,.08,'sawtooth'],[350,.12,'sawtooth']],
+    miss:[[400,.08,'sine'],[300,.15,'sine']],
+    levelUp:[[523,.15],[587,.15],[659,.15],[784,.15],[1047,.3]],
+    catch:[[440,.12],[440,.12],[440,.12],[660,.1],[880,.3]],
+    catchFail:[[400,.1],[300,.1],[200,.2]],
+    heal:[[523,.1,'sine'],[659,.1,'sine'],[784,.1,'sine'],[1047,.15,'sine']],
+    victory:[[523,.12],[523,.08],[659,.12],[784,.2],[659,.08],[784,.08],[1047,.35]],
+    run:[[500,.08],[400,.08],[300,.12]],
+    sel:[[600,.06],[800,.06]],
+    bump:[[150,.06,'sine']],
+    evolve:[[261,.15],[329,.15],[392,.15],[523,.15],[659,.15],[784,.2],[1047,.35]],
+    enc:[[200,.08,'sawtooth'],[300,.08,'sawtooth'],[200,.08,'sawtooth'],[400,.15]],
+    step:[[80,.03,'sine']],
+    buy:[[523,.08],[784,.12]],
+    status:[[300,.1,'sawtooth'],[200,.15,'sawtooth']],
+    gymWin:[[523,.15],[659,.15],[784,.15],[1047,.15],[1318,.15],[1568,.25],[2093,.4]],
+    badge:[[440,.1],[554,.1],[659,.1],[880,.2],[1047,.3]],
+  };const ns=J[n];if(!ns)return;let t=0;for(const a of ns){this.t(a[0],a[1],a[2]||'square',a[3]||.4,t);t+=a[1]*.85}},
+  bgm(s){this.stopBgm();if(!this.ctx)this.init();const songs={
+    town:{tempo:.25,mel:[523,587,659,784,659,587,523,440,523,587,659,523,440,392,440,523],bas:[261,261,329,329,261,261,220,220,261,261,329,329,220,220,196,261]},
+    route:{tempo:.2,mel:[440,523,587,659,587,523,440,392,440,523,659,784,659,523,440,392],bas:[220,220,293,293,220,220,196,196,220,220,329,329,220,220,196,196]},
+    battle:{tempo:.14,mel:[659,659,784,659,523,659,784,1047,784,659,523,440,523,659,784,659],bas:[329,329,392,329,261,329,392,523,392,329,261,220,261,329,392,329]},
+    gym:{tempo:.16,mel:[587,659,784,880,784,659,587,523,587,659,880,1047,880,784,659,587],bas:[293,293,392,392,293,293,261,261,293,293,440,440,293,293,329,293]},
+    champion:{tempo:.13,mel:[784,880,1047,784,659,784,880,1175,1047,880,784,659,784,880,1047,1318],bas:[392,392,523,392,329,392,440,587,523,440,392,329,392,440,523,659]},
+  };const song=songs[s];if(!song)return;let i=0;this._bgm=setInterval(()=>{this.t(song.mel[i%song.mel.length],song.tempo*.8,'square',.18);this.t(song.bas[i%song.bas.length],song.tempo*.9,'triangle',.12);i++},song.tempo*1000)},
+  stopBgm(){if(this._bgm){clearInterval(this._bgm);this._bgm=null}}
 };
 
-// --- Pixel Art Sprite System ---
-const Sprites = {
-  cache: {},
-  draw(name, x, y, w, h, flipX=false, palette=null) {
-    const data = this.getData(name);
-    if (!data) return;
-    const pw = data[0].length, ph = data.length;
-    const sx = w / pw, sy = h / ph;
-    X.save();
-    if (flipX) { X.translate(x + w, y); X.scale(-1, 1); x = 0; y = 0; }
-    for (let py = 0; py < ph; py++) {
-      for (let px = 0; px < pw; px++) {
-        const c = data[py][px];
-        if (c === '.') continue;
-        const color = palette ? (palette[c] || c) : this.colorMap[c];
-        if (!color) continue;
-        X.fillStyle = color;
-        X.fillRect(Math.floor(x + px * sx), Math.floor(y + py * sy), Math.ceil(sx), Math.ceil(sy));
+// === TYPE SYSTEM ===
+const TYPES={
+  rhetoric:{name:'Rhetoric',color:'#e74c3c',strong:['poetic','gothic'],weak:['narrative','satirical']},
+  narrative:{name:'Narrative',color:'#3498db',strong:['rhetoric','dramatic'],weak:['poetic','gothic']},
+  poetic:{name:'Poetic',color:'#2ecc71',strong:['narrative','satirical'],weak:['rhetoric','dramatic']},
+  dramatic:{name:'Dramatic',color:'#f39c12',strong:['poetic','gothic'],weak:['narrative','satirical']},
+  satirical:{name:'Satirical',color:'#9b59b6',strong:['rhetoric','dramatic'],weak:['poetic','gothic']},
+  gothic:{name:'Gothic',color:'#636e72',strong:['narrative','satirical'],weak:['rhetoric','dramatic']},
+};
+function typeEff(a,d){if(TYPES[a].strong.includes(d))return 2;if(TYPES[a].weak.includes(d))return .5;return 1}
+
+// === PARTICLES ===
+const Particles={
+  list:[],
+  spawn(x,y,n,col,spd=3,life=30,sz=4,shape='square'){
+    for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=Math.random()*spd+1;
+    this.list.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life,maxLife:life,color:col,size:Math.random()*sz+1,shape})}},
+  stream(x,y,n,col,dx,dy,life=25,sz=3){
+    for(let i=0;i<n;i++)this.list.push({x:x+Math.random()*20-10,y:y+Math.random()*10-5,vx:dx+Math.random()*.5-.25,vy:dy+Math.random()*.5-.25,life,maxLife:life,color:col,size:Math.random()*sz+1,shape:'circle'})},
+  update(){for(let i=this.list.length-1;i>=0;i--){const p=this.list[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.08;p.life--;if(p.life<=0)this.list.splice(i,1)}},
+  draw(){for(const p of this.list){X.globalAlpha=p.life/p.maxLife;X.fillStyle=p.color;
+    if(p.shape==='circle'){X.beginPath();X.arc(p.x,p.y,p.size,0,Math.PI*2);X.fill()}
+    else if(p.shape==='star'){drawStar(p.x,p.y,p.size)}
+    else{X.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size)}}X.globalAlpha=1}
+};
+function drawStar(cx,cy,r){X.beginPath();for(let i=0;i<5;i++){const a=i*Math.PI*2/5-Math.PI/2;X.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);const a2=a+Math.PI/5;X.lineTo(cx+Math.cos(a2)*r*.4,cy+Math.sin(a2)*r*.4)}X.closePath();X.fill()}
+
+// === MOVE VFX ===
+const MoveVFX={
+  active:false,timer:0,type:'',tx:0,ty:0,cb:null,
+  play(type,x,y,cb){this.active=true;this.timer=0;this.type=type;this.tx=x;this.ty=y;this.cb=cb},
+  update(){
+    if(!this.active)return;
+    this.timer++;
+    const t=this.timer,x=this.tx,y=this.ty;
+    if(t===1){
+      const cols={rhetoric:['#ff4422','#ff8844','#ffaa00'],narrative:['#2288ff','#44aaff','#88ccff'],poetic:['#22cc44','#88ff44','#ccff88'],dramatic:['#ffaa00','#ffdd44','#ffffff'],satirical:['#aa44ff','#cc88ff','#ff44ff'],gothic:['#445566','#223344','#112233']};
+      const c=cols[this.type]||['#fff','#ddd','#bbb'];
+      // Type-specific VFX
+      if(this.type==='rhetoric'){
+        for(let i=0;i<20;i++)Particles.list.push({x:x+Math.random()*60-30,y:y+20,vx:Math.random()*2-1,vy:-Math.random()*4-2,life:25,maxLife:25,color:c[i%3],size:Math.random()*5+2,shape:'circle'});
+      }else if(this.type==='narrative'){
+        for(let i=0;i<15;i++)Particles.stream(x-80+i*12,y,1,c[i%3],3,-0.5,20,4);
+      }else if(this.type==='poetic'){
+        for(let i=0;i<18;i++){const a=Math.random()*Math.PI*2;Particles.list.push({x:x+Math.cos(a)*30,y:y+Math.sin(a)*30,vx:Math.cos(a+1)*2,vy:Math.sin(a+1)*2-1,life:30,maxLife:30,color:c[i%3],size:Math.random()*4+2,shape:'star'})}
+      }else if(this.type==='dramatic'){
+        for(let i=0;i<12;i++){const lx=x+Math.random()*40-20;Particles.list.push({x:lx,y:y-60,vx:Math.random()*2-1,vy:6+Math.random()*3,life:12,maxLife:12,color:c[i%3],size:Math.random()*3+1,shape:'square'})}
+      }else if(this.type==='satirical'){
+        for(let i=0;i<16;i++){const a=i*Math.PI*2/16+frame*.1;Particles.list.push({x:x+Math.cos(a)*25,y:y+Math.sin(a)*25,vx:Math.cos(a)*1.5,vy:Math.sin(a)*1.5,life:22,maxLife:22,color:c[i%3],size:3,shape:'circle'})}
+      }else if(this.type==='gothic'){
+        for(let i=0;i<20;i++)Particles.list.push({x:x+Math.random()*80-40,y:y+Math.random()*60-30,vx:Math.random()-.5,vy:Math.random()-.5,life:30,maxLife:30,color:c[i%3],size:Math.random()*8+3,shape:'square'});
+      }else{
+        Particles.spawn(x,y,15,'#fff',3,20,4);
       }
     }
+    if(t>=25){this.active=false;if(this.cb)this.cb()}
+  },
+  draw(){} // particles handle drawing
+};
+
+// === SPRITE DATA ===
+const SP={
+  // Color map
+  C:{'R':'#e74c3c','r':'#c0392b','G':'#2ecc71','g':'#1a8a4a','B':'#3498db','b':'#206694',
+     'Y':'#f1c40f','y':'#d4a50c','W':'#ecf0f1','w':'#bdc3c7','K':'#2c3e50','k':'#1a252f',
+     'S':'#e8c170','s':'#c9a050','P':'#9b59b6','p':'#7d3c98','O':'#e67e22','o':'#bf6516',
+     'T':'#1abc9c','t':'#148f77','C2':'#95a5a6','c':'#7f8c8d','N':'#6d4c41','n':'#4e342e',
+     'M':'#e84393','m':'#c2185b','L':'#4caf50','l':'#2e7d32','D':'#7c4dff','d':'#512da8',
+     'H':'#ff7043','h':'#d84315','X':'#546e7a','x':'#263238','F':'#f06292','f':'#c2185b',
+     'A':'#26a69a','a':'#00897b'},
+  // Sprite definitions (12x12 pixel grids for characters, 16x16 for creatures)
+  D:{
+    p_d0:['....RRRR....','...RRRRRR...','...RRRRR....','..SSSSSSSS..','..SK..KS....','..SSMMSS....','..S.SS.S....','...BBBB.....','..BBBBBB....','..BB..BB....','..SS..SS....','..kk..kk....'],
+    p_d1:['....RRRR....','...RRRRRR...','...RRRRR....','..SSSSSSSS..','..SK..KS....','..SSMMSS....','..S.SS.S....','...BBBB.....','..BBBBBB....','..BB..BB....','...SS.SS....','...kk.kk....'],
+    p_u0:['....RRRR....','...RRRRRR...','...RRRRR....','..SSSSSSSS..','..SSSSSSSS..','..SSSSSSSS..','..S.SS.S....','...BBBB.....','..BBBBBB....','..BB..BB....','..SS..SS....','..kk..kk....'],
+    p_u1:['....RRRR....','...RRRRRR...','...RRRRR....','..SSSSSSSS..','..SSSSSSSS..','..SSSSSSSS..','..S.SS.S....','...BBBB.....','..BBBBBB....','..BB..BB....','..SS...SS...','..kk...kk...'],
+    p_l0:['.....RRRR...','....RRRRRR..','....RRRRR...','...SSSSSSSS.','...SK.SSSSS.','...SSMMSS...','....S.SS.S..','....BBBB....','...BBBBBB...','...BB..BB...','...SS..SS...','...kk..kk...'],
+    p_l1:['.....RRRR...','....RRRRRR..','....RRRRR...','...SSSSSSSS.','...SK.SSSSS.','...SSMMSS...','....S.SS.S..','....BBBB....','...BBBBBB...','...BB..BB...','..SS....SS..','..kk....kk..'],
+    p_r0:['...RRRR.....','..RRRRRR....','...RRRRR....','..SSSSSSSS..','..SSSSS.KS..','...SSMMSS...','..S.SS.S....','....BBBB....','...BBBBBB...','...BB..BB...','...SS..SS...','...kk..kk...'],
+    p_r1:['...RRRR.....','..RRRRRR....','...RRRRR....','..SSSSSSSS..','..SSSSS.KS..','...SSMMSS...','..S.SS.S....','....BBBB....','...BBBBBB...','...BB..BB...','..SS....SS..','..kk....kk..'],
+    // NPCs
+    npc_prof:['..wwwwww....','..WWWWWW....','..WWWWWW....','..SSSSSSSS..','..SK..KS....','..SSSSSS....','...WWWW.....','..WWWWWW....','..WWWWWW....','..WW..WW....','..SS..SS....','..kk..kk....'],
+    npc_girl:['..YYYYYY....','..YYYYYYYY..','..YYYYYYYY..','..SSSSSSSS..','..SK..KS....','..S.FF.S....','...MMMM.....','..MMMMMM....','..MMMMMM....','..MM..MM....','..SS..SS....','..kk..kk....'],
+    npc_boy:['..NNNNNN....','..NNNNNN....','..NNNNNN....','..SSSSSSSS..','..SK..KS....','..SSSSSS....','...GGGG.....','..GGGGGG....','..GGGGGG....','..GG..GG....','..SS..SS....','..kk..kk....'],
+    npc_nurse:['..RRRRRR....','..RWWWWR....','..RWWWWR....','..SSSSSSSS..','..SK..KS....','..SSSSSS....','...WWWW.....','..WWRWWW....','..WRRWWW....','..WW..WW....','..SS..SS....','..kk..kk....'],
+    npc_gym:['..YYYY......','..YYYYYYY...','..YYYYYYY...','..SSSSSSSS..','..SK..KS....','..SSMMSS....','...RRRR.....','..RRRRRR....','..RRRRRR....','..RR..RR....','..kk..kk....','..kk..kk....'],
+    npc_rival:['..BBBBBB....','..BBBBBBB...','..BBBBBBB...','..SSSSSSSS..','..SK..KS....','..SSMMSS....','...KKKK.....','..KKKKKK....','..KKKKKK....','..KK..KK....','..SS..SS....','..kk..kk....'],
+    npc_elder:['..wwwwww....','..wwwwwww...','..wwwwwww...','..SSSSSSSS..','..SK..KS....','..SSSSSS....','...NNNN.....','..NNNNNN....','..NNNNNN....','..NN..NN....','..SS..SS....','..kk..kk....'],
+    npc_shop:['..GGGGGG....','..GGGGGG....','..GGGGGG....','..SSSSSSSS..','..SK..KS....','..SSSSSS....','...YYYY.....','..YYYYYY....','..YYYYYY....','..YY..YY....','..NN..NN....','..kk..kk....'],
+    // Creature battle sprites (16x16)
+    cr_metaphor:['......RRRR..........','....RRRRRRRR........','...RRRRRRRRRR.......','..RRR.WW.WWRRR.....','..RRR.KK.KKRRR.....','..RRRRRRRRRRRR......','..RRRRR..RRRRR......','...RRRRRRRRRR.......','...RRHHHHHHRR.......','..RRHHHHHHHHRR......','..RRHHOOOOHRR.......','..RRHHHHHHHHRR......','...RRHHHHHHRR.......','....RRRRRRRR........','...RR......RR.......','..RR........RR......'],
+    cr_simile:['......LLLL..........','....LL.AA.LL........','...L.AAAAAA.L.......','..LLAAAAAAAAALL.....','..LA.WW..WW.AL......','..LA.KK..KK.AL......','..LLAAAAAAAAALL.....','...LAAA..AAAL.......','....LLAAAALL........','..LL..LLLL..LL......','..L.LL....LL.L......','..L.L......L.L......','...L........L.......','...L........L.......','....LL....LL........','.....LLLLLL.........'],
+    cr_hyperbole:['......YYYY..........','....YYYYYYYY........','...YOOOOOOOY........','..YOOOOOOOOOY.......','..YO.WW.WW.OY......','..YO.KK.KK.OY......','..YOOOOOOOOOY.......','...YOOFFFOOY........','...YOOOOOOOY........','..YYOOOOOOOYY.......','..Y.YYYYYYYY.Y......','..YO..YYYYYY.OY.....','..YO...YYYY...OY....','...Y...YYYY...Y.....','....YY.Y..Y.YY......','.....YYYY.YYYY......'],
+    cr_irony:['....PPPPPPPP........','...PP.PPPP.PP.......','..PP..PPPP..PP......','..P.WW.PP.WW.P......','..P.KK.PP.KK.P......','..PP..PPPP..PP......','...PP.P..P.PP.......','....PPPPPPPP........','...PPDDDDDPP........','..PPDDDDDDDDPP......','..PDDDDDDDDDP.......','..PDDDDDDDDDP.......','...PDDDDDDDP........','....PPPPPPP.........','...PP.....PP........','..PP.......PP.......'],
+    cr_allegory:['....BBBBBBBB........','...BB.NNNN.BB.......','..BB.NNNNNN.BB......','..B.WW.NN.WW.B......','..B.KK.NN.KK.B......','..BB.NNNNNN.BB......','...BB.N..N.BB.......','....BBBBBBBB........','...BBNNNNNNBB.......','..BBNNNNNNNNBB......','..BNNNNNNNNNB.......','..BNNNNNNNNNB.......','...BNNNNNNNNB.......','....BBBBBBBB........','...BB......BB.......','..BB........BB......'],
+    cr_foreshadow:['....XXXXXXXX........','...XX..XX..XX.......','..XX..XXXX..XX......','..X.WW.XX.WW.X......','..X.Kk.XX.kK.X......','..XX..XXXX..XX......','...XX.X..X.XX.......','....XXXXXXXX........','...XXKKKKKKXX.......','..XXKKKKKKKKXX......','..XKKKKKKKKKKX......','..XKKKKKKKKKKX......','...XKKKKKKKKX.......','....XXXXXXXX........','...XX......XX.......','..XX........XX......'],
+    cr_allit:['....LLLLLLLL........','...LL.YYYY.LL.......','..LL.YYYYYY.LL......','..L.WW.YY.WW.L......','..L.KK.YY.KK.L......','..LL.YYYYYY.LL......','...LL.Y..Y.LL.......','....LLLLLLLL........','...LLHHHHHHLL.......','..LLHHHHHHHHLL......','..LHHHHHHHHHLL......','..LHHHHHHHHHLL......','...LHHHHHHHLL.......','....LLLLLLLL........','...LL......LL.......','..LL........LL......'],
+    cr_generic:['....cccccccc........','...cc.cccc.cc.......','..cc..cccc..cc......','..c.WW.cc.WW.c......','..c.KK.cc.KK.c......','..cc..cccc..cc......','...cc.c..c.cc.......','....cccccccc........','...ccWWWWWWcc.......','..ccWWWWWWWWcc......','..cWWWWWWWWWWc......','..cWWWWWWWWWWc......','...cWWWWWWWWc.......','....cccccccc........','...cc......cc.......','..cc........cc......'],
+    cr_ono:['....OOOOOOOO........','...OO.HHHH.OO.......','..OO.HHHHHH.OO......','..O.WW.HH.WW.O......','..O.KK.HH.KK.O......','..OO.HHHHHH.OO......','...OO.HHHH.OO.......','....OOOOOOOO........','...OOYYYYYOO........','..OOYYYYYYYOO.......','..OYYYYYYYYYYO......','..OYYYYYYYYYYO......','...OYYYYYYYYO.......','....OOOOOOOO........','...OO......OO.......','..OO........OO......'],
+  },
+  draw(name,x,y,w,h,flip=false){
+    const d=this.D[name];if(!d)return;
+    const rows=d.map(r=>r.split(''));
+    const ph=rows.length,pw=rows[0].length;
+    const sx=w/pw,sy=h/ph;
+    X.save();
+    if(flip){X.translate(x+w,y);X.scale(-1,1);x=0;y=0}
+    for(let py=0;py<ph;py++)for(let px=0;px<pw;px++){
+      const ch=rows[py][px];if(ch==='.')continue;
+      const col=this.C[ch];if(!col)continue;
+      X.fillStyle=col;X.fillRect(Math.floor(x+px*sx),Math.floor(y+py*sy),Math.ceil(sx),Math.ceil(sy));
+    }
     X.restore();
-  },
-  colorMap: {
-    'R': '#e74c3c', 'r': '#c0392b', 'G': '#2ecc71', 'g': '#27ae60', 'B': '#3498db', 'b': '#2980b9',
-    'Y': '#f1c40f', 'y': '#f39c12', 'W': '#ecf0f1', 'w': '#bdc3c7', 'K': '#2c3e50', 'k': '#1a252f',
-    'S': '#e8c170', 's': '#d4a055', 'P': '#9b59b6', 'p': '#8e44ad', 'O': '#e67e22', 'o': '#d35400',
-    'T': '#1abc9c', 't': '#16a085', 'C': '#95a5a6', 'c': '#7f8c8d', 'N': '#5d4e37', 'n': '#3e2f1c',
-    'M': '#e84393', 'm': '#c44569', 'L': '#6ab04c', 'l': '#009432', 'D': '#a29bfe', 'd': '#6c5ce7',
-    'F': '#fd79a8', 'f': '#e84393', 'H': '#fdcb6e', 'h': '#e17055', 'X': '#636e72', 'x': '#2d3436',
-  },
-  getData(name) {
-    if (this.data[name]) return this.data[name].map(r => r.split(''));
-    return null;
-  },
-  data: {
-    // Player character - 16x16
-    player_down: [
-      '....RRRR....',
-      '...RRRRRR...',
-      '...RRRRRR...',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..SSSSSS....',
-      '..S.SS.S....',
-      '...BBBB.....',
-      '..BBBBBB....',
-      '..BBBBBB....',
-      '..BB..BB....',
-      '..SS..SS....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
-    player_up: [
-      '....RRRR....',
-      '...RRRRRR...',
-      '...RRRRRR...',
-      '..SSSSSSSS..',
-      '..SSSSSSSS..',
-      '..SSSSSSSS..',
-      '..S.SS.S....',
-      '...BBBB.....',
-      '..BBBBBB....',
-      '..BBBBBB....',
-      '..BB..BB....',
-      '..SS..SS....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
-    player_left: [
-      '...RRRR.....',
-      '..RRRRRR....',
-      '..RRRRRR....',
-      '.SSSSSSSS...',
-      '.SK.SSSSS...',
-      '.SSSSSSSS...',
-      '..S.SS.S....',
-      '..BBBB......',
-      '.BBBBBB.....',
-      '.BBBBBB.....',
-      '.BB..BB.....',
-      '.SS..SS.....',
-      '.SS..SS.....',
-      '.KK..KK.....',
-    ],
-    player_right: [
-      '.....RRRR...',
-      '....RRRRRR..',
-      '....RRRRRR..',
-      '...SSSSSSSS.',
-      '...SSSSS.KS.',
-      '...SSSSSSSS.',
-      '....S.SS.S..',
-      '......BBBB..',
-      '.....BBBBBB.',
-      '.....BBBBBB.',
-      '.....BB..BB.',
-      '.....SS..SS.',
-      '.....SS..SS.',
-      '.....KK..KK.',
-    ],
-    player_walk_down: [
-      '....RRRR....',
-      '...RRRRRR...',
-      '...RRRRRR...',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..SSSSSS....',
-      '..S.SS.S....',
-      '...BBBB.....',
-      '..BBBBBB....',
-      '..BBBBBB....',
-      '..BB..BB....',
-      '..SS...SS...',
-      '...SS.SS....',
-      '...KK.KK....',
-    ],
-    // Creatures - battle sprites (larger, more detailed)
-    metaphor_front: [
-      '......RRRR......',
-      '....RRRRRRRR....',
-      '...RRRRRRRRRR...',
-      '..RRR.WW.WWRRR..',
-      '..RRR.KK.KKRRR..',
-      '..RRRRRRRRRRRR..',
-      '...RRRR..RRRR...',
-      '....RRRRRRRR....',
-      '...RROOOOOORR...',
-      '..RROOOOOOOOOR..',
-      '..RROOOOOOOOOR..',
-      '...RROOOOOORR...',
-      '....RRRRRRRR....',
-      '.....RRRRRR.....',
-      '....RR....RR....',
-      '...RR......RR...',
-    ],
-    simile_front: [
-      '......GGGG......',
-      '....GG.TT.GG....',
-      '...G.TTTTTT.G...',
-      '..GGTTTTTTTTGG..',
-      '..GT.WW..WW.TG..',
-      '..GT.KK..KK.TG..',
-      '..GTTTTTTTTTTG..',
-      '...GTTT..TTTG...',
-      '....GGTTTTGG....',
-      '..GG..GGGG..GG..',
-      '.G..GG....GG..G.',
-      'G..G........G..G',
-      '..G..........G..',
-      '..G..........G..',
-      '...GG......GG...',
-      '....GGGGGGGG....',
-    ],
-    hyperbole_front: [
-      '......YYYY......',
-      '....YYYYYYYY....',
-      '...YOOOOOOOY....',
-      '..YOOOOOOOOOY...',
-      '..YO.WW.WW.OY..',
-      '..YO.KK.KK.OY..',
-      '..YOOOOOOOOOY...',
-      '...YOOMMMOOY....',
-      '...YOOOOOOOY....',
-      '..YYOOOOOOOYY...',
-      '.YY.YYYYYYYY.YY.',
-      'YO...YYYYYY...OY',
-      'YO....YYYY....OY',
-      '.Y....YYYY....Y.',
-      '..YY..Y..Y..YY..',
-      '...YYYY..YYYY...',
-    ],
-    irony_front: [
-      '....PPPPPPPP....',
-      '...PP.PPPP.PP...',
-      '..PP..PPPP..PP..',
-      '..P.WW.PP.WW.P..',
-      '..P.KK.PP.KK.P..',
-      '..PP..PPPP..PP..',
-      '...PP.P..P.PP...',
-      '....PPPPPPPP....',
-      '...PPDDDDDDPP..',
-      '..PPDDDDDDDDPP.',
-      '..PDDDDDDDDDP..',
-      '..PDDDDDDDDDP..',
-      '...PDDDDDDDP...',
-      '....PPPPPPP.....',
-      '...PP.....PP....',
-      '..PP.......PP...',
-    ],
-    allegory_front: [
-      '....BBBBBBBB....',
-      '...BB.BBBB.BB...',
-      '..BB.BBBBBB.BB..',
-      '..B.WW.BB.WW.B..',
-      '..B.KK.BB.KK.B..',
-      '..BB.BBBBBB.BB..',
-      '...BB.B..B.BB...',
-      '....BBBBBBBB....',
-      '...BBNNNNNNBB...',
-      '..BBNNNNNNNNBB..',
-      '..BNNNNNNNNNNB..',
-      '..BNNNNNNNNNNB..',
-      '...BNNNNNNNNB...',
-      '....BBBBBBBB....',
-      '...BB......BB...',
-      '..BB........BB..',
-    ],
-    foreshadowing_front: [
-      '....XXXXXXXX....',
-      '...XX..XX..XX...',
-      '..XX..XXXX..XX..',
-      '..X.WW.XX.WW.X..',
-      '..X.Kk.XX.kK.X..',
-      '..XX..XXXX..XX..',
-      '...XX.X..X.XX...',
-      '....XXXXXXXX....',
-      '...XXKKKKKKXX...',
-      '..XXKKKKKKKKXX..',
-      '..XKKKKKKKKKKX..',
-      '..XKKKKKKKKKKX..',
-      '...XKKKKKKKKX...',
-      '....XXXXXXXX....',
-      '...XX......XX...',
-      '..XX........XX..',
-    ],
-    alliteration_front: [
-      '....LLLLLLLL....',
-      '...LL.YYYY.LL...',
-      '..LL.YYYYYY.LL..',
-      '..L.WW.YY.WW.L..',
-      '..L.KK.YY.KK.L..',
-      '..LL.YYYYYY.LL..',
-      '...LL.Y..Y.LL...',
-      '....LLLLLLLL....',
-      '...LLHHHHHHLL...',
-      '..LLHHHHHHHHLL..',
-      '..LHHHHHHHHHL...',
-      '..LHHHHHHHHHL...',
-      '...LHHHHHHL....',
-      '....LLLLLLLL....',
-      '...LL......LL...',
-      '..LL........LL..',
-    ],
-    generic_front: [
-      '....CCCCCCCC....',
-      '...CC.CCCC.CC...',
-      '..CC..CCCC..CC..',
-      '..C.WW.CC.WW.C..',
-      '..C.KK.CC.KK.C..',
-      '..CC..CCCC..CC..',
-      '...CC.C..C.CC...',
-      '....CCCCCCCC....',
-      '...CCWWWWWWCC...',
-      '..CCWWWWWWWWCC..',
-      '..CWWWWWWWWWWC..',
-      '..CWWWWWWWWWWC..',
-      '...CWWWWWWWWC...',
-      '....CCCCCCCC....',
-      '...CC......CC...',
-      '..CC........CC..',
-    ],
-    // NPC sprites
-    npc_professor: [
-      '...WWWWWW...',
-      '..WWWWWWWW..',
-      '..WWWWWWWW..',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..SSSSSS....',
-      '...WWWW.....',
-      '..WWWWWW....',
-      '..WWWWWW....',
-      '..WW..WW....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
-    npc_girl: [
-      '...YYYYYY...',
-      '..YYYYYYYY..',
-      '..YYYYYYYY..',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..S.MM.S....',
-      '...MMMM.....',
-      '..MMMMMM....',
-      '..MMMMMM....',
-      '..MM..MM....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
-    npc_nurse: [
-      '...RRRRRR...',
-      '..RWWWWWR...',
-      '..RWWWWWR...',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..SSSSSS....',
-      '...WWWW.....',
-      '..WWRWWW....',
-      '..WRRWWW....',
-      '..WW..WW....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
-    npc_trainer: [
-      '...BBBBBB...',
-      '..BBBBBBBB..',
-      '..BBBBBBBB..',
-      '..SSSSSSSS..',
-      '..SK..KS....',
-      '..SSSSSS....',
-      '...GGGG.....',
-      '..GGGGGG....',
-      '..GGGGGG....',
-      '..GG..GG....',
-      '..SS..SS....',
-      '..KK..KK....',
-    ],
   }
 };
 
-// --- Type System ---
-const TYPES = {
-  rhetoric:  { name:'Rhetoric',  color:'#e74c3c', strong:['poetic','gothic'],    weak:['narrative','satirical'] },
-  narrative: { name:'Narrative', color:'#3498db', strong:['rhetoric','dramatic'], weak:['poetic','gothic'] },
-  poetic:    { name:'Poetic',    color:'#2ecc71', strong:['narrative','satirical'],weak:['rhetoric','dramatic'] },
-  dramatic:  { name:'Dramatic',  color:'#f39c12', strong:['poetic','gothic'],     weak:['narrative','satirical'] },
-  satirical: { name:'Satirical', color:'#9b59b6', strong:['rhetoric','dramatic'], weak:['poetic','gothic'] },
-  gothic:    { name:'Gothic',    color:'#636e72', strong:['narrative','satirical'],weak:['rhetoric','dramatic'] },
+// === UTILITIES ===
+function roundRect(x,y,w,h,r){X.beginPath();X.moveTo(x+r,y);X.lineTo(x+w-r,y);X.quadraticCurveTo(x+w,y,x+w,y+r);X.lineTo(x+w,y+h-r);X.quadraticCurveTo(x+w,y+h,x+w-r,y+h);X.lineTo(x+r,y+h);X.quadraticCurveTo(x,y+h,x,y+h-r);X.lineTo(x,y+r);X.quadraticCurveTo(x,y,x+r,y);X.closePath()}
+function wrapText(t,x,y,mw,lh){X.textAlign='left';const ws=t.split(' ');let ln='',cy=y;for(const w of ws){const tl=ln+w+' ';if(X.measureText(tl).width>mw&&ln!==''){X.fillText(ln,x,cy);ln=w+' ';cy+=lh}else ln=tl}X.fillText(ln,x,cy)}
+function lerp(a,b,t){return a+(b-a)*t}
+
+// === MOVES ===
+const MOVES={
+  burning_rhetoric:{name:'Burning Rhetoric',type:'rhetoric',pow:65,acc:95,pp:15,cat:'special',fx:{type:'burn',chance:30}},
+  persuade:{name:'Persuade',type:'rhetoric',pow:50,acc:100,pp:25,cat:'special',fx:null},
+  rebut:{name:'Rebut',type:'rhetoric',pow:60,acc:100,pp:20,cat:'physical',fx:null},
+  transform:{name:'Transform',type:'rhetoric',pow:0,acc:100,pp:15,cat:'status',fx:{type:'atkUp'}},
+  grand_oration:{name:'Grand Oration',type:'rhetoric',pow:90,acc:80,pp:5,cat:'special',fx:null},
+  paradox_strike:{name:'Paradox Strike',type:'rhetoric',pow:55,acc:90,pp:15,cat:'physical',fx:null},
+  repetition_strike:{name:'Repetition Strike',type:'rhetoric',pow:35,acc:100,pp:20,cat:'physical',fx:{type:'double'}},
+  plot_twist:{name:'Plot Twist',type:'narrative',pow:70,acc:85,pp:10,cat:'special',fx:null},
+  flashback:{name:'Flashback',type:'narrative',pow:0,acc:100,pp:10,cat:'status',fx:{type:'heal'}},
+  cliffhanger:{name:'Cliffhanger',type:'narrative',pow:55,acc:90,pp:15,cat:'special',fx:null},
+  deeper_meaning:{name:'Deeper Meaning',type:'narrative',pow:45,acc:95,pp:20,cat:'special',fx:null},
+  animate:{name:'Animate',type:'narrative',pow:0,acc:100,pp:10,cat:'status',fx:{type:'allUp'}},
+  deus_ex_machina:{name:'Deus Ex Machina',type:'narrative',pow:120,acc:60,pp:3,cat:'special',fx:null},
+  unreliable_narrator:{name:'Unreliable Narrator',type:'narrative',pow:50,acc:90,pp:15,cat:'special',fx:{type:'confuse',chance:40}},
+  rhyme:{name:'Rhyme',type:'poetic',pow:40,acc:100,pp:25,cat:'special',fx:null},
+  like_lightning:{name:'Like Lightning',type:'poetic',pow:60,acc:90,pp:15,cat:'physical',fx:null},
+  gentle_verse:{name:'Gentle Verse',type:'poetic',pow:0,acc:100,pp:15,cat:'status',fx:{type:'heal'}},
+  stanza_slam:{name:'Stanza Slam',type:'poetic',pow:70,acc:85,pp:10,cat:'physical',fx:null},
+  meter_strike:{name:'Meter Strike',type:'poetic',pow:80,acc:80,pp:8,cat:'physical',fx:null},
+  sonic_surge:{name:'Sonic Surge',type:'poetic',pow:50,acc:95,pp:18,cat:'special',fx:null},
+  lullaby:{name:'Lullaby',type:'poetic',pow:0,acc:80,pp:10,cat:'status',fx:{type:'sleep',chance:100}},
+  monologue:{name:'Monologue',type:'dramatic',pow:50,acc:95,pp:20,cat:'special',fx:null},
+  climax:{name:'Climax',type:'dramatic',pow:80,acc:80,pp:8,cat:'special',fx:null},
+  exaggerate:{name:'Exaggerate',type:'dramatic',pow:0,acc:100,pp:10,cat:'status',fx:{type:'atkUpBig'}},
+  tragic_flaw:{name:'Tragic Flaw',type:'dramatic',pow:65,acc:90,pp:12,cat:'physical',fx:null},
+  grand_finale:{name:'Grand Finale',type:'dramatic',pow:100,acc:75,pp:5,cat:'special',fx:{type:'recoil'}},
+  inner_conflict:{name:'Inner Conflict',type:'dramatic',pow:55,acc:95,pp:15,cat:'special',fx:null},
+  dramatic_pause:{name:'Dramatic Pause',type:'dramatic',pow:0,acc:85,pp:15,cat:'status',fx:{type:'paralyze',chance:100}},
+  mock:{name:'Mock',type:'satirical',pow:45,acc:100,pp:25,cat:'special',fx:null},
+  subvert:{name:'Subvert',type:'satirical',pow:60,acc:90,pp:15,cat:'special',fx:null},
+  double_meaning:{name:'Double Meaning',type:'satirical',pow:50,acc:95,pp:18,cat:'special',fx:null},
+  lampoon:{name:'Lampoon',type:'satirical',pow:70,acc:85,pp:10,cat:'special',fx:null},
+  soften_blow:{name:'Soften Blow',type:'satirical',pow:0,acc:100,pp:15,cat:'status',fx:{type:'defUp'}},
+  understate:{name:'Understate',type:'satirical',pow:0,acc:100,pp:10,cat:'status',fx:{type:'eAtkDown'}},
+  cosmic_joke:{name:'Cosmic Joke',type:'satirical',pow:90,acc:80,pp:5,cat:'special',fx:{type:'confuse',chance:30}},
+  dark_omen:{name:'Dark Omen',type:'gothic',pow:50,acc:95,pp:20,cat:'special',fx:{type:'freeze',chance:20}},
+  haunt:{name:'Haunt',type:'gothic',pow:40,acc:100,pp:25,cat:'special',fx:null},
+  shadow_strike:{name:'Shadow Strike',type:'gothic',pow:65,acc:88,pp:12,cat:'physical',fx:null},
+  forebode:{name:'Forebode',type:'gothic',pow:0,acc:100,pp:10,cat:'status',fx:{type:'eSpdDown'}},
+  storm_of_emotion:{name:'Storm of Emotion',type:'gothic',pow:60,acc:90,pp:12,cat:'special',fx:null},
+  doom_foretold:{name:'Doom Foretold',type:'gothic',pow:100,acc:70,pp:5,cat:'special',fx:null},
+  nightmare:{name:'Nightmare',type:'gothic',pow:0,acc:75,pp:10,cat:'status',fx:{type:'sleep',chance:100}},
 };
 
-function typeEffect(atk, def) {
-  if (TYPES[atk].strong.includes(def)) return 2;
-  if (TYPES[atk].weak.includes(def)) return 0.5;
-  return 1;
+// === CREATURES ===
+const CREATURES={
+  metaphor:{name:'Metaphor',type:'rhetoric',sprite:'cr_metaphor',base:{hp:45,atk:55,def:40,spd:50,spAtk:60,spDef:42},desc:'A shapeshifter that IS the thing it describes.',moves:['persuade','burning_rhetoric','transform','rebut','grand_oration'],evo:{level:16,into:'extended_metaphor'},rate:.15},
+  extended_metaphor:{name:'Ext. Metaphor',type:'rhetoric',sprite:'cr_metaphor',base:{hp:70,atk:80,def:60,spd:65,spAtk:85,spDef:60},desc:'A sustained transformation across passages.',moves:['burning_rhetoric','persuade','transform','grand_oration','paradox_strike'],evo:null,rate:0},
+  simile:{name:'Simile',type:'poetic',sprite:'cr_simile',base:{hp:40,atk:45,def:45,spd:55,spAtk:50,spDef:48},desc:'Gentle as a breeze, sharp as a tack.',moves:['rhyme','like_lightning','gentle_verse','stanza_slam','meter_strike'],evo:{level:14,into:'epic_simile'},rate:.18},
+  epic_simile:{name:'Epic Simile',type:'poetic',sprite:'cr_simile',base:{hp:65,atk:70,def:65,spd:70,spAtk:75,spDef:68},desc:'A Homeric comparison that IS its own narrative.',moves:['rhyme','like_lightning','stanza_slam','meter_strike','sonic_surge'],evo:null,rate:0},
+  hyperbole:{name:'Hyperbole',type:'dramatic',sprite:'cr_hyperbole',base:{hp:50,atk:70,def:30,spd:60,spAtk:75,spDef:32},desc:'THE MOST POWERFUL. (Allegedly.)',moves:['monologue','climax','exaggerate','tragic_flaw','grand_finale'],evo:{level:18,into:'hyperbolic_titan'},rate:.12},
+  hyperbolic_titan:{name:'Hyper. Titan',type:'dramatic',sprite:'cr_hyperbole',base:{hp:75,atk:100,def:45,spd:75,spAtk:105,spDef:47},desc:'Warps reality. Ultimate glass cannon.',moves:['climax','exaggerate','grand_finale','tragic_flaw','inner_conflict'],evo:null,rate:0},
+  irony:{name:'Irony',type:'satirical',sprite:'cr_irony',base:{hp:50,atk:50,def:50,spd:50,spAtk:55,spDef:52},desc:'Says one thing, means another.',moves:['mock','subvert','double_meaning','lampoon','cosmic_joke'],evo:{level:20,into:'dramatic_irony'},rate:.10},
+  dramatic_irony:{name:'Dramatic Irony',type:'satirical',sprite:'cr_irony',base:{hp:75,atk:75,def:70,spd:70,spAtk:80,spDef:72},desc:'The audience knows what characters don\'t.',moves:['mock','subvert','cosmic_joke','lampoon','understate'],evo:null,rate:0},
+  alliteration:{name:'Alliteration',type:'poetic',sprite:'cr_allit',base:{hp:42,atk:48,def:48,spd:52,spAtk:50,spDef:50},desc:'Brilliantly begins every battle.',moves:['rhyme','sonic_surge','gentle_verse','meter_strike','lullaby'],evo:{level:15,into:'assonance'},rate:.16},
+  assonance:{name:'Assonance',type:'poetic',sprite:'cr_allit',base:{hp:62,atk:68,def:65,spd:68,spAtk:72,spDef:65},desc:'Moaning tones flowing through prose.',moves:['rhyme','sonic_surge','stanza_slam','meter_strike','lullaby'],evo:null,rate:0},
+  onomatopoeia:{name:'Onomatopoeia',type:'dramatic',sprite:'cr_ono',base:{hp:48,atk:62,def:35,spd:55,spAtk:58,spDef:38},desc:'CRASH! BANG! It IS the sound.',moves:['sonic_surge','monologue','climax','dramatic_pause','exaggerate'],evo:null,rate:.14},
+  allegory:{name:'Allegory',type:'narrative',sprite:'cr_allegory',base:{hp:55,atk:45,def:55,spd:40,spAtk:50,spDef:58},desc:'Everything has deeper meaning.',moves:['plot_twist','flashback','deeper_meaning','cliffhanger','unreliable_narrator'],evo:{level:22,into:'parable'},rate:.08},
+  parable:{name:'Parable',type:'narrative',sprite:'cr_allegory',base:{hp:80,atk:70,def:75,spd:55,spAtk:78,spDef:75},desc:'A moral transcending the page.',moves:['plot_twist','deeper_meaning','cliffhanger','deus_ex_machina','animate'],evo:null,rate:0},
+  personification:{name:'Personification',type:'narrative',sprite:'cr_generic',base:{hp:50,atk:50,def:50,spd:45,spAtk:52,spDef:50},desc:'The wind whispers, the sun smiles.',moves:['animate','plot_twist','flashback','cliffhanger','unreliable_narrator'],evo:null,rate:.13},
+  oxymoron:{name:'Oxymoron',type:'rhetoric',sprite:'cr_generic',base:{hp:44,atk:52,def:52,spd:46,spAtk:54,spDef:50},desc:'A living contradiction.',moves:['burning_rhetoric','paradox_strike','rebut','transform','repetition_strike'],evo:null,rate:.12},
+  foreshadowing:{name:'Foreshadowing',type:'gothic',sprite:'cr_foreshadow',base:{hp:48,atk:55,def:42,spd:58,spAtk:60,spDef:45},desc:'What comes next won\'t be good.',moves:['dark_omen','haunt','shadow_strike','forebode','nightmare'],evo:{level:17,into:'prophecy'},rate:.11},
+  prophecy:{name:'Prophecy',type:'gothic',sprite:'cr_foreshadow',base:{hp:72,atk:80,def:60,spd:72,spAtk:85,spDef:62},desc:'The future bows to its will.',moves:['dark_omen','shadow_strike','doom_foretold','nightmare','forebode'],evo:null,rate:0},
+  pathetic_fallacy:{name:'Path. Fallacy',type:'gothic',sprite:'cr_generic',base:{hp:52,atk:48,def:50,spd:42,spAtk:55,spDef:52},desc:'When sad, it rains. When angry, lightning.',moves:['dark_omen','storm_of_emotion','haunt','forebode','nightmare'],evo:null,rate:.12},
+  soliloquy:{name:'Soliloquy',type:'dramatic',sprite:'cr_generic',base:{hp:55,atk:58,def:40,spd:48,spAtk:62,spDef:42},desc:'Talks at length. Powerful monologues.',moves:['monologue','climax','inner_conflict','tragic_flaw','dramatic_pause'],evo:null,rate:.10},
+  euphemism:{name:'Euphemism',type:'satirical',sprite:'cr_generic',base:{hp:46,atk:40,def:55,spd:48,spAtk:45,spDef:58},desc:'Puts things... delicately.',moves:['mock','soften_blow','double_meaning','lampoon','understate'],evo:null,rate:.13},
+  anaphora:{name:'Anaphora',type:'rhetoric',sprite:'cr_generic',base:{hp:50,atk:55,def:45,spd:50,spAtk:58,spDef:47},desc:'Repetition is power.',moves:['burning_rhetoric','persuade','repetition_strike','rebut','transform'],evo:null,rate:.10},
+  litotes:{name:'Litotes',type:'satirical',sprite:'cr_generic',base:{hp:42,atk:42,def:58,spd:50,spAtk:44,spDef:60},desc:'Not unimpressive.',moves:['mock','understate','double_meaning','subvert','soften_blow'],evo:null,rate:.14},
+};
+
+// === CREATURE FACTORY ===
+function makeCreature(id,level){
+  const d=CREATURES[id];if(!d)return null;
+  const c={id,name:d.name,type:d.type,sprite:d.sprite,level,base:{...d.base},mods:{atk:0,def:0,spd:0,spAtk:0,spDef:0},
+    desc:d.desc,evoDef:d.evo,xp:0,status:null,statusTurns:0,moves:[]};
+  const avail=d.moves.slice(0,Math.min(4,2+Math.floor(level/5)));
+  c.moves=avail.map(mid=>{const m=MOVES[mid];return{...m,id:mid,curPP:m.pp}});
+  calcStats(c);c.hp=c.maxHp;return c;
+}
+function calcStats(c){
+  c.maxHp=Math.floor(c.base.hp+c.level*2.5+10);
+  c.atk=Math.floor(c.base.atk+c.level*1.5);
+  c.def=Math.floor(c.base.def+c.level*1.5);
+  c.spd=Math.floor(c.base.spd+c.level*1.5);
+  c.spAtk=Math.floor((c.base.spAtk||c.base.atk)+c.level*1.5);
+  c.spDef=Math.floor((c.base.spDef||c.base.def)+c.level*1.5);
+  c.xpNext=Math.floor(c.level*c.level*1.5+10);
+}
+function checkEvolve(c){
+  if(!c.evoDef||c.level<c.evoDef.level)return false;
+  const ed=CREATURES[c.evoDef.into];if(!ed)return false;
+  const old=c.name;
+  c.id=c.evoDef.into;c.name=ed.name;c.sprite=ed.sprite;c.type=ed.type;
+  c.base={...ed.base};c.desc=ed.desc;c.evoDef=ed.evo;
+  calcStats(c);c.hp=c.maxHp;
+  for(const mid of ed.moves){if(!c.moves.find(m=>m.id===mid)&&c.moves.length<4){const mv=MOVES[mid];if(mv)c.moves.push({...mv,id:mid,curPP:mv.pp})}}
+  return old;
 }
 
-// --- Creature Database ---
-const CREATURES = {
-  metaphor: {
-    name:'Metaphor', type:'rhetoric', sprite:'metaphor_front',
-    base:{hp:45,atk:55,def:40,spd:50},
-    desc:'A shapeshifting figure that IS the thing it describes.',
-    moves:['burning_rhetoric','persuade','transform','rebut'],
-    evo:{level:16,into:'extended_metaphor'}, rate:0.15
-  },
-  extended_metaphor: {
-    name:'Extended Metaphor', type:'rhetoric', sprite:'metaphor_front',
-    base:{hp:70,atk:80,def:60,spd:65},
-    desc:'A sustained transformation across entire passages.',
-    moves:['burning_rhetoric','persuade','transform','grand_oration'],
-    evo:null, rate:0
-  },
-  simile: {
-    name:'Simile', type:'poetic', sprite:'simile_front',
-    base:{hp:40,atk:45,def:45,spd:55},
-    desc:'Gentle as a breeze, sharp as a tack.',
-    moves:['rhyme','like_lightning','gentle_verse','stanza_slam'],
-    evo:{level:14,into:'epic_simile'}, rate:0.18
-  },
-  epic_simile: {
-    name:'Epic Simile', type:'poetic', sprite:'simile_front',
-    base:{hp:65,atk:70,def:65,spd:70},
-    desc:'A Homeric comparison so grand it becomes its own narrative.',
-    moves:['rhyme','like_lightning','stanza_slam','meter_strike'],
-    evo:null, rate:0
-  },
-  hyperbole: {
-    name:'Hyperbole', type:'dramatic', sprite:'hyperbole_front',
-    base:{hp:50,atk:70,def:30,spd:60},
-    desc:'THE MOST POWERFUL CREATURE IN THE UNIVERSE. (Allegedly.)',
-    moves:['monologue','climax','exaggerate','tragic_flaw'],
-    evo:{level:18,into:'hyperbolic_titan'}, rate:0.12
-  },
-  hyperbolic_titan: {
-    name:'Hyperbolic Titan', type:'dramatic', sprite:'hyperbole_front',
-    base:{hp:75,atk:100,def:45,spd:75},
-    desc:'So exaggerated it warps reality. Glass cannon supreme.',
-    moves:['climax','exaggerate','grand_finale','tragic_flaw'],
-    evo:null, rate:0
-  },
-  irony: {
-    name:'Irony', type:'satirical', sprite:'irony_front',
-    base:{hp:50,atk:50,def:50,spd:50},
-    desc:'Says one thing, means another. Attacks are... unexpected.',
-    moves:['mock','subvert','double_meaning','lampoon'],
-    evo:{level:20,into:'dramatic_irony'}, rate:0.10
-  },
-  dramatic_irony: {
-    name:'Dramatic Irony', type:'satirical', sprite:'irony_front',
-    base:{hp:75,atk:75,def:70,spd:70},
-    desc:'The audience knows what the characters don\'t.',
-    moves:['mock','subvert','cosmic_joke','lampoon'],
-    evo:null, rate:0
-  },
-  alliteration: {
-    name:'Alliteration', type:'poetic', sprite:'alliteration_front',
-    base:{hp:42,atk:48,def:48,spd:52},
-    desc:'Brilliantly, beautifully begins every battle.',
-    moves:['rhyme','sonic_surge','gentle_verse','meter_strike'],
-    evo:{level:15,into:'assonance'}, rate:0.16
-  },
-  assonance: {
-    name:'Assonance', type:'poetic', sprite:'alliteration_front',
-    base:{hp:62,atk:68,def:65,spd:68},
-    desc:'Moaning, groaning tones that flow through prose.',
-    moves:['rhyme','sonic_surge','stanza_slam','meter_strike'],
-    evo:null, rate:0
-  },
-  onomatopoeia: {
-    name:'Onomatopoeia', type:'dramatic', sprite:'generic_front',
-    base:{hp:48,atk:60,def:35,spd:55},
-    desc:'CRASH! BANG! WHOOSH! It IS the sound it makes.',
-    moves:['sonic_surge','monologue','climax','exaggerate'],
-    evo:null, rate:0.14
-  },
-  allegory: {
-    name:'Allegory', type:'narrative', sprite:'allegory_front',
-    base:{hp:55,atk:45,def:55,spd:40},
-    desc:'Everything it does has deeper meaning.',
-    moves:['plot_twist','flashback','deeper_meaning','cliffhanger'],
-    evo:{level:22,into:'parable'}, rate:0.08
-  },
-  parable: {
-    name:'Parable', type:'narrative', sprite:'allegory_front',
-    base:{hp:80,atk:70,def:75,spd:55},
-    desc:'A story with a moral so powerful it transcends the page.',
-    moves:['plot_twist','deeper_meaning','cliffhanger','deus_ex_machina'],
-    evo:null, rate:0
-  },
-  personification: {
-    name:'Personification', type:'narrative', sprite:'generic_front',
-    base:{hp:50,atk:50,def:50,spd:45},
-    desc:'The wind whispers, the sun smiles.',
-    moves:['animate','plot_twist','flashback','cliffhanger'],
-    evo:null, rate:0.13
-  },
-  oxymoron: {
-    name:'Oxymoron', type:'rhetoric', sprite:'generic_front',
-    base:{hp:44,atk:52,def:52,spd:46},
-    desc:'A living contradiction. Deafening silence.',
-    moves:['burning_rhetoric','paradox_strike','rebut','transform'],
-    evo:null, rate:0.12
-  },
-  foreshadowing: {
-    name:'Foreshadowing', type:'gothic', sprite:'foreshadowing_front',
-    base:{hp:48,atk:55,def:42,spd:58},
-    desc:'You feel like you\'ve seen this before...',
-    moves:['dark_omen','haunt','shadow_strike','forebode'],
-    evo:{level:17,into:'prophecy'}, rate:0.11
-  },
-  prophecy: {
-    name:'Prophecy', type:'gothic', sprite:'foreshadowing_front',
-    base:{hp:72,atk:80,def:60,spd:72},
-    desc:'What was hinted at is now inevitable.',
-    moves:['dark_omen','haunt','shadow_strike','doom_foretold'],
-    evo:null, rate:0
-  },
-  pathetic_fallacy: {
-    name:'Pathetic Fallacy', type:'gothic', sprite:'generic_front',
-    base:{hp:52,atk:48,def:50,spd:42},
-    desc:'When it\'s sad, it rains. When angry, lightning.',
-    moves:['dark_omen','storm_of_emotion','haunt','forebode'],
-    evo:null, rate:0.12
-  },
-  soliloquy: {
-    name:'Soliloquy', type:'dramatic', sprite:'generic_front',
-    base:{hp:55,atk:58,def:40,spd:48},
-    desc:'Talks to itself at great length. Surprisingly powerful.',
-    moves:['monologue','climax','inner_conflict','tragic_flaw'],
-    evo:null, rate:0.10
-  },
-  euphemism: {
-    name:'Euphemism', type:'satirical', sprite:'generic_front',
-    base:{hp:46,atk:40,def:55,spd:48},
-    desc:'Puts things... delicately.',
-    moves:['mock','soften_blow','double_meaning','lampoon'],
-    evo:null, rate:0.13
-  },
-  anaphora: {
-    name:'Anaphora', type:'rhetoric', sprite:'generic_front',
-    base:{hp:50,atk:55,def:45,spd:50},
-    desc:'I have a dream. I have a dream. Repetition is power.',
-    moves:['burning_rhetoric','persuade','repetition_strike','rebut'],
-    eo:null, rate:0.10
-  },
-  litotes: {
-    name:'Litotes', type:'satirical', sprite:'generic_front',
-    base:{hp:42,atk:42,def:58,spd:50},
-    desc:'Not unimpressive. Understatement is power.',
-    moves:['mock','understate','double_meaning','subvert'],
-    evo:null, rate:0.14
-  },
+// === TILE SYSTEM ===
+const T={G:0,P:1,TG:2,TR:3,W:4,BL:5,DR:6,SN:7,FL:9,FN:10,HL:11,BR:12,SD:13,RK:14,ST:15,CP:16,SH:18};
+const WALK=[T.G,T.P,T.TG,T.DR,T.SN,T.FL,T.HL,T.BR,T.SD,T.ST,T.CP,T.SH];
+function mkMap(w,h,f){const m=[];for(let y=0;y<h;y++){const r=[];for(let x=0;x<w;x++)r.push(f);m.push(r)}return m}
+function sR(m,x1,y1,x2,y2,t){for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t}
+function sT(m,x,y,t){if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t}
+
+// === MAPS ===
+const MAPS={};
+
+// Inkwell Town (30x25)
+(()=>{const d=mkMap(30,25,T.G);
+sR(d,0,0,29,0,T.TR);sR(d,0,24,29,24,T.TR);sR(d,0,0,0,24,T.TR);sR(d,29,0,29,24,T.TR);
+sR(d,3,12,27,12,T.P);sR(d,15,3,15,22,T.P);sT(d,28,12,T.P);
+// Lab
+sR(d,5,8,11,10,T.BL);sT(d,8,10,T.DR);sR(d,4,7,12,7,T.FN);sR(d,4,7,4,11,T.FN);sR(d,12,7,12,11,T.FN);sR(d,4,11,7,11,T.FN);sR(d,9,11,12,11,T.FN);
+// House
+sR(d,5,3,9,5,T.BL);sT(d,7,5,T.DR);
+// Heal center
+sR(d,18,3,22,5,T.BL);sT(d,20,5,T.HL);
+// Shop
+sR(d,24,3,27,5,T.BL);sT(d,25,5,T.SH);
+// Pond
+sR(d,3,16,7,19,T.W);
+// Flowers
+[3,5,7].forEach(x=>sT(d,x,15,T.FL));[4,6].forEach(x=>sT(d,x,20,T.FL));
+// Tall grass
+sR(d,20,14,27,22,T.TG);
+sT(d,14,11,T.SN);
+MAPS.hometown={name:'Inkwell Town',w:30,h:25,data:d,enc:['simile','alliteration','litotes'],eRate:.10,music:'town',
+npcs:[
+  {x:13,y:11,sp:'npc_prof',name:'Prof. Narrator',dlg:[{s:'Prof. Narrator',t:'Welcome to the world of Lexicon Legends!'},{s:'Prof. Narrator',t:'Literary creatures roam the tall grass!'},{s:'Prof. Narrator',t:'Catch them, train them, become the greatest Lexicographer!'}]},
+  {x:7,y:6,sp:'npc_girl',name:'Mom',dlg:[{s:'Mom',t:'Be careful out there, dear! Don\'t forget to heal your team!'}]},
+  {x:10,y:15,sp:'npc_girl',name:'Lily',dlg:[{s:'Lily',t:'I love the Similes! Gentle as a breeze~'},{s:'Lily',t:'Try the tall grass to the east!'}]},
+  {x:20,y:7,sp:'npc_nurse',name:'Nurse',dlg:[{s:'Nurse',t:'Step on the red cross to heal your team!'}]},
+  {x:25,y:7,sp:'npc_shop',name:'Shopkeeper Ed',dlg:[{s:'Ed',t:'Welcome! Step on the green tile to shop!'}]},
+],signs:[{x:14,y:11,text:'INKWELL TOWN — Where Every Story Begins'}],
+conns:[{x:28,y:12,to:'route1',tx:1,ty:15}]}})();
+
+// Route 1 - Prose Path (45x30)
+(()=>{const d=mkMap(45,30,T.G);
+sR(d,0,0,44,0,T.TR);sR(d,0,29,44,29,T.TR);sR(d,44,0,44,29,T.TR);sR(d,0,0,0,29,T.TR);
+sT(d,0,15,T.P);sR(d,1,15,22,15,T.P);
+for(let y=8;y<=15;y++)sT(d,22,y,T.P);
+sR(d,22,8,38,8,T.P);
+for(let y=4;y<=8;y++)sT(d,38,y,T.P);
+sR(d,38,4,43,4,T.P);sT(d,43,4,T.P);
+// Tall grass patches
+sR(d,5,10,16,14,T.TG);sR(d,8,16,19,23,T.TG);sR(d,25,3,34,7,T.TG);sR(d,26,10,40,16,T.TG);
+// Water
+sR(d,26,20,33,26,T.W);sR(d,23,22,25,22,T.BR);
+// Trees
+[[3,5],[7,3],[13,25],[36,20],[2,22],[19,4],[40,18],[30,28],[5,27]].forEach(([x,y])=>sT(d,x,y,T.TR));
+[[3,18],[19,6],[16,26]].forEach(([x,y])=>sT(d,x,y,T.FL));
+MAPS.route1={name:'Prose Path',w:45,h:30,data:d,enc:['metaphor','simile','alliteration','oxymoron','litotes','personification'],eRate:.14,music:'route',
+npcs:[
+  {x:11,y:14,sp:'npc_boy',name:'Bug Catcher Tim',dlg:[{s:'Tim',t:'Hey! Let\'s battle!'}],battle:{creatures:[{id:'simile',lv:5},{id:'alliteration',lv:4}]}},
+  {x:32,y:7,sp:'npc_girl',name:'Lass Emily',dlg:[{s:'Emily',t:'Creatures get tougher heading east!'},{s:'Emily',t:'Train in the tall grass!'}]},
+  {x:23,y:14,sp:'npc_elder',name:'Old Man Webster',dlg:[{s:'Webster',t:'In my day, only Metaphors and Similes...'},{s:'Webster',t:'Now all these newfangled devices!'}]},
+],signs:[{x:1,y:14,text:'← Inkwell Town'},{x:22,y:7,text:'→ Stanza City'}],
+conns:[{x:0,y:15,to:'hometown',tx:27,ty:12},{x:43,y:4,to:'stanza_city',tx:1,ty:15}]}})();
+
+// Stanza City (35x25) - First gym town
+(()=>{const d=mkMap(35,25,T.G);
+sR(d,0,0,34,0,T.TR);sR(d,0,24,34,24,T.TR);sR(d,34,0,34,24,T.TR);sR(d,0,0,0,24,T.TR);
+sT(d,0,15,T.P);
+// Main roads
+sR(d,1,15,33,15,T.P);sR(d,17,3,17,22,T.P);
+// Heal
+sR(d,5,3,10,6,T.BL);sT(d,7,6,T.HL);
+// Shop
+sR(d,12,3,15,6,T.BL);sT(d,13,6,T.SH);
+// Gym
+sR(d,22,3,30,8,T.BL);sT(d,26,8,T.DR);
+sR(d,23,4,29,7,T.CP);sT(d,26,7,T.CP);
+// Houses
+sR(d,5,18,9,20,T.BL);sT(d,7,20,T.DR);
+sR(d,25,18,29,20,T.BL);sT(d,27,20,T.DR);
+// Flowers
+[3,5,7,9,11].forEach(x=>sT(d,x,22,T.FL));
+sR(d,30,18,33,22,T.TG);
+sT(d,14,11,T.SN);sT(d,26,9,T.SN);
+MAPS.stanza_city={name:'Stanza City',w:35,h:25,data:d,enc:['oxymoron','anaphora','onomatopoeia'],eRate:.08,music:'town',
+npcs:[
+  {x:25,y:9,sp:'npc_gym',name:'Gym Guide',dlg:[{s:'Guide',t:'This is the Rhetoric Gym! Byron the Rhetorician awaits inside!'},{s:'Guide',t:'His team uses Rhetoric-type creatures. Narrative types are strong against them!'}]},
+  {x:26,y:5,sp:'npc_gym',name:'Byron',dlg:[{s:'Byron',t:'So you\'ve come to challenge the Rhetoric Gym!'},{s:'Byron',t:'My words will set the world ablaze! Prepare yourself!'}],battle:{creatures:[{id:'metaphor',lv:12},{id:'anaphora',lv:13},{id:'oxymoron',lv:14}]},gym:'rhetoric'},
+  {x:7,y:7,sp:'npc_nurse',name:'Nurse',dlg:[{s:'Nurse',t:'Step on the red tile to heal!'}]},
+  {x:13,y:7,sp:'npc_shop',name:'Shopkeeper',dlg:[{s:'Shopkeeper',t:'Step on the green tile to browse!'}]},
+  {x:7,y:17,sp:'npc_elder',name:'Elder Prose',dlg:[{s:'Elder Prose',t:'Beat the gym leaders to prove your worth as a Lexicographer!'},{s:'Elder Prose',t:'There are three gyms: Rhetoric, Poetic, and Gothic.'}]},
+],signs:[{x:14,y:11,text:'STANZA CITY — Words Have Power'},{x:26,y:9,text:'Rhetoric Gym — Leader: Byron'}],
+conns:[{x:0,y:15,to:'route1',tx:42,ty:4},{x:17,y:0,to:'route2',tx:20,ty:29}]}})();
+
+// Route 2 - Narrative Way (40x35)
+(()=>{const d=mkMap(40,35,T.G);
+sR(d,0,0,39,0,T.TR);sR(d,0,34,39,34,T.TR);sR(d,39,0,39,34,T.TR);sR(d,0,0,0,34,T.TR);
+// Path
+sR(d,18,30,22,34,T.P);sT(d,20,34,T.P);
+sR(d,18,15,22,30,T.P);
+for(let x=10;x<=18;x++)sT(d,x,15,T.P);
+sR(d,10,5,10,15,T.P);sR(d,10,5,22,5,T.P);sR(d,22,1,22,5,T.P);sT(d,22,0,T.P);
+// Tall grass
+sR(d,3,8,8,18,T.TG);sR(d,12,18,16,28,T.TG);sR(d,25,8,36,16,T.TG);sR(d,28,20,36,30,T.TG);sR(d,3,24,9,30,T.TG);
+// Water
+sR(d,25,24,32,28,T.W);sR(d,23,26,24,26,T.BR);
+// Trees/rocks
+[[5,3],[15,10],[35,5],[37,25],[2,20],[30,3]].forEach(([x,y])=>sT(d,x,y,T.TR));
+[[8,5],[33,18],[14,32]].forEach(([x,y])=>sT(d,x,y,T.FL));
+MAPS.route2={name:'Narrative Way',w:40,h:35,data:d,enc:['allegory','personification','hyperbole','onomatopoeia','euphemism','soliloquy'],eRate:.15,music:'route',
+npcs:[
+  {x:9,y:12,sp:'npc_boy',name:'Youngster Jake',dlg:[{s:'Jake',t:'I\'ve been training hard! Battle me!'}],battle:{creatures:[{id:'hyperbole',lv:10},{id:'onomatopoeia',lv:11}]}},
+  {x:30,y:13,sp:'npc_girl',name:'Poet Maya',dlg:[{s:'Maya',t:'Poetry is power! Let me show you!'}],battle:{creatures:[{id:'personification',lv:12},{id:'allegory',lv:11},{id:'euphemism',lv:12}]}},
+  {x:15,y:25,sp:'npc_elder',name:'Sage',dlg:[{s:'Sage',t:'The Poetic Gym in Verse Valley awaits north of here.'},{s:'Sage',t:'Rhetoric types are strong against Poetic — remember your advantages!'}]},
+],signs:[{x:20,y:33,text:'↓ Stanza City'},{x:22,y:1,text:'↑ Verse Valley'}],
+conns:[{x:20,y:34,to:'stanza_city',tx:17,ty:1},{x:22,y:0,to:'verse_valley',tx:17,ty:27}]}})();
+
+// Verse Valley (35x30) - Second gym
+(()=>{const d=mkMap(35,30,T.G);
+sR(d,0,0,34,0,T.TR);sR(d,0,29,34,29,T.TR);sR(d,34,0,34,29,T.TR);sR(d,0,0,0,29,T.TR);
+sT(d,17,29,T.P);sR(d,15,22,19,29,T.P);sR(d,8,15,19,15,T.P);
+for(let y=15;y<=22;y++)sT(d,17,y,T.P);
+sR(d,8,8,8,15,T.P);sR(d,8,8,25,8,T.P);
+// Heal
+sR(d,3,3,8,6,T.BL);sT(d,5,6,T.HL);
+// Gym
+sR(d,20,3,28,7,T.BL);sT(d,24,7,T.DR);sR(d,21,4,27,6,T.CP);
+// Shop
+sR(d,11,3,14,6,T.BL);sT(d,12,6,T.SH);
+// Tall grass
+sR(d,2,12,6,20,T.TG);sR(d,22,12,32,20,T.TG);sR(d,10,22,14,27,T.TG);
+// Water
+sR(d,26,22,32,27,T.W);
+sT(d,24,8,T.SN);
+MAPS.verse_valley={name:'Verse Valley',w:35,h:30,data:d,enc:['alliteration','simile','foreshadowing','pathetic_fallacy','irony','euphemism'],eRate:.16,music:'town',
+npcs:[
+  {x:23,y:8,sp:'npc_gym',name:'Gym Guide',dlg:[{s:'Guide',t:'The Poetic Gym! Lyra the Poetess is inside!'},{s:'Guide',t:'Rhetoric types crush Poetic types!'}]},
+  {x:24,y:5,sp:'npc_gym',name:'Lyra',dlg:[{s:'Lyra',t:'Welcome to the Poetic Gym!'},{s:'Lyra',t:'My verses will sweep you away!'}],battle:{creatures:[{id:'simile',lv:18},{id:'alliteration',lv:17},{id:'epic_simile',lv:20}]},gym:'poetic'},
+  {x:5,y:7,sp:'npc_nurse',name:'Nurse',dlg:[{s:'Nurse',t:'Heal up!'}]},
+  {x:12,y:7,sp:'npc_shop',name:'Shop',dlg:[{s:'Shop',t:'Browse on the green tile!'}]},
+  {x:10,y:20,sp:'npc_elder',name:'Sage Dickens',dlg:[{s:'Dickens',t:'It was the best of times... Gothic types lurk to the east.'},{s:'Dickens',t:'Seek the final gym in Climax Plateau!'}]},
+],signs:[{x:17,y:28,text:'↓ Narrative Way'},{x:24,y:8,text:'Poetic Gym — Leader: Lyra'}],
+conns:[{x:17,y:29,to:'route2',tx:22,ty:1},{x:34,y:8,to:'route3',tx:1,ty:12}]}})();
+
+// Route 3 - Gothic Pass (50x25)
+(()=>{const d=mkMap(50,25,T.G);
+sR(d,0,0,49,0,T.TR);sR(d,0,24,49,24,T.TR);sR(d,49,0,49,24,T.TR);sR(d,0,0,0,24,T.TR);
+sT(d,0,12,T.P);
+sR(d,1,12,15,12,T.P);
+for(let y=6;y<=12;y++)sT(d,15,y,T.P);
+sR(d,15,6,35,6,T.P);
+for(let y=6;y<=12;y++)sT(d,35,y,T.P);
+sR(d,35,12,48,12,T.P);sT(d,48,12,T.P);
+// Heavy trees
+for(let y=1;y<24;y++)for(let x=1;x<49;x++){if(d[y][x]!==T.P&&(x+y)%4===0&&Math.abs(y-12)>2)sT(d,x,y,T.TR)}
+// Tall grass corridors
+sR(d,3,8,12,11,T.TG);sR(d,3,13,12,16,T.TG);sR(d,18,2,28,5,T.TG);sR(d,18,7,28,11,T.TG);sR(d,38,2,46,5,T.TG);sR(d,38,8,46,11,T.TG);sR(d,38,13,46,18,T.TG);
+// Dark water
+sR(d,20,15,30,20,T.W);
+MAPS.route3={name:'Gothic Pass',w:50,h:25,data:d,enc:['foreshadowing','pathetic_fallacy','irony','soliloquy','hyperbole','allegory'],eRate:.18,music:'route',
+npcs:[
+  {x:10,y:11,sp:'npc_boy',name:'Poet Blake',dlg:[{s:'Blake',t:'Tiger, tiger, burning bright!'}],battle:{creatures:[{id:'foreshadowing',lv:18},{id:'hyperbole',lv:17},{id:'irony',lv:19}]}},
+  {x:30,y:5,sp:'npc_girl',name:'Dark Writer Edgar',dlg:[{s:'Edgar',t:'Nevermore shall you pass without battle!'}],battle:{creatures:[{id:'pathetic_fallacy',lv:20},{id:'foreshadowing',lv:21},{id:'soliloquy',lv:20}]}},
+],signs:[{x:1,y:11,text:'← Verse Valley'},{x:48,y:11,text:'→ Climax Plateau'}],
+conns:[{x:0,y:12,to:'verse_valley',tx:33,ty:8},{x:48,y:12,to:'climax_plateau',tx:1,ty:12}]}})();
+
+// Climax Plateau (35x25)
+(()=>{const d=mkMap(35,25,T.G);
+sR(d,0,0,34,0,T.TR);sR(d,0,24,34,24,T.TR);sR(d,34,0,34,24,T.TR);sR(d,0,0,0,24,T.TR);
+sT(d,0,12,T.P);
+sR(d,1,12,17,12,T.P);sR(d,17,5,17,12,T.P);sR(d,17,5,30,5,T.P);sR(d,30,2,30,5,T.P);sR(d,30,2,33,2,T.P);sT(d,33,2,T.P);
+// Heal
+sR(d,3,9,7,11,T.BL);sT(d,5,11,T.HL);
+// Tall grass
+sR(d,8,2,14,10,T.TG);sR(d,20,8,28,14,T.TG);sR(d,8,14,14,22,T.TG);sR(d,20,16,30,22,T.TG);
+// Rocks
+[[16,3],[25,3],[10,13],[28,15]].forEach(([x,y])=>sT(d,x,y,T.RK));
+MAPS.climax_plateau={name:'Climax Plateau',w:35,h:25,data:d,enc:['hyperbole','foreshadowing','irony','allegory','soliloquy','onomatopoeia'],eRate:.20,music:'gym',
+npcs:[
+  {x:5,y:8,sp:'npc_nurse',name:'Nurse',dlg:[{s:'Nurse',t:'Last heal before the Champion!'}]},
+  {x:25,y:4,sp:'npc_gym',name:'Gothic Gym Edgar',dlg:[{s:'Edgar',t:'The final gym stands before the Champion!'},{s:'Edgar',t:'Darkness and dread await you!'}],battle:{creatures:[{id:'foreshadowing',lv:24},{id:'pathetic_fallacy',lv:25},{id:'prophecy',lv:27}]},gym:'gothic'},
+],signs:[{x:1,y:11,text:'← Gothic Pass'},{x:33,y:1,text:'→ Champion\'s Hall'}],
+conns:[{x:0,y:12,to:'route3',tx:47,ty:12},{x:33,y:2,to:'champion_hall',tx:10,ty:18}]}})();
+
+// Champion's Hall (20x20)
+(()=>{const d=mkMap(20,20,T.TR);
+sR(d,5,1,14,18,T.CP);sR(d,8,1,11,18,T.P);sR(d,8,18,11,19,T.P);sT(d,10,19,T.P);
+MAPS.champion_hall={name:"Champion's Hall",w:20,h:20,data:d,enc:[],eRate:0,music:'champion',
+npcs:[
+  {x:10,y:3,sp:'npc_gym',name:'Champion Austen',dlg:[{s:'Austen',t:'It is a truth universally acknowledged...'},{s:'Austen',t:'...that a trainer with all badges must be in want of a battle!'},{s:'Austen',t:'Show me everything your Lexicons can do!'}],battle:{creatures:[{id:'dramatic_irony',lv:28},{id:'parable',lv:30},{id:'prophecy',lv:28},{id:'hyperbolic_titan',lv:32}]},champion:true},
+],signs:[],
+conns:[{x:10,y:19,to:'climax_plateau',tx:32,ty:2}]}})();
+
+// === RIVAL DEFINITIONS ===
+const RIVAL={name:'Quinn',sp:'npc_rival',
+  getStarter(playerChoice){return{metaphor:'simile',simile:'hyperbole',hyperbole:'metaphor'}[playerChoice]},
+  team1(starter){return[{id:starter,lv:5}]},
+  team2(starter){const evo=CREATURES[starter].evo;return[{id:evo?evo.into:starter,lv:15},{id:'irony',lv:14}]},
+  team3(starter){const evo=CREATURES[starter].evo;return[{id:evo?evo.into:starter,lv:26},{id:'irony',lv:25},{id:'allegory',lv:25},{id:'foreshadowing',lv:24}]},
 };
 
-// --- Move Database ---
-const MOVES = {
-  burning_rhetoric:{name:'Burning Rhetoric',type:'rhetoric',pow:50,acc:95,pp:20,desc:'Fiery argument.'},
-  persuade:{name:'Persuade',type:'rhetoric',pow:40,acc:100,pp:25,desc:'Never misses.'},
-  rebut:{name:'Rebut',type:'rhetoric',pow:60,acc:85,pp:15,desc:'Powerful counter.'},
-  transform:{name:'Transform',type:'rhetoric',pow:0,acc:100,pp:10,desc:'Raises attack.',fx:'atkUp'},
-  grand_oration:{name:'Grand Oration',type:'rhetoric',pow:90,acc:80,pp:5,desc:'Shakes foundations.'},
-  paradox_strike:{name:'Paradox Strike',type:'rhetoric',pow:55,acc:90,pp:15,desc:'Impossible contradiction.'},
-  repetition_strike:{name:'Repetition Strike',type:'rhetoric',pow:35,acc:100,pp:20,desc:'Hits twice.',fx:'double'},
-  plot_twist:{name:'Plot Twist',type:'narrative',pow:70,acc:85,pp:10,desc:'Nobody saw this coming.'},
-  flashback:{name:'Flashback',type:'narrative',pow:0,acc:100,pp:10,desc:'Heals HP.',fx:'heal'},
-  cliffhanger:{name:'Cliffhanger',type:'narrative',pow:55,acc:90,pp:15,desc:'Suspense damage.'},
-  deeper_meaning:{name:'Deeper Meaning',type:'narrative',pow:45,acc:95,pp:20,desc:'More than meets the eye.'},
-  animate:{name:'Animate',type:'narrative',pow:0,acc:100,pp:10,desc:'Boosts all stats.',fx:'allUp'},
-  deus_ex_machina:{name:'Deus Ex Machina',type:'narrative',pow:120,acc:60,pp:3,desc:'Divine intervention.'},
-  rhyme:{name:'Rhyme',type:'poetic',pow:40,acc:100,pp:25,desc:'Perfect couplet.'},
-  like_lightning:{name:'Like Lightning',type:'poetic',pow:60,acc:90,pp:15,desc:'Swift simile.'},
-  gentle_verse:{name:'Gentle Verse',type:'poetic',pow:0,acc:100,pp:15,desc:'Heals wounds.',fx:'heal'},
-  stanza_slam:{name:'Stanza Slam',type:'poetic',pow:70,acc:85,pp:10,desc:'Devastating verse.'},
-  meter_strike:{name:'Meter Strike',type:'poetic',pow:80,acc:80,pp:8,desc:'Iambic pentameter.'},
-  sonic_surge:{name:'Sonic Surge',type:'poetic',pow:50,acc:95,pp:18,desc:'Wave of sound.'},
-  monologue:{name:'Monologue',type:'dramatic',pow:50,acc:95,pp:20,desc:'Passionate speech.'},
-  climax:{name:'Climax',type:'dramatic',pow:80,acc:80,pp:8,desc:'Peak action.'},
-  exaggerate:{name:'Exaggerate',type:'dramatic',pow:0,acc:100,pp:10,desc:'Raises atk sharply.',fx:'atkUpBig'},
-  tragic_flaw:{name:'Tragic Flaw',type:'dramatic',pow:65,acc:90,pp:12,desc:'Exploits weakness.'},
-  grand_finale:{name:'Grand Finale',type:'dramatic',pow:100,acc:75,pp:5,desc:'Final curtain.'},
-  inner_conflict:{name:'Inner Conflict',type:'dramatic',pow:55,acc:95,pp:15,desc:'Internal struggle.'},
-  mock:{name:'Mock',type:'satirical',pow:45,acc:100,pp:25,desc:'Ridicule.'},
-  subvert:{name:'Subvert',type:'satirical',pow:60,acc:90,pp:15,desc:'Expectations flipped.'},
-  double_meaning:{name:'Double Meaning',type:'satirical',pow:50,acc:95,pp:18,desc:'Hits on two levels.'},
-  lampoon:{name:'Lampoon',type:'satirical',pow:70,acc:85,pp:10,desc:'Savage mockery.'},
-  soften_blow:{name:'Soften Blow',type:'satirical',pow:0,acc:100,pp:15,desc:'Raises defense.',fx:'defUp'},
-  understate:{name:'Understate',type:'satirical',pow:0,acc:100,pp:10,desc:'Lowers enemy atk.',fx:'eAtkDown'},
-  cosmic_joke:{name:'Cosmic Joke',type:'satirical',pow:90,acc:80,pp:5,desc:'Universe laughs.'},
-  dark_omen:{name:'Dark Omen',type:'gothic',pow:50,acc:95,pp:20,desc:'Chilling portent.'},
-  haunt:{name:'Haunt',type:'gothic',pow:40,acc:100,pp:25,desc:'Never misses.'},
-  shadow_strike:{name:'Shadow Strike',type:'gothic',pow:65,acc:88,pp:12,desc:'From darkness.'},
-  forebode:{name:'Forebode',type:'gothic',pow:0,acc:100,pp:10,desc:'Lowers enemy spd.',fx:'eSpdDown'},
-  storm_of_emotion:{name:'Storm of Emotion',type:'gothic',pow:60,acc:90,pp:12,desc:'Nature rages.'},
-  doom_foretold:{name:'Doom Foretold',type:'gothic',pow:100,acc:70,pp:5,desc:'Prophecy fulfilled.'},
-};
+// === PLAYER ===
+const P={x:15,y:13,px:15*TS,py:13*TS,dir:'down',moving:false,moveDir:null,moveProgress:0,walkFrame:0,walkTimer:0,
+  mapId:'hometown',party:[],
+  bag:[{id:'ink_pot',name:'Ink Potion',desc:'Heal 30 HP',count:5,fx:'heal',val:30},
+    {id:'quill_pot',name:'Quill Potion',desc:'Heal 60 HP',count:3,fx:'heal',val:60},
+    {id:'manuscript',name:'Manuscript',desc:'Catch creatures',count:10,fx:'catch',val:1},
+    {id:'rare_ms',name:'Rare Manuscript',desc:'Better catch',count:3,fx:'catch',val:2},
+    {id:'revive',name:'Revive Scroll',desc:'Revive fainted',count:2,fx:'revive',val:1}],
+  defeated:[],money:500,badges:[],lexLog:new Set(),rivalStarter:null,starterChoice:null};
 
-// --- Creature Factory ---
-function makeCreature(id, level) {
-  const d = CREATURES[id]; if (!d) return null;
-  const c = {
-    id, name:d.name, type:d.type, sprite:d.sprite, level,
-    base:{...d.base}, mods:{atk:0,def:0,spd:0}, desc:d.desc, evoDef:d.evo,
-    xp:0, moves:[]
-  };
-  // Assign moves based on level
-  const available = d.moves.slice(0, Math.min(4, 2 + Math.floor(level/5)));
-  c.moves = available.map(mid => ({...MOVES[mid], id:mid, curPP:MOVES[mid].pp}));
-  calcStats(c);
-  c.hp = c.maxHp;
-  return c;
-}
-function calcStats(c) {
-  c.maxHp = Math.floor(c.base.hp + c.level*2.5 + 10);
-  c.atk = Math.floor(c.base.atk + c.level*1.5);
-  c.def = Math.floor(c.base.def + c.level*1.5);
-  c.spd = Math.floor(c.base.spd + c.level*1.5);
-  c.xpNext = Math.floor(c.level*c.level*1.5 + 10);
-}
+const MOVE_SPD=3;
 
-// --- Player ---
-const P = {
-  x:15, y:13, px:15*TS, py:13*TS, // px/py = pixel position for smooth movement
-  dir:'down', walking:false, walkFrame:0, walkTimer:0,
-  mapId:'hometown',
-  party: [],
-  bag: [
-    {id:'ink_potion',name:'Ink Potion',desc:'Restores 30 HP',count:5,fx:'heal',val:30},
-    {id:'quill_potion',name:'Quill Potion',desc:'Restores 60 HP',count:3,fx:'heal',val:60},
-    {id:'manuscript',name:'Manuscript',desc:'Catches creatures',count:10,fx:'catch',val:1},
-    {id:'rare_ms',name:'Rare Manuscript',desc:'Better catch rate',count:3,fx:'catch',val:2},
-    {id:'revive',name:'Revive Scroll',desc:'Revives fainted',count:2,fx:'revive',val:1},
-  ],
-  defeated: [],
-  money: 500,
-  moving: false, moveDir:null, moveProgress:0,
-};
-
-// --- Smooth Movement ---
-const MOVE_SPEED = 3; // pixels per frame
-
-function updatePlayer() {
-  if (P.moving) {
-    P.moveProgress += MOVE_SPEED;
-    const dirs = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
-    const [dx,dy] = dirs[P.moveDir];
-    P.px = (P.x + dx * (P.moveProgress/TS)) * TS;
-    P.py = (P.y + dy * (P.moveProgress/TS)) * TS;
-    P.walkTimer++;
-    if (P.walkTimer % 8 === 0) P.walkFrame = 1 - P.walkFrame;
-    if (P.moveProgress >= TS) {
-      P.x += dx; P.y += dy;
-      P.px = P.x * TS; P.py = P.y * TS;
-      P.moving = false; P.moveProgress = 0;
-      onStepComplete();
-    }
+function updatePlayer(){
+  if(P.moving){
+    P.moveProgress+=MOVE_SPD;
+    const dirs={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+    const[dx,dy]=dirs[P.moveDir];
+    P.px=(P.x+dx*(P.moveProgress/TS))*TS;
+    P.py=(P.y+dy*(P.moveProgress/TS))*TS;
+    P.walkTimer++;if(P.walkTimer%8===0)P.walkFrame=1-P.walkFrame;
+    if(P.moveProgress>=TS){P.x+=dx;P.y+=dy;P.px=P.x*TS;P.py=P.y*TS;P.moving=false;P.moveProgress=0;onStep()}
     return;
   }
-
-  let dx=0, dy=0, dir=null;
-  if (keys['ArrowUp']||keys['KeyW']) { dy=-1; dir='up'; }
-  else if (keys['ArrowDown']||keys['KeyS']) { dy=1; dir='down'; }
-  else if (keys['ArrowLeft']||keys['KeyA']) { dx=-1; dir='left'; }
-  else if (keys['ArrowRight']||keys['KeyD']) { dx=1; dir='right'; }
-
-  if (!dir) { P.walkFrame=0; return; }
-  P.dir = dir;
-
-  const map = MAPS[P.mapId];
-  const nx = P.x+dx, ny = P.y+dy;
-
-  // Connection check
-  for (const conn of (map.connections||[])) {
-    if (nx===conn.x && ny===conn.y) {
-      Transition.start(() => {
-        P.mapId=conn.toMap; P.x=conn.toX; P.y=conn.toY;
-        P.px=P.x*TS; P.py=P.y*TS;
-        if (MAPS[conn.toMap].music) Audio.bgm(MAPS[conn.toMap].music);
-      });
-      return;
-    }
-  }
-
-  if (nx<0||ny<0||nx>=map.width||ny>=map.height) { return; }
-  const tile = map.data[ny][nx];
-  if (!WALKABLE.includes(tile)) { return; }
-  // NPC collision
-  for (const npc of (map.npcs||[])) { if (npc.x===nx&&npc.y===ny) return; }
-
-  P.moving = true; P.moveDir = dir; P.moveProgress = 0;
-  if (frame % 3 === 0) Audio.jingle('step');
+  let dx=0,dy=0,dir=null;
+  if(keys.ArrowUp||keys.KeyW){dy=-1;dir='up'}
+  else if(keys.ArrowDown||keys.KeyS){dy=1;dir='down'}
+  else if(keys.ArrowLeft||keys.KeyA){dx=-1;dir='left'}
+  else if(keys.ArrowRight||keys.KeyD){dx=1;dir='right'}
+  if(!dir){P.walkFrame=0;return}
+  P.dir=dir;
+  const map=MAPS[P.mapId],nx=P.x+dx,ny=P.y+dy;
+  for(const c of(map.conns||[])){if(nx===c.x&&ny===c.y){Trans.start(()=>{P.mapId=c.to;P.x=c.tx;P.y=c.ty;P.px=P.x*TS;P.py=P.y*TS;const m=MAPS[c.to];if(m.music)SFX.bgm(m.music)});return}}
+  if(nx<0||ny<0||nx>=map.w||ny>=map.h)return;
+  if(!WALK.includes(map.data[ny][nx]))return;
+  for(const npc of(map.npcs||[]))if(npc.x===nx&&npc.y===ny)return;
+  P.moving=true;P.moveDir=dir;P.moveProgress=0;
+  if(frame%3===0)SFX.j('step');
 }
 
-function onStepComplete() {
-  const map = MAPS[P.mapId];
-  const tile = map.data[P.y][P.x];
-  if (tile === TILE.TALL_GRASS && Math.random() < (map.encounterRate||0.12)) {
-    startWildEncounter();
-  }
-  if (tile === TILE.HEAL) {
-    P.party.forEach(c => { c.hp=c.maxHp; c.moves.forEach(m => m.curPP=m.pp); });
-    Audio.jingle('heal');
-    Notification.show('Your team was healed!');
-  }
+function onStep(){
+  const map=MAPS[P.mapId],tile=map.data[P.y][P.x];
+  if(tile===T.TG&&Math.random()<(map.eRate||.12))startWild();
+  if(tile===T.HL){P.party.forEach(c=>{c.hp=c.maxHp;c.status=null;c.statusTurns=0;c.moves.forEach(m=>m.curPP=m.pp)});SFX.j('heal');Notif.show('Team healed!')}
+  if(tile===T.SH){Shop.open()}
 }
 
-function interact() {
-  const map = MAPS[P.mapId];
-  const dirs={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
-  const [dx,dy] = dirs[P.dir];
-  const tx=P.x+dx, ty=P.y+dy;
-
-  for (const npc of (map.npcs||[])) {
-    if (npc.x===tx && npc.y===ty) {
-      if (npc.battle && !P.defeated.includes(npc.name)) {
-        Dialogue.start(npc.dialogue, () => startTrainerBattle(npc));
-      } else if (npc.battle) {
-        Dialogue.start([{s:npc.name,t:'Great battle earlier!'}]);
-      } else {
-        Dialogue.start(npc.dialogue);
-      }
-      return;
+function interact(){
+  const map=MAPS[P.mapId],dirs={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+  const[dx,dy]=dirs[P.dir],tx=P.x+dx,ty=P.y+dy;
+  for(const npc of(map.npcs||[])){
+    if(npc.x===tx&&npc.y===ty){
+      if(npc.gym&&!P.defeated.includes(npc.name)&&npc.battle){
+        Dlg.start(npc.dlg,()=>startTrainer(npc));
+      }else if(npc.champion&&!P.defeated.includes(npc.name)&&npc.battle){
+        Dlg.start(npc.dlg,()=>startTrainer(npc));
+      }else if(npc.battle&&!P.defeated.includes(npc.name)){
+        Dlg.start(npc.dlg,()=>startTrainer(npc));
+      }else if(npc.battle){
+        Dlg.start([{s:npc.name,t:'Great battle before!'}]);
+      }else{
+        Dlg.start(npc.dlg);
+      }return;
     }
   }
-  for (const sign of (map.signs||[])) {
-    if (sign.x===tx && sign.y===ty) {
-      Dialogue.start([{s:'Sign',t:sign.text}]);
-      return;
-    }
-  }
+  for(const s of(map.signs||[]))if(s.x===tx&&s.y===ty){Dlg.start([{s:'Sign',t:s.text}]);return}
 }
 
-// --- Map System ---
-const TILE={GRASS:0,PATH:1,TALL_GRASS:2,TREE:3,WATER:4,BUILDING:5,DOOR:6,SIGN:7,FLOWER:9,FENCE:10,HEAL:11,BRIDGE:12};
-const WALKABLE=[TILE.GRASS,TILE.PATH,TILE.TALL_GRASS,TILE.DOOR,TILE.SIGN,TILE.FLOWER,TILE.HEAL,TILE.BRIDGE];
-
-function makeMap(w,h,fill) { const m=[]; for(let y=0;y<h;y++){const r=[];for(let x=0;x<w;x++)r.push(fill);m.push(r);}return m; }
-function setRect(m,x1,y1,x2,y2,t){for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t;}
-function setTile(m,x,y,t){if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t;}
-
-const MAPS = {};
-
-// Hometown
-(function(){
-  const d=makeMap(30,25,TILE.GRASS);
-  setRect(d,0,0,29,0,TILE.TREE);setRect(d,0,24,29,24,TILE.TREE);setRect(d,0,0,0,24,TILE.TREE);setRect(d,29,0,29,24,TILE.TREE);
-  // Paths
-  setRect(d,3,12,27,12,TILE.PATH); setRect(d,15,3,15,22,TILE.PATH);
-  // Prof lab
-  setRect(d,5,8,11,10,TILE.BUILDING); setTile(d,8,10,TILE.DOOR);
-  setRect(d,4,7,12,7,TILE.FENCE); setRect(d,4,7,4,11,TILE.FENCE); setRect(d,12,7,12,11,TILE.FENCE);
-  setRect(d,4,11,7,11,TILE.FENCE); setRect(d,9,11,12,11,TILE.FENCE);
-  // Player house
-  setRect(d,5,3,9,5,TILE.BUILDING); setTile(d,7,5,TILE.DOOR);
-  // Healing center
-  setRect(d,18,3,22,5,TILE.BUILDING); setTile(d,20,5,TILE.HEAL);
-  // Pond
-  setRect(d,3,16,7,19,TILE.WATER);
-  // Flowers
-  [3,5,7].forEach(x=>setTile(d,x,15,TILE.FLOWER));
-  [4,6].forEach(x=>setTile(d,x,20,TILE.FLOWER));
-  // Tall grass
-  setRect(d,20,14,27,22,TILE.TALL_GRASS);
-  // Sign
-  setTile(d,14,11,TILE.SIGN);
-  // Exit east
-  setTile(d,28,12,TILE.PATH);
-
-  MAPS.hometown = {
-    name:'Inkwell Town', width:30, height:25, data:d,
-    encounters:['simile','alliteration','litotes'], encounterRate:0.10, music:'town',
-    npcs:[
-      {x:13,y:11,sprite:'npc_professor',name:'Prof. Narrator',dialogue:[
-        {s:'Prof. Narrator',t:'Welcome to the world of Lexicon Legends!'},
-        {s:'Prof. Narrator',t:'Literary creatures roam the tall grass. Each embodies a literary device!'},
-        {s:'Prof. Narrator',t:'Catch them, train them, become the greatest Lexicographer!'}
-      ]},
-      {x:10,y:15,sprite:'npc_girl',name:'Lily',dialogue:[
-        {s:'Lily',t:'I love the Similes around here! Gentle as a summer breeze~'},
-        {s:'Lily',t:'Try the tall grass to the east!'}
-      ]},
-      {x:20,y:7,sprite:'npc_nurse',name:'Nurse',dialogue:[
-        {s:'Nurse',t:'Step on the red cross to heal your team!'}
-      ]},
-    ],
-    signs:[{x:14,y:11,text:'INKWELL TOWN - Where Every Story Begins'}],
-    connections:[{x:28,y:12,toMap:'route1',toX:1,toY:15}]
-  };
-})();
-
-// Route 1
-(function(){
-  const d=makeMap(40,30,TILE.GRASS);
-  setRect(d,0,0,39,0,TILE.TREE);setRect(d,0,29,39,29,TILE.TREE);setRect(d,39,0,39,29,TILE.TREE);setRect(d,0,0,0,29,TILE.TREE);
-  setTile(d,0,15,TILE.PATH);
-  // Main path
-  setRect(d,1,15,20,15,TILE.PATH);
-  for(let y=8;y<=15;y++)setTile(d,20,y,TILE.PATH);
-  setRect(d,20,8,35,8,TILE.PATH);
-  for(let y=4;y<=8;y++)setTile(d,35,y,TILE.PATH);
-  setRect(d,35,4,38,4,TILE.PATH);
-  // Tall grass patches
-  setRect(d,5,10,15,14,TILE.TALL_GRASS);
-  setRect(d,8,16,18,22,TILE.TALL_GRASS);
-  setRect(d,24,3,33,7,TILE.TALL_GRASS);
-  setRect(d,25,10,37,16,TILE.TALL_GRASS);
-  // Water
-  setRect(d,25,20,32,25,TILE.WATER);
-  // Bridges
-  setRect(d,22,22,24,22,TILE.BRIDGE);
-  // Scattered trees
-  [[3,5],[7,3],[12,24],[35,20],[2,22],[18,4],[37,18]].forEach(([x,y])=>setTile(d,x,y,TILE.TREE));
-  // Flowers
-  [[3,18],[18,6],[15,25]].forEach(([x,y])=>setTile(d,x,y,TILE.FLOWER));
-
-  MAPS.route1 = {
-    name:'Prose Path', width:40, height:30, data:d,
-    encounters:['metaphor','simile','hyperbole','onomatopoeia','personification','oxymoron'], encounterRate:0.14, music:'route',
-    npcs:[
-      {x:10,y:14,sprite:'npc_trainer',name:'Bug Catcher Tim',dialogue:[
-        {s:'Tim',t:'Hey! You look like a trainer! Let\'s battle!'}
-      ], battle:{creatures:[{id:'simile',lv:5},{id:'alliteration',lv:4}]}},
-      {x:30,y:7,sprite:'npc_girl',name:'Lass Emily',dialogue:[
-        {s:'Emily',t:'The creatures get tougher heading north!'},
-        {s:'Emily',t:'Make sure to train in the tall grass!'}
-      ]},
-      {x:22,y:15,sprite:'npc_professor',name:'Old Man Webster',dialogue:[
-        {s:'Webster',t:'In my day, we only had Metaphors and Similes...'},
-        {s:'Webster',t:'Now there\'s all these newfangled devices!'}
-      ]},
-    ],
-    signs:[{x:1,y:14,text:'← Inkwell Town'},{x:20,y:7,text:'↑ Verse Valley →'}],
-    connections:[{x:0,y:15,toMap:'hometown',toX:27,toY:12},{x:38,y:4,toMap:'verse_valley',toX:1,toY:15}]
-  };
-})();
-
-// Verse Valley
-(function(){
-  const d=makeMap(35,30,TILE.GRASS);
-  setRect(d,0,0,34,0,TILE.TREE);setRect(d,0,29,34,29,TILE.TREE);setRect(d,34,0,34,29,TILE.TREE);setRect(d,0,0,0,29,TILE.TREE);
-  setTile(d,0,15,TILE.PATH);
-  // Winding path
-  setRect(d,1,15,10,15,TILE.PATH);
-  for(let y=10;y<=15;y++)setTile(d,10,y,TILE.PATH);
-  setRect(d,10,10,25,10,TILE.PATH);
-  for(let y=10;y<=20;y++)setTile(d,25,y,TILE.PATH);
-  setRect(d,25,20,30,20,TILE.PATH);
-  // Heal station
-  setRect(d,15,5,19,7,TILE.BUILDING); setTile(d,17,7,TILE.HEAL);
-  // Tall grass
-  setRect(d,2,2,8,8,TILE.TALL_GRASS);
-  setRect(d,13,12,22,18,TILE.TALL_GRASS);
-  setRect(d,5,22,15,27,TILE.TALL_GRASS);
-  setRect(d,27,22,32,27,TILE.TALL_GRASS);
-  // Water
-  setRect(d,2,16,6,19,TILE.WATER);
-
-  MAPS.verse_valley = {
-    name:'Verse Valley', width:35, height:30, data:d,
-    encounters:['allegory','foreshadowing','pathetic_fallacy','irony','euphemism','soliloquy','anaphora','hyperbole'], encounterRate:0.18, music:'route',
-    npcs:[
-      {x:8,y:10,sprite:'npc_professor',name:'Sage Dickens',dialogue:[
-        {s:'Sage Dickens',t:'It was the best of times, it was the worst of times...'},
-        {s:'Sage Dickens',t:'Gothic types lurk in the shadows here.'},
-        {s:'Sage Dickens',t:'Seek the Legendary Protagonist at the valley\'s end!'}
-      ]},
-      {x:20,y:19,sprite:'npc_trainer',name:'Poet Blake',dialogue:[
-        {s:'Blake',t:'Tiger, tiger, burning bright... want to battle?'}
-      ], battle:{creatures:[{id:'metaphor',lv:12},{id:'hyperbole',lv:11},{id:'foreshadowing',lv:13}]}},
-      {x:30,y:20,sprite:'npc_girl',name:'Champion Austen',dialogue:[
-        {s:'Champion Austen',t:'It is a truth universally acknowledged that a trainer must want a battle!'}
-      ], battle:{creatures:[{id:'irony',lv:15},{id:'allegory',lv:16},{id:'foreshadowing',lv:15},{id:'hyperbole',lv:17}]}},
-    ],
-    signs:[{x:1,y:14,text:'← Prose Path'},{x:25,y:9,text:'Verse Valley - Beware Gothic types!'}],
-    connections:[{x:0,y:15,toMap:'route1',toX:37,toY:4}]
-  };
-})();
-
-// --- Transition Effect ---
-const Transition = {
-  active:false, alpha:0, phase:'out', cb:null, type:'fade',
-  start(cb, type='fade') { this.active=true; this.alpha=0; this.phase='out'; this.cb=cb; this.type=type; },
-  update() {
-    if (!this.active) return;
-    if (this.phase==='out') {
-      this.alpha += 0.06;
-      if (this.alpha >= 1) { this.alpha=1; if(this.cb){this.cb();this.cb=null;} this.phase='in'; }
-    } else {
-      this.alpha -= 0.06;
-      if (this.alpha <= 0) { this.alpha=0; this.active=false; }
-    }
-  },
-  draw() {
-    if (!this.active) return;
-    X.fillStyle = `rgba(0,0,0,${this.alpha})`;
-    X.fillRect(0,0,W,H);
-  }
+// === TRANSITIONS ===
+const Trans={active:false,alpha:0,phase:'out',cb:null,
+  start(cb){this.active=true;this.alpha=0;this.phase='out';this.cb=cb},
+  update(){if(!this.active)return;if(this.phase==='out'){this.alpha+=.06;if(this.alpha>=1){this.alpha=1;if(this.cb){this.cb();this.cb=null}this.phase='in'}}else{this.alpha-=.06;if(this.alpha<=0){this.alpha=0;this.active=false}}},
+  draw(){if(!this.active)return;X.fillStyle=`rgba(0,0,0,${this.alpha})`;X.fillRect(0,0,W,H)}
 };
 
-// --- Notification ---
-const Notification = {
-  text:'', timer:0,
-  show(t) { this.text=t; this.timer=120; },
-  update() { if(this.timer>0) this.timer--; },
-  draw() {
-    if (this.timer<=0) return;
-    const a = Math.min(1, this.timer/20);
-    X.save();
-    X.globalAlpha = a;
-    X.fillStyle = 'rgba(0,0,0,0.85)';
-    const tw = X.measureText(this.text).width;
-    const bx = W/2-tw/2-20, by = H/2-20;
-    roundRect(bx,by,tw+40,40,10);
-    X.fill();
-    X.strokeStyle = '#f0c040';
-    X.lineWidth = 2;
-    roundRect(bx,by,tw+40,40,10);
-    X.stroke();
-    X.fillStyle = '#f0c040';
-    X.font = '16px monospace';
-    X.textAlign = 'center';
-    X.fillText(this.text, W/2, H/2+6);
-    X.restore();
-  }
+const EncTrans={active:false,timer:0,cb:null,
+  start(cb){this.active=true;this.timer=0;this.cb=cb;SFX.j('enc')},
+  update(){if(!this.active)return;this.timer++;if(this.timer>=55){this.active=false;if(this.cb)this.cb()}},
+  draw(){if(!this.active)return;const t=this.timer;
+    if(t<12){const a=t<4?t/4:t<8?1:(12-t)/4;X.fillStyle=`rgba(255,255,255,${a})`;X.fillRect(0,0,W,H)}
+    else{const prog=(t-12)/43,bH=25,bars=Math.ceil(H/bH);X.fillStyle='#000';
+    for(let i=0;i<bars;i++){const dir=i%2===0?1:-1,off=(1-prog)*W*dir;X.fillRect(off,i*bH,W,bH)}}}
 };
 
-// --- Dialogue System ---
-const Dialogue = {
-  queue:[], cb:null, text:'', displayText:'', charIdx:0, speaker:'', typing:false,
-  start(msgs, cb=null) {
-    this.queue = msgs.map(m => ({speaker:m.s||'',text:m.t||m.text||''}));
-    this.cb = cb;
-    gameState = 'dialogue';
-    this.showNext();
+// === NOTIFICATION ===
+const Notif={text:'',timer:0,
+  show(t){this.text=t;this.timer=100},
+  update(){if(this.timer>0)this.timer--},
+  draw(){if(this.timer<=0)return;const a=Math.min(1,this.timer/15);X.save();X.globalAlpha=a;
+    X.fillStyle='rgba(0,0,0,.85)';const tw=X.measureText(this.text).width;
+    roundRect(W/2-tw/2-20,H/2-20,tw+40,40,10);X.fill();
+    X.strokeStyle='#f0c040';X.lineWidth=2;roundRect(W/2-tw/2-20,H/2-20,tw+40,40,10);X.stroke();
+    X.fillStyle='#f0c040';X.font='16px monospace';X.textAlign='center';X.fillText(this.text,W/2,H/2+6);X.restore()}
+};
+
+// === DIALOGUE ===
+const Dlg={queue:[],cb:null,text:'',disp:'',ci:0,speaker:'',typing:false,
+  start(msgs,cb=null){this.queue=msgs.map(m=>({speaker:m.s||'',text:m.t||''}));this.cb=cb;gameState='dialogue';this.next()},
+  next(){if(!this.queue.length){this.close();return}const m=this.queue.shift();this.speaker=m.speaker;this.text=m.text;this.disp='';this.ci=0;this.typing=true},
+  update(){if(this.typing&&this.ci<this.text.length){this.ci++;this.disp=this.text.substring(0,this.ci);if(this.ci>=this.text.length)this.typing=false}},
+  advance(){SFX.j('sel');if(this.typing){this.disp=this.text;this.ci=this.text.length;this.typing=false;return}this.next()},
+  close(){gameState='overworld';if(this.cb){const cb=this.cb;this.cb=null;cb()}},
+  draw(){X.fillStyle='rgba(10,10,30,.95)';roundRect(20,H-140,W-40,120,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(20,H-140,W-40,120,12);X.stroke();
+    if(this.speaker){X.fillStyle='#f0c040';X.font='bold 16px monospace';X.textAlign='left';X.fillText(this.speaker,45,H-110)}
+    X.fillStyle='#eee';X.font='15px monospace';wrapText(this.disp,45,H-85,W-90,22);
+    if(!this.typing){X.fillStyle=`rgba(255,255,255,${.5+Math.sin(frame*.1)*.5})`;X.font='14px monospace';X.textAlign='right';X.fillText('▼',W-40,H-30)}}
+};
+
+// === SHOP ===
+const Shop={open:false,items:[
+  {name:'Ink Potion',desc:'Heal 30 HP',price:100,bagId:'ink_pot',fx:'heal',val:30},
+  {name:'Quill Potion',desc:'Heal 60 HP',price:250,bagId:'quill_pot',fx:'heal',val:60},
+  {name:'Manuscript',desc:'Catch creatures',price:200,bagId:'manuscript',fx:'catch',val:1},
+  {name:'Rare Manuscript',desc:'Better catch',price:500,bagId:'rare_ms',fx:'catch',val:2},
+  {name:'Revive Scroll',desc:'Revive fainted',price:400,bagId:'revive',fx:'revive',val:1},
+],
+  open(){if(gameState!=='overworld')return;gameState='shop';this.isOpen=true;SFX.j('sel')},
+  close(){this.isOpen=false;gameState='overworld'},
+  buy(idx){const item=this.items[idx];if(P.money<item.price)return;P.money-=item.price;
+    const b=P.bag.find(i=>i.id===item.bagId);if(b)b.count++;SFX.j('buy');Notif.show(`Bought ${item.name}!`)},
+  draw(){X.fillStyle='rgba(10,10,30,.95)';roundRect(100,50,W-200,H-100,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(100,50,W-200,H-100,12);X.stroke();
+    X.fillStyle='#f0c040';X.font='bold 20px monospace';X.textAlign='center';X.fillText('SHOP',W/2,85);
+    X.fillStyle='#aaa';X.font='14px monospace';X.fillText(`Money: $${P.money}`,W/2,108);
+    this.items.forEach((item,i)=>{const y=130+i*55;
+      X.fillStyle=i%2?'rgba(255,255,255,.03)':'rgba(0,0,0,.1)';roundRect(120,y,W-240,45,6);X.fill();
+      X.fillStyle='#eee';X.font='15px monospace';X.textAlign='left';X.fillText(item.name,140,y+20);
+      X.fillStyle='#888';X.font='12px monospace';X.fillText(item.desc,140,y+36);
+      X.fillStyle=P.money>=item.price?'#2e7d32':'#555';roundRect(W-240,y+8,80,28,4);X.fill();
+      X.fillStyle='#fff';X.font='13px monospace';X.textAlign='center';X.fillText(`$${item.price}`,W-200,y+28)});
+    X.fillStyle='#444';roundRect(W/2-50,H-70,100,30,6);X.fill();
+    X.fillStyle='#eee';X.font='14px monospace';X.textAlign='center';X.fillText('Close',W/2,H-50)},
+  click(mx,my){
+    this.items.forEach((item,i)=>{const y=130+i*55;if(mx>W-240&&mx<W-160&&my>y+8&&my<y+36)this.buy(i)});
+    if(mx>W/2-50&&mx<W/2+50&&my>H-70&&my<H-40)this.close()}
+};
+
+// === BATTLE SYSTEM ===
+const B={
+  active:false,enemy:null,eparty:[],eidx:0,isWild:true,tname:'',turn:true,
+  menuState:'main',tq:[],curText:'',tci:0,typing:false,_ft:'',tcb:null,
+  hpAP:1,hpAE:1,slideP:0,slideE:0,shakeT:0,shakeTgt:'',flashT:0,flashTgt:'',
+  gymName:null,isChamp:false,
+
+  startWild(c){this.active=true;this.enemy=c;this.eparty=[c];this.eidx=0;this.isWild=true;this.tname='';this.turn=true;this.menuState='main';this.tq=[];
+    this.hpAE=1;this.hpAP=P.party[0].hp/P.party[0].maxHp;this.slideP=-200;this.slideE=200;this.gymName=null;this.isChamp=false;
+    this._sendFirst();gameState='battle';SFX.stopBgm();SFX.bgm('battle');
+    P.lexLog.add(c.id);
+    this.qt(`A wild ${c.name} appeared!`)},
+  startTrainer(creatures,name,gym,champ){
+    this.active=true;this.eparty=creatures;this.eidx=0;this.enemy=creatures[0];this.isWild=false;this.tname=name;
+    this.turn=true;this.menuState='main';this.tq=[];this.hpAE=1;this.hpAP=P.party[0].hp/P.party[0].maxHp;
+    this.slideP=-200;this.slideE=200;this.gymName=gym||null;this.isChamp=champ||false;
+    this._sendFirst();gameState='battle';SFX.stopBgm();SFX.bgm(gym?'gym':'battle');
+    creatures.forEach(c=>P.lexLog.add(c.id));
+    this.qt(`${name} wants to battle!`);this.qt(`Sent out ${this.enemy.name}!`)},
+  _sendFirst(){const a=P.party.findIndex(c=>c.hp>0);if(a>0)[P.party[0],P.party[a]]=[P.party[a],P.party[0]]},
+
+  qt(t,cb=null){this.tq.push({text:t,cb})},
+  showNext(){if(!this.tq.length){this.typing=false;this.curText='';gameState='battle';this.menuState='main';return}
+    const i=this.tq.shift();this.curText='';this.tci=0;this.typing=true;this._ft=i.text;this.tcb=i.cb;gameState='battleText'},
+  advText(){if(this.typing&&this.tci<this._ft.length){this.curText=this._ft;this.tci=this._ft.length;this.typing=false;return}
+    const cb=this.tcb;this.tcb=null;if(cb)cb();this.showNext()},
+
+  update(){
+    const p=P.party[0];if(p){const t=Math.max(0,p.hp/p.maxHp);this.hpAP+=(t-this.hpAP)*.1}
+    if(this.enemy){const t=Math.max(0,this.enemy.hp/this.enemy.maxHp);this.hpAE+=(t-this.hpAE)*.1}
+    if(this.slideP<0)this.slideP+=8;if(this.slideE>0)this.slideE-=8;
+    if(this.slideP>0)this.slideP=0;if(this.slideE<0)this.slideE=0;
+    if(this.shakeT>0)this.shakeT--;if(this.flashT>0)this.flashT--;
+    if(this.typing&&this.tci<this._ft.length){this.tci++;this.curText=this._ft.substring(0,this.tci);if(this.tci>=this._ft.length)this.typing=false}
+    Particles.update();MoveVFX.update();
   },
-  showNext() {
-    if (this.queue.length===0) { this.close(); return; }
-    const msg = this.queue.shift();
-    this.speaker = msg.speaker;
-    this.text = msg.text;
-    this.displayText = '';
-    this.charIdx = 0;
-    this.typing = true;
+
+  // === STATUS CHECK ===
+  checkStatus(c){
+    if(!c.status)return true; // can act
+    if(c.status==='burn'){const dmg=Math.max(1,Math.floor(c.maxHp/16));c.hp=Math.max(0,c.hp-dmg);this.qt(`${c.name} is burned! (-${dmg})`);SFX.j('status')}
+    if(c.status==='poison'){const dmg=Math.max(1,Math.floor(c.maxHp/8));c.hp=Math.max(0,c.hp-dmg);this.qt(`${c.name} is poisoned! (-${dmg})`);SFX.j('status')}
+    if(c.status==='freeze'){if(Math.random()<.2){c.status=null;this.qt(`${c.name} thawed out!`);return true}this.qt(`${c.name} is frozen!`);return false}
+    if(c.status==='sleep'){c.statusTurns--;if(c.statusTurns<=0){c.status=null;this.qt(`${c.name} woke up!`);return true}this.qt(`${c.name} is asleep!`);return false}
+    if(c.status==='paralyze'){if(Math.random()<.25){this.qt(`${c.name} is paralyzed!`);return false}return true}
+    if(c.status==='confuse'){if(Math.random()<.33){const dmg=Math.max(1,Math.floor(c.atk*.4));c.hp=Math.max(0,c.hp-dmg);this.qt(`${c.name} hurt itself in confusion! (-${dmg})`);return false}return true}
+    return true;
   },
-  update() {
-    if (this.typing && this.charIdx < this.text.length) {
-      this.charIdx += 1;
-      this.displayText = this.text.substring(0, this.charIdx);
-      if (this.charIdx >= this.text.length) this.typing = false;
-    }
-  },
-  advance() {
-    Audio.jingle('select');
-    if (this.typing) {
-      this.displayText = this.text;
-      this.charIdx = this.text.length;
-      this.typing = false;
-      return;
+
+  useMove(idx){
+    const p=P.party[0],mv=p.moves[idx];if(!mv||mv.curPP<=0)return;
+    this.turn=false;this.menuState='main';mv.curPP--;
+    const pSpd=p.spd*(1+p.mods.spd*.25)*(p.status==='paralyze'?.25:1);
+    const eSpd=this.enemy.spd*(1+(this.enemy.mods?.spd||0)*.25)*(this.enemy.status==='paralyze'?.25:1);
+    if(pSpd>=eSpd){
+      this._pTurn(p,mv,()=>{if(this.enemy.hp<=0){this.eFaint();return}this._eTurn()})
+    }else{
+      this._eTurn(()=>{if(P.party[0].hp<=0){this.pFaint();return}this._pTurn(p,mv,()=>{if(this.enemy.hp<=0){this.eFaint();return}this.turn=true})})
     }
     this.showNext();
   },
-  close() {
-    gameState = 'overworld';
-    if (this.cb) { const cb=this.cb; this.cb=null; cb(); }
+  _pTurn(p,mv,cb){
+    if(!this.checkStatus(p)){if(p.hp<=0){this.pFaint();return}cb&&cb();return}
+    this.execMove(p,this.enemy,mv,'player',cb);
   },
-  draw() {
-    // Box
-    X.fillStyle = 'rgba(10,10,30,0.95)';
-    roundRect(20, H-140, W-40, 120, 12);
-    X.fill();
-    X.strokeStyle = '#e2b340';
-    X.lineWidth = 3;
-    roundRect(20, H-140, W-40, 120, 12);
-    X.stroke();
-    // Speaker
-    if (this.speaker) {
-      X.fillStyle = '#f0c040';
-      X.font = 'bold 16px monospace';
-      X.textAlign = 'left';
-      X.fillText(this.speaker, 45, H-110);
-    }
-    // Text with word wrap
-    X.fillStyle = '#eee';
-    X.font = '15px monospace';
-    wrapText(this.displayText, 45, H-85, W-90, 22);
-    // Continue indicator
-    if (!this.typing) {
-      X.fillStyle = `rgba(255,255,255,${0.5+Math.sin(frame*0.1)*0.5})`;
-      X.font = '14px monospace';
-      X.textAlign = 'right';
-      X.fillText('▼', W-40, H-30);
-    }
-  }
-};
-
-function wrapText(text, x, y, maxW, lineH) {
-  X.textAlign = 'left';
-  const words = text.split(' ');
-  let line = '';
-  let cy = y;
-  for (const word of words) {
-    const test = line + word + ' ';
-    if (X.measureText(test).width > maxW && line !== '') {
-      X.fillText(line, x, cy);
-      line = word + ' ';
-      cy += lineH;
-    } else {
-      line = test;
-    }
-  }
-  X.fillText(line, x, cy);
-}
-
-function roundRect(x,y,w,h,r) {
-  X.beginPath();
-  X.moveTo(x+r,y); X.lineTo(x+w-r,y); X.quadraticCurveTo(x+w,y,x+w,y+r);
-  X.lineTo(x+w,y+h-r); X.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  X.lineTo(x+r,y+h); X.quadraticCurveTo(x,y+h,x,y+h-r);
-  X.lineTo(x,y+r); X.quadraticCurveTo(x,y,x+r,y);
-  X.closePath();
-}
-
-// --- Particle System ---
-const Particles = {
-  list: [],
-  spawn(x, y, count, color, speed=3, life=30, size=4) {
-    for (let i=0;i<count;i++) {
-      const angle = Math.random()*Math.PI*2;
-      const spd = Math.random()*speed + 1;
-      this.list.push({
-        x, y, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
-        life, maxLife:life, color, size: Math.random()*size+2
-      });
-    }
-  },
-  update() {
-    for (let i=this.list.length-1;i>=0;i--) {
-      const p = this.list[i];
-      p.x += p.vx; p.y += p.vy;
-      p.vy += 0.1; // gravity
-      p.life--;
-      if (p.life<=0) this.list.splice(i,1);
-    }
-  },
-  draw() {
-    for (const p of this.list) {
-      X.globalAlpha = p.life/p.maxLife;
-      X.fillStyle = p.color;
-      X.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
-    }
-    X.globalAlpha = 1;
-  }
-};
-
-// --- Battle Encounter Transition ---
-const EncounterTransition = {
-  active:false, timer:0, cb:null, phase:0,
-  start(cb) {
-    this.active=true; this.timer=0; this.cb=cb; this.phase=0;
-    Audio.jingle('encounter');
-  },
-  update() {
-    if (!this.active) return;
-    this.timer++;
-    if (this.timer < 15) {
-      this.phase = 0; // flash
-    } else if (this.timer < 60) {
-      this.phase = 1; // sliding bars
-    } else {
-      this.active = false;
-      if(this.cb) this.cb();
-    }
-  },
-  draw() {
-    if (!this.active) return;
-    if (this.phase === 0) {
-      // White flash
-      const a = this.timer < 5 ? this.timer/5 : (this.timer < 10 ? 1 : (15-this.timer)/5);
-      X.fillStyle = `rgba(255,255,255,${a})`;
-      X.fillRect(0,0,W,H);
-    } else {
-      // Horizontal bars sliding in
-      const progress = (this.timer - 15) / 45;
-      const barH = 30;
-      const bars = Math.ceil(H / barH);
-      X.fillStyle = '#000';
-      for (let i = 0; i < bars; i++) {
-        const dir = i % 2 === 0 ? 1 : -1;
-        const offset = (1 - progress) * W * dir;
-        X.fillRect(offset, i * barH, W, barH);
-      }
-    }
-  }
-};
-
-// --- Rendering: Overworld ---
-const TILE_PAL = {
-  [TILE.GRASS]:'#3a7d44', [TILE.PATH]:'#c4a35a', [TILE.TALL_GRASS]:'#2d6b35',
-  [TILE.TREE]:'#1a4d2e', [TILE.WATER]:'#2563a8', [TILE.BUILDING]:'#6d5c4e',
-  [TILE.DOOR]:'#8b4513', [TILE.SIGN]:'#c4a35a', [TILE.FLOWER]:'#3a7d44',
-  [TILE.FENCE]:'#8b7355', [TILE.HEAL]:'#ff6b6b', [TILE.BRIDGE]:'#a0845c'
-};
-
-function drawOverworld() {
-  const map = MAPS[P.mapId]; if(!map) return;
-  const camX = P.px - W/2 + TS/2;
-  const camY = P.py - H/2 + TS/2;
-  const cx = Math.max(0, Math.min(camX, map.width*TS - W));
-  const cy = Math.max(0, Math.min(camY, map.height*TS - H));
-
-  const stx = Math.floor(cx/TS), sty = Math.floor(cy/TS);
-  const etx = Math.min(map.width-1, stx+Math.ceil(W/TS)+1);
-  const ety = Math.min(map.height-1, sty+Math.ceil(H/TS)+1);
-
-  for (let y=sty;y<=ety;y++) {
-    for (let x=stx;x<=etx;x++) {
-      const tile = map.data[y][x];
-      const sx = x*TS-cx, sy = y*TS-cy;
-      drawTile(tile, sx, sy, x, y);
-    }
-  }
-
-  // NPCs
-  for (const npc of (map.npcs||[])) {
-    const sx = npc.x*TS-cx, sy = npc.y*TS-cy;
-    if (sx>-TS&&sx<W+TS&&sy>-TS&&sy<H+TS) {
-      Sprites.draw(npc.sprite, sx+2, sy+2, TS-4, TS-4);
-      // Shadow
-      X.fillStyle='rgba(0,0,0,0.2)';
-      X.beginPath();
-      X.ellipse(sx+TS/2, sy+TS-3, 10, 3, 0, 0, Math.PI*2);
-      X.fill();
-    }
-  }
-
-  // Player
-  const ppx = P.px - cx, ppy = P.py - cy;
-  // Shadow
-  X.fillStyle='rgba(0,0,0,0.25)';
-  X.beginPath();
-  X.ellipse(ppx+TS/2, ppy+TS-2, 10, 4, 0, 0, Math.PI*2);
-  X.fill();
-  // Sprite
-  let spriteName = 'player_' + P.dir;
-  if (P.moving && P.walkFrame) spriteName = 'player_walk_down'; // simplified
-  Sprites.draw(spriteName, ppx+2, ppy, TS-4, TS);
-
-  // Draw tall grass overlay (on top of player if in tall grass)
-  if (map.data[P.y] && map.data[P.y][P.x] === TILE.TALL_GRASS) {
-    const osx = P.x*TS-cx, osy = P.y*TS-cy;
-    drawTallGrassOverlay(osx, osy, P.x, P.y);
-  }
-
-  // HUD
-  drawHUD(map);
-  // Minimap
-  drawMinimap(map, cx, cy);
-}
-
-function drawTile(tile, sx, sy, tx, ty) {
-  // Base
-  X.fillStyle = TILE_PAL[tile] || '#3a7d44';
-  X.fillRect(sx, sy, TS, TS);
-
-  switch(tile) {
-    case TILE.GRASS:
-      // Subtle grass texture
-      X.fillStyle = '#3e8348';
-      if((tx+ty)%3===0) X.fillRect(sx+8,sy+12,2,8);
-      if((tx+ty)%5===1) X.fillRect(sx+20,sy+6,2,10);
-      break;
-    case TILE.TALL_GRASS:
-      X.fillStyle = '#1e5428';
-      for(let i=0;i<4;i++) {
-        const gx=sx+3+i*7, sway=Math.sin(frame*0.04+tx+ty+i)*2;
-        X.fillRect(gx+sway,sy+4,2,24);
-        X.fillRect(gx+sway-3,sy+2,8,4);
-      }
-      X.fillStyle='#25632f';
-      X.fillRect(sx+2+Math.sin(frame*0.05+tx)*1,sy+10,3,16);
-      break;
-    case TILE.TREE:
-      // Trunk
-      X.fillStyle='#5d3a1a';
-      X.fillRect(sx+12,sy+18,8,14);
-      // Canopy layers
-      X.fillStyle='#1a5c2e';
-      X.beginPath(); X.arc(sx+16,sy+12,13,0,Math.PI*2); X.fill();
-      X.fillStyle='#1a6e32';
-      X.beginPath(); X.arc(sx+14,sy+9,9,0,Math.PI*2); X.fill();
-      X.fillStyle='#22803a';
-      X.beginPath(); X.arc(sx+18,sy+8,7,0,Math.PI*2); X.fill();
-      break;
-    case TILE.WATER:
-      X.fillStyle='#1d5faa';
-      const wo=Math.sin(frame*0.025+tx*0.5+ty*0.3)*3;
-      X.fillRect(sx,sy+12+wo,TS,4);
-      X.fillStyle='#3a9fd8';
-      X.fillRect(sx+4,sy+5+wo,12,2);
-      X.fillRect(sx+18,sy+20+wo,8,2);
-      X.fillStyle='#1a4e8a';
-      X.fillRect(sx+10,sy+25+wo,6,2);
-      break;
-    case TILE.BUILDING:
-      X.fillStyle='#5a4a3e';
-      X.fillRect(sx+1,sy+1,30,30);
-      X.fillStyle='#4a3828';
-      X.fillRect(sx,sy,TS,5);
-      X.fillStyle='#756050';
-      X.fillRect(sx,sy+28,TS,4);
-      // Window
-      X.fillStyle='#ffd700';
-      X.fillRect(sx+8,sy+10,14,10);
-      X.fillStyle='#fff8dc';
-      X.fillRect(sx+10,sy+12,10,6);
-      X.fillStyle='#4a3828';
-      X.fillRect(sx+14,sy+10,2,10);
-      X.fillRect(sx+8,sy+14,14,2);
-      break;
-    case TILE.DOOR:
-      X.fillStyle='#5a4a3e'; X.fillRect(sx+1,sy+1,30,30);
-      X.fillStyle='#8b4513'; X.fillRect(sx+8,sy+2,16,30);
-      X.fillStyle='#a0522d'; X.fillRect(sx+10,sy+4,12,26);
-      X.fillStyle='#ffd700'; X.beginPath(); X.arc(sx+19,sy+18,2,0,Math.PI*2); X.fill();
-      break;
-    case TILE.HEAL:
-      X.fillStyle='#cc4444'; X.fillRect(sx+2,sy+2,28,28);
-      X.fillStyle='#ff6b6b'; X.fillRect(sx+4,sy+4,24,24);
-      X.fillStyle='#fff';
-      X.fillRect(sx+12,sy+6,8,20); X.fillRect(sx+6,sy+12,20,8);
-      // Pulsing glow
-      X.fillStyle=`rgba(255,100,100,${0.2+Math.sin(frame*0.08)*0.15})`;
-      X.beginPath(); X.arc(sx+16,sy+16,18,0,Math.PI*2); X.fill();
-      break;
-    case TILE.FENCE:
-      X.fillStyle='#6d5c4e';
-      X.fillRect(sx+2,sy+10,28,4); X.fillRect(sx+2,sy+20,28,4);
-      X.fillStyle='#8b7355';
-      X.fillRect(sx+4,sy+5,4,24); X.fillRect(sx+24,sy+5,4,24);
-      break;
-    case TILE.SIGN:
-      X.fillStyle='#c4a35a'; X.fillRect(sx,sy,TS,TS);
-      X.fillStyle='#8b7355'; X.fillRect(sx+12,sy+18,8,14);
-      X.fillStyle='#deb887'; X.fillRect(sx+4,sy+4,24,16);
-      X.fillStyle='#5a3e28';
-      X.fillRect(sx+7,sy+8,18,2); X.fillRect(sx+7,sy+14,14,2);
-      // Exclamation on approach
-      if (Math.abs(P.x-tx)<=1 && Math.abs(P.y-ty)<=1) {
-        X.fillStyle='#f0c040';
-        X.font='bold 12px monospace'; X.textAlign='center';
-        X.fillText('!', sx+16, sy-2);
-      }
-      break;
-    case TILE.FLOWER:
-      X.fillStyle='#3a7d44'; X.fillRect(sx,sy,TS,TS);
-      const fcolors=['#ff69b4','#ff6347','#ffd700','#da70d6','#87ceeb'];
-      for(let i=0;i<4;i++) {
-        X.fillStyle=fcolors[(tx+ty+i)%fcolors.length];
-        const fx=sx+4+i*7, fy=sy+10+Math.sin(frame*0.03+i+tx)*2;
-        X.beginPath(); X.arc(fx,fy,3,0,Math.PI*2); X.fill();
-        X.fillStyle='#ffff00'; X.beginPath(); X.arc(fx,fy,1,0,Math.PI*2); X.fill();
-        X.fillStyle='#2d6b35'; X.fillRect(fx-0.5,fy+3,1,12);
-      }
-      break;
-    case TILE.PATH:
-      X.fillStyle='#b89a4a';
-      if((tx+ty)%4===0) X.fillRect(sx+4,sy+4,4,4);
-      if((tx+ty)%6===2) X.fillRect(sx+20,sy+20,5,5);
-      if((tx+ty)%5===3) X.fillRect(sx+14,sy+8,3,3);
-      break;
-    case TILE.BRIDGE:
-      X.fillStyle='#8b7355'; X.fillRect(sx,sy,TS,3); X.fillRect(sx,sy+29,TS,3);
-      X.fillStyle='#6d5c4e';
-      X.fillRect(sx+4,sy+3,3,26); X.fillRect(sx+25,sy+3,3,26);
-      break;
-  }
-}
-
-function drawTallGrassOverlay(sx, sy, tx, ty) {
-  X.fillStyle = 'rgba(30,84,40,0.6)';
-  for(let i=0;i<3;i++) {
-    const gx=sx+5+i*9, sway=Math.sin(frame*0.04+tx+ty+i)*2;
-    X.fillRect(gx+sway,sy+16,3,16);
-  }
-}
-
-function drawHUD(map) {
-  // Top left: area name + party preview
-  X.fillStyle='rgba(0,0,0,0.7)';
-  roundRect(8,8,220,20+P.party.length*18,8);
-  X.fill();
-  X.strokeStyle='rgba(255,255,255,0.2)'; X.lineWidth=1;
-  roundRect(8,8,220,20+P.party.length*18,8);
-  X.stroke();
-
-  X.fillStyle='#f0c040'; X.font='bold 13px monospace'; X.textAlign='left';
-  X.fillText(map.name, 18, 25);
-
-  P.party.forEach((c,i) => {
-    const cy = 40 + i*18;
-    X.fillStyle='#ddd'; X.font='12px monospace';
-    X.fillText(`${c.name} Lv${c.level}`, 18, cy);
-    // Mini HP bar
-    const barX=160, barW=55, barH=6;
-    X.fillStyle='#333'; X.fillRect(barX,cy-6,barW,barH);
-    const pct=Math.max(0,c.hp/c.maxHp);
-    X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
-    X.fillRect(barX,cy-6,barW*pct,barH);
-  });
-}
-
-function drawMinimap(map, cx, cy) {
-  const mw=100,mh=80;
-  const mx=W-mw-10, my=10;
-  X.fillStyle='rgba(0,0,0,0.7)';
-  roundRect(mx-4,my-4,mw+8,mh+8,6);
-  X.fill();
-
-  const sx=mw/map.width, sy=mh/map.height;
-  for(let y=0;y<map.height;y++) {
-    for(let x=0;x<map.width;x++) {
-      X.fillStyle=TILE_PAL[map.data[y][x]]||'#3a7d44';
-      X.fillRect(mx+x*sx, my+y*sy, Math.ceil(sx), Math.ceil(sy));
-    }
-  }
-  // Player
-  X.fillStyle='#ff0';
-  X.fillRect(mx+P.x*sx-1, my+P.y*sy-1, 3, 3);
-  // NPCs
-  X.fillStyle='#f0c040';
-  for(const npc of (map.npcs||[])) {
-    X.fillRect(mx+npc.x*sx, my+npc.y*sy, 2, 2);
-  }
-}
-
-// --- Battle System ---
-const Battle = {
-  active:false, enemy:null, eparty:[], eidx:0, isWild:true, tname:'',
-  playerTurn:true, animating:false,
-  textQueue:[], currentText:'', textCharIdx:0, textTyping:false, textCb:null,
-  menuState:'main', // main, moves, bag, team
-  selectedMove:-1,
-  shakeTimer:0, shakeTarget:'', flashTimer:0, flashTarget:'',
-  hpAnimPlayer:1, hpAnimEnemy:1, // animated hp ratios
-  slideInPlayer:0, slideInEnemy:0, // for entrance animations
-
-  startWild(creature) {
-    this.active=true; this.enemy=creature;
-    this.eparty=[creature]; this.eidx=0; this.isWild=true;
-    this.tname=''; this.playerTurn=true; this.animating=false;
-    this.menuState='main'; this.textQueue=[];
-    this.hpAnimEnemy=1; this.hpAnimPlayer = P.party[0].hp/P.party[0].maxHp;
-    this.slideInPlayer=-200; this.slideInEnemy=200;
-    this.sendOutFirst();
-    gameState='battle';
-    Audio.stopBgm(); Audio.bgm('battle');
-    this.queueText(`A wild ${creature.name} appeared!`);
-  },
-  startTrainer(creatures, name) {
-    this.active=true; this.eparty=creatures; this.eidx=0;
-    this.enemy=creatures[0]; this.isWild=false; this.tname=name;
-    this.playerTurn=true; this.animating=false; this.menuState='main';
-    this.textQueue=[]; this.hpAnimEnemy=1;
-    this.hpAnimPlayer = P.party[0].hp/P.party[0].maxHp;
-    this.slideInPlayer=-200; this.slideInEnemy=200;
-    this.sendOutFirst();
-    gameState='battle';
-    Audio.stopBgm(); Audio.bgm('battle');
-    this.queueText(`${name} wants to battle!`);
-    this.queueText(`${name} sent out ${this.enemy.name}!`);
-  },
-  sendOutFirst() {
-    const alive = P.party.findIndex(c=>c.hp>0);
-    if (alive>0) { [P.party[0],P.party[alive]]=[P.party[alive],P.party[0]]; }
-  },
-
-  queueText(t, cb=null) {
-    this.textQueue.push({text:t, cb});
-  },
-  showNextText() {
-    if (this.textQueue.length===0) {
-      this.textTyping=false; this.currentText='';
-      gameState='battle'; this.menuState='main';
-      return;
-    }
-    const item = this.textQueue.shift();
-    this.currentText=''; this.textCharIdx=0; this.textTyping=true;
-    this._fullText = item.text; this.textCb = item.cb;
-    gameState='battleText';
-  },
-
-  advanceText() {
-    if (this.textTyping && this.textCharIdx < this._fullText.length) {
-      this.currentText = this._fullText;
-      this.textCharIdx = this._fullText.length;
-      this.textTyping = false;
-      return;
-    }
-    const cb = this.textCb; this.textCb = null;
-    if (cb) cb();
-    this.showNextText();
-  },
-
-  update() {
-    // Animate HP bars
-    const p = P.party[0];
-    if (p) {
-      const targetP = Math.max(0, p.hp/p.maxHp);
-      this.hpAnimPlayer += (targetP - this.hpAnimPlayer) * 0.1;
-    }
-    if (this.enemy) {
-      const targetE = Math.max(0, this.enemy.hp/this.enemy.maxHp);
-      this.hpAnimEnemy += (targetE - this.hpAnimEnemy) * 0.1;
-    }
-    // Slide in animations
-    if (this.slideInPlayer < 0) this.slideInPlayer += 8;
-    if (this.slideInEnemy > 0) this.slideInEnemy -= 8;
-    if (this.slideInPlayer > 0) this.slideInPlayer = 0;
-    if (this.slideInEnemy < 0) this.slideInEnemy = 0;
-    // Shake
-    if (this.shakeTimer > 0) this.shakeTimer--;
-    if (this.flashTimer > 0) this.flashTimer--;
-    // Text typing
-    if (this.textTyping && this.textCharIdx < this._fullText.length) {
-      this.textCharIdx += 1;
-      this.currentText = this._fullText.substring(0, this.textCharIdx);
-      if (this.textCharIdx >= this._fullText.length) this.textTyping = false;
-    }
-    Particles.update();
-  },
-
-  draw() {
-    // Battle background
-    drawBattleBG();
-    // Enemy platform
-    X.fillStyle='#6b8f45';
-    X.beginPath(); X.ellipse(580+this.slideInEnemy,200,120,30,0,0,Math.PI*2); X.fill();
-    X.fillStyle='#7a9f55';
-    X.beginPath(); X.ellipse(580+this.slideInEnemy,198,100,22,0,0,Math.PI*2); X.fill();
-    // Player platform
-    X.fillStyle='#7a9f55';
-    X.beginPath(); X.ellipse(200+this.slideInPlayer,380,130,35,0,0,Math.PI*2); X.fill();
-    X.fillStyle='#8aaf65';
-    X.beginPath(); X.ellipse(200+this.slideInPlayer,378,110,28,0,0,Math.PI*2); X.fill();
-
-    // Enemy sprite
-    if (this.enemy) {
-      let ex = 530+this.slideInEnemy, ey = 105;
-      if (this.shakeTimer>0 && this.shakeTarget==='enemy') {
-        ex += Math.sin(this.shakeTimer*2)*8;
-      }
-      if (this.flashTimer>0 && this.flashTarget==='enemy' && Math.floor(this.flashTimer/3)%2===0) {
-        X.globalAlpha=0.3;
-      }
-      Sprites.draw(this.enemy.sprite, ex, ey, 96, 96);
-      X.globalAlpha=1;
-    }
-    // Player sprite (back view = just larger)
-    const p = P.party[0];
-    if (p) {
-      let px = 150+this.slideInPlayer, py = 240;
-      if (this.shakeTimer>0 && this.shakeTarget==='player') {
-        px += Math.sin(this.shakeTimer*2)*8;
-      }
-      if (this.flashTimer>0 && this.flashTarget==='player' && Math.floor(this.flashTimer/3)%2===0) {
-        X.globalAlpha=0.3;
-      }
-      Sprites.draw(p.sprite, px, py, 112, 112);
-      X.globalAlpha=1;
-    }
-
-    Particles.draw();
-
-    // Enemy info panel
-    if (this.enemy) {
-      this.drawInfoPanel(this.enemy, 30, 30, this.hpAnimEnemy, false);
-    }
-    // Player info panel
-    if (p) {
-      this.drawInfoPanel(p, W-290, 320, this.hpAnimPlayer, true);
-    }
-
-    // Battle menu / text
-    this.drawBattleMenu();
-  },
-
-  drawInfoPanel(c, x, y, hpRatio, showXP) {
-    X.fillStyle='rgba(10,10,30,0.9)';
-    roundRect(x,y,250,showXP?90:75,10);
-    X.fill();
-    X.strokeStyle='#e2b340'; X.lineWidth=2;
-    roundRect(x,y,250,showXP?90:75,10);
-    X.stroke();
-
-    // Name and level
-    X.fillStyle='#f0c040'; X.font='bold 16px monospace'; X.textAlign='left';
-    X.fillText(c.name, x+12, y+22);
-    X.fillStyle='#aaa'; X.font='13px monospace';
-    X.fillText(`Lv.${c.level}`, x+180, y+22);
-    // Type badge
-    X.fillStyle=TYPES[c.type].color;
-    roundRect(x+12,y+28,70,16,4); X.fill();
-    X.fillStyle='#fff'; X.font='11px monospace'; X.textAlign='center';
-    X.fillText(TYPES[c.type].name, x+47, y+40);
-    X.textAlign='left';
-    // HP bar
-    const barX=x+12, barY=y+50, barW=226, barH=14;
-    X.fillStyle='#333';
-    roundRect(barX,barY,barW,barH,4); X.fill();
-    const pct = Math.max(0, Math.min(1, hpRatio));
-    const hpColor = pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
-    if (pct > 0) {
-      X.fillStyle=hpColor;
-      roundRect(barX,barY,barW*pct,barH,4); X.fill();
-      // Shine
-      X.fillStyle='rgba(255,255,255,0.15)';
-      X.fillRect(barX+2,barY+2,barW*pct-4,barH/2-2);
-    }
-    X.fillStyle='#ddd'; X.font='11px monospace'; X.textAlign='right';
-    X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, x+238, y+62);
-    X.textAlign='left';
-    // XP bar
-    if (showXP) {
-      X.fillStyle='#222';
-      X.fillRect(barX,barY+20,barW,6);
-      X.fillStyle='#2196f3';
-      X.fillRect(barX,barY+20,barW*(c.xp/c.xpNext),6);
-    }
-  },
-
-  drawBattleMenu() {
-    // Bottom panel
-    X.fillStyle='rgba(10,10,30,0.95)';
-    X.fillRect(0, H-150, W, 150);
-    X.strokeStyle='#e2b340'; X.lineWidth=3;
-    X.beginPath(); X.moveTo(0,H-150); X.lineTo(W,H-150); X.stroke();
-
-    if (gameState==='battleText') {
-      // Show text
-      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='left';
-      wrapText(this.currentText, 30, H-115, W-60, 24);
-      if (!this.textTyping) {
-        X.fillStyle=`rgba(255,255,255,${0.5+Math.sin(frame*0.1)*0.5})`;
-        X.font='14px monospace'; X.textAlign='right';
-        X.fillText('▼ click', W-30, H-15);
-      }
-      return;
-    }
-
-    if (this.menuState==='main') {
-      const btns = [
-        {label:'FIGHT',color:'#c62828',x:W/2+10,y:H-130},
-        {label:'BAG',color:'#2e7d32',x:W/2+170,y:H-130},
-        {label:'TEAM',color:'#1565c0',x:W/2+10,y:H-70},
-        {label:'RUN',color:'#6a1b9a',x:W/2+170,y:H-70},
-      ];
-      // Prompt text
-      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='left';
-      X.fillText('What will', 30, H-110);
-      X.fillText(`${P.party[0]?.name || '???'} do?`, 30, H-85);
-
-      btns.forEach((b,i) => {
-        X.fillStyle=b.color;
-        roundRect(b.x,b.y,140,48,8); X.fill();
-        // Hover-like highlight border
-        X.strokeStyle='rgba(255,255,255,0.3)'; X.lineWidth=2;
-        roundRect(b.x,b.y,140,48,8); X.stroke();
-        // Shine
-        X.fillStyle='rgba(255,255,255,0.1)';
-        X.fillRect(b.x+4,b.y+4,132,20);
-        X.fillStyle='#fff'; X.font='bold 16px monospace'; X.textAlign='center';
-        X.fillText(b.label, b.x+70, b.y+30);
-      });
-    } else if (this.menuState==='moves') {
-      const p = P.party[0]; if(!p) return;
-      p.moves.forEach((m,i) => {
-        const mx = (i%2)*220 + 30, my = H-135 + Math.floor(i/2)*55;
-        X.fillStyle=TYPES[m.type]?TYPES[m.type].color+'33':'#333';
-        roundRect(mx,my,200,45,8); X.fill();
-        X.strokeStyle=TYPES[m.type]?TYPES[m.type].color:'#555'; X.lineWidth=2;
-        roundRect(mx,my,200,45,8); X.stroke();
-        X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='left';
-        X.fillText(m.name, mx+10, my+18);
-        X.fillStyle=TYPES[m.type]?TYPES[m.type].color:'#888'; X.font='11px monospace';
-        X.fillText(`${TYPES[m.type]?.name||'???'} Pow:${m.pow||'-'}`, mx+10, my+34);
-        X.fillStyle='#888'; X.textAlign='right';
-        X.fillText(`PP:${m.curPP}/${m.pp}`, mx+190, my+34);
-      });
-      // Back button
-      X.fillStyle='#444';
-      roundRect(500,H-80,120,40,8); X.fill();
-      X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='center';
-      X.fillText('← BACK', 560, H-55);
-    } else if (this.menuState==='bag') {
-      const items = P.bag.filter(i=>i.count>0);
-      items.forEach((item,i) => {
-        const iy = H-140 + i*28;
-        X.fillStyle=i%2===0?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.1)';
-        X.fillRect(30,iy,W-60,26);
-        X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='left';
-        X.fillText(`${item.name}`, 50, iy+18);
-        X.fillStyle='#888'; X.textAlign='right';
-        X.fillText(`x${item.count}`, W-50, iy+18);
-      });
-      X.fillStyle='#444'; roundRect(W-160,H-30,120,25,6); X.fill();
-      X.fillStyle='#eee'; X.font='12px monospace'; X.textAlign='center';
-      X.fillText('← BACK', W-100, H-13);
-    } else if (this.menuState==='team') {
-      P.party.forEach((c,i) => {
-        const cy = H-140+i*24;
-        const pct=Math.max(0,c.hp/c.maxHp);
-        X.fillStyle=i===0?'rgba(255,255,100,0.1)':'rgba(255,255,255,0.03)';
-        X.fillRect(30,cy,W-60,22);
-        X.fillStyle=c.hp>0?'#eee':'#666'; X.font='13px monospace'; X.textAlign='left';
-        X.fillText(`${c.name} Lv${c.level}`, 50, cy+16);
-        X.fillStyle='#333'; X.fillRect(300,cy+5,150,10);
-        X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
-        X.fillRect(300,cy+5,150*pct,10);
-        X.fillStyle='#aaa'; X.font='11px monospace'; X.textAlign='right';
-        X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, W-50, cy+16);
-      });
-      X.fillStyle='#444'; roundRect(W-160,H-30,120,25,6); X.fill();
-      X.fillStyle='#eee'; X.font='12px monospace'; X.textAlign='center';
-      X.fillText('← BACK', W-100, H-13);
-    }
-  },
-
-  // Handle clicks
-  handleClick(mx, my) {
-    if (gameState==='battleText') { this.advanceText(); return; }
-    if (!this.playerTurn || this.animating) return;
-
-    if (this.menuState==='main') {
-      if (mx>W/2+10&&mx<W/2+150&&my>H-130&&my<H-82) this.showMoves();
-      else if (mx>W/2+170&&mx<W/2+310&&my>H-130&&my<H-82) this.showBag();
-      else if (mx>W/2+10&&mx<W/2+150&&my>H-70&&my<H-22) this.showTeam();
-      else if (mx>W/2+170&&mx<W/2+310&&my>H-70&&my<H-22) this.tryRun();
-    } else if (this.menuState==='moves') {
-      const p = P.party[0]; if(!p) return;
-      for (let i=0;i<p.moves.length;i++) {
-        const bx=(i%2)*220+30, by=H-135+Math.floor(i/2)*55;
-        if (mx>bx&&mx<bx+200&&my>by&&my<by+45) { this.useMove(i); return; }
-      }
-      if (mx>500&&mx<620&&my>H-80&&my<H-40) this.menuState='main';
-    } else if (this.menuState==='bag') {
-      const items=P.bag.filter(i=>i.count>0);
-      for (let i=0;i<items.length;i++) {
-        const iy=H-140+i*28;
-        if (mx>30&&mx<W-30&&my>iy&&my<iy+26) { this.useItem(items[i]); return; }
-      }
-      if (mx>W-160&&mx<W-40&&my>H-30&&my<H-5) this.menuState='main';
-    } else if (this.menuState==='team') {
-      for (let i=0;i<P.party.length;i++) {
-        const cy=H-140+i*24;
-        if (mx>30&&mx<W-30&&my>cy&&my<cy+22) { this.switchTo(i); return; }
-      }
-      if (mx>W-160&&mx<W-40&&my>H-30&&my<H-5) this.menuState='main';
-    }
-  },
-
-  showMoves() { Audio.jingle('select'); this.menuState='moves'; },
-  showBag() { Audio.jingle('select'); this.menuState='bag'; },
-  showTeam() { Audio.jingle('select'); this.menuState='team'; },
-
-  switchTo(i) {
-    if (P.party[i].hp<=0||i===0) return;
-    this.playerTurn=false;
-    [P.party[0],P.party[i]]=[P.party[i],P.party[0]];
-    this.menuState='main';
-    this.queueText(`Go, ${P.party[0].name}!`, () => { this.enemyTurn(); });
-    this.showNextText();
-  },
-
-  useItem(item) {
-    if (item.fx==='heal') {
-      const c=P.party[0];
-      if (c.hp>=c.maxHp) return;
-      c.hp=Math.min(c.maxHp, c.hp+item.val);
-      item.count--;
-      this.playerTurn=false; this.menuState='main';
-      Audio.jingle('heal');
-      this.queueText(`Used ${item.name}! Recovered HP!`, () => { this.enemyTurn(); });
-      this.showNextText();
-    } else if (item.fx==='catch') {
-      if (!this.isWild) return;
-      item.count--;
-      this.playerTurn=false; this.menuState='main';
-      this.tryCatch(item.val);
-    } else if (item.fx==='revive') {
-      const f=P.party.find(c=>c.hp<=0);
-      if (!f) return;
-      f.hp=Math.floor(f.maxHp/2);
-      item.count--;
-      this.playerTurn=false; this.menuState='main';
-      Audio.jingle('heal');
-      this.queueText(`${f.name} was revived!`, () => { this.enemyTurn(); });
-      this.showNextText();
-    }
-  },
-
-  useMove(idx) {
-    const p=P.party[0], move=p.moves[idx];
-    if (!move||move.curPP<=0) return;
-    this.playerTurn=false; this.menuState='main';
-    move.curPP--;
-
-    const pSpd=p.spd*(1+p.mods.spd*0.25);
-    const eSpd=this.enemy.spd*(1+(this.enemy.mods?.spd||0)*0.25);
-
-    if (pSpd>=eSpd) {
-      this.execMove(p,this.enemy,move,'player',() => {
-        if (this.enemy.hp<=0) { this.enemyFainted(); return; }
-        this.enemyTurn();
-      });
-    } else {
-      this.enemyTurnFirst(() => {
-        if (P.party[0].hp<=0) { this.playerFainted(); return; }
-        this.execMove(p,this.enemy,move,'player',() => {
-          if (this.enemy.hp<=0) { this.enemyFainted(); return; }
-          this.playerTurn=true;
-        });
-      });
-    }
-    this.showNextText();
-  },
-
-  execMove(atk,def,move,who,cb) {
-    // Accuracy
-    if (Math.random()*100 > move.acc) {
-      Audio.jingle('miss');
-      this.queueText(`${atk.name} used ${move.name}... but missed!`, cb);
-      return;
-    }
-    // Status moves
-    if (move.pow===0 && move.fx) {
-      this.applyFx(atk,def,move,who,cb);
-      return;
-    }
-    // Damage calc
-    const aStat=atk.atk*(1+(atk.mods?.atk||0)*0.25);
-    const dStat=def.def*(1+(def.mods?.def||0)*0.25);
-    const eff=typeEffect(move.type, def.type);
-    const stab=move.type===atk.type?1.5:1;
-    const rand=0.85+Math.random()*0.15;
-    let dmg=Math.floor(((2*atk.level/5+2)*move.pow*aStat/dStat/50+2)*stab*eff*rand);
-    if (move.fx==='double') dmg=Math.floor(dmg*1.5);
-    let crit=false;
-    if (Math.random()<0.0625) { dmg=Math.floor(dmg*1.5); crit=true; }
-    if (dmg<1) dmg=1;
-    def.hp=Math.max(0,def.hp-dmg);
-
-    // VFX
-    const target=who==='player'?'enemy':'player';
-    this.shakeTimer=15; this.shakeTarget=target;
-    this.flashTimer=20; this.flashTarget=target;
-    const pColor=TYPES[move.type]?TYPES[move.type].color:'#fff';
-    const pTarget=target==='enemy'?{x:580,y:150}:{x:200,y:300};
-    Particles.spawn(pTarget.x,pTarget.y,15,pColor,4,25,5);
-    if (eff>1) { Audio.jingle('superHit'); Particles.spawn(pTarget.x,pTarget.y,20,'#ff0',5,30,6); }
-    else Audio.jingle('hit');
-
-    let msg=`${atk.name} used ${move.name}! `;
-    if (eff>1) msg+="Super effective! ";
-    else if (eff<1) msg+="Not very effective... ";
-    if (crit) msg+="Critical hit! ";
-    msg+=`(-${dmg} HP)`;
-
-    this.queueText(msg, cb);
-  },
-
-  applyFx(atk,def,move,who,cb) {
-    let msg=`${atk.name} used ${move.name}! `;
-    const fx=move.fx;
-    if (fx==='heal') {
-      const amt=Math.floor(atk.maxHp*0.35);
-      atk.hp=Math.min(atk.maxHp,atk.hp+amt);
-      msg+=`Restored ${amt} HP!`;
-      Audio.jingle('heal');
-    } else if (fx==='atkUp') {
-      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+1);
-      msg+='Attack rose!';
-      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 8, '#f44', 3, 20);
-    } else if (fx==='atkUpBig') {
-      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+2);
-      msg+='Attack rose sharply!';
-      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 15, '#f44', 4, 25);
-    } else if (fx==='defUp') {
-      atk.mods.def=Math.min(3,(atk.mods?.def||0)+1);
-      msg+='Defense rose!';
-    } else if (fx==='allUp') {
-      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+1);
-      atk.mods.def=Math.min(3,(atk.mods?.def||0)+1);
-      atk.mods.spd=Math.min(3,(atk.mods?.spd||0)+1);
-      msg+='All stats rose!';
-      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 20, '#0ff', 4, 25);
-    } else if (fx==='eAtkDown') {
-      def.mods=def.mods||{atk:0,def:0,spd:0};
-      def.mods.atk=Math.max(-3,def.mods.atk-1);
-      msg+=`${def.name}'s attack fell!`;
-    } else if (fx==='eSpdDown') {
-      def.mods=def.mods||{atk:0,def:0,spd:0};
-      def.mods.spd=Math.max(-3,def.mods.spd-1);
-      msg+=`${def.name}'s speed fell!`;
-    }
-    this.queueText(msg, cb);
-  },
-
-  enemyTurn(cb) {
-    const e=this.enemy, p=P.party[0];
-    if (!e||e.hp<=0||!p||p.hp<=0) { if(cb)cb(); else{this.playerTurn=true;} return; }
+  _eTurn(cb){
+    const e=this.enemy,p=P.party[0];
+    if(!e||e.hp<=0||!p||p.hp<=0){cb?cb():this.turn=true;return}
+    if(!this.checkStatus(e)){if(e.hp<=0){this.eFaint();return}cb?cb():this.turn=true;this.showNext();return}
     const valid=e.moves.filter(m=>m.curPP>0);
-    if (valid.length===0) {
-      this.queueText(`${e.name} struggles!`, () => {
-        e.hp=Math.max(0,e.hp-Math.floor(e.maxHp*0.1));
-        if (e.hp<=0) { this.enemyFainted(); return; }
-        if(cb)cb();else{this.playerTurn=true;}
-      });
-      this.showNextText();
-      return;
-    }
+    if(!valid.length){this.qt(`${e.name} struggles!`,()=>{e.hp=Math.max(0,e.hp-Math.floor(e.maxHp*.1));if(e.hp<=0){this.eFaint();return}cb?cb():this.turn=true});this.showNext();return}
     // AI
-    let best=valid[0], bestS=-1;
-    for (const m of valid) {
-      let s=m.pow||30;
-      s*=typeEffect(m.type,p.type);
-      if (m.type===e.type) s*=1.3;
-      if (m.fx==='heal'&&e.hp<e.maxHp*0.4) s=80;
-      s+=Math.random()*15;
-      if (s>bestS){bestS=s;best=m;}
-    }
+    let best=valid[0],bestS=-1;
+    for(const m of valid){let s=m.pow||30;s*=typeEff(m.type,p.type);if(m.type===e.type)s*=1.3;
+      if(m.fx&&m.fx.type==='heal'&&e.hp<e.maxHp*.35)s=80;
+      if(m.cat==='status'&&m.pow===0&&e.hp>e.maxHp*.5)s*=.6;
+      s+=Math.random()*15;if(s>bestS){bestS=s;best=m}}
     best.curPP--;
-    this.execMove(e,p,best,'enemy',() => {
-      if (p.hp<=0){this.playerFainted();return;}
-      if(cb)cb();else{this.playerTurn=true;}
-    });
-    this.showNextText();
-  },
-  enemyTurnFirst(cb) {
-    // Enemy goes first, then callback
-    this.enemyTurn(cb);
+    this.execMove(e,p,best,'enemy',()=>{if(p.hp<=0){this.pFaint();return}cb?cb():this.turn=true});
+    this.showNext();
   },
 
-  enemyFainted() {
-    const p=P.party[0];
-    const xpGain=Math.floor(this.enemy.level*8+10);
-    p.xp+=xpGain;
-    let msg=`${this.enemy.name} fainted! +${xpGain} XP!`;
-    // Level up chain
-    while (p.xp>=p.xpNext) {
-      p.xp-=p.xpNext; p.level++;
-      calcStats(p); p.hp=Math.min(p.hp+15,p.maxHp);
-      msg+=` Level ${p.level}!`;
-      Audio.jingle('levelUp');
-      // New move?
-      const def=CREATURES[p.id];
-      if (def) {
-        const mi=Math.min(3,Math.floor(p.level/5)+1);
-        if (def.moves[mi]&&!p.moves.find(m=>m.id===def.moves[mi])) {
-          const nm=MOVES[def.moves[mi]];
-          if (nm) {
-            if (p.moves.length<4) {
-              p.moves.push({...nm,id:def.moves[mi],curPP:nm.pp});
-              msg+=` Learned ${nm.name}!`;
-            }
-          }
-        }
-      }
-      // Evolution?
-      if (p.evoDef&&p.level>=p.evoDef.level) {
-        const ed=CREATURES[p.evoDef.into];
-        if (ed) {
-          const old=p.name;
-          p.id=p.evoDef.into; p.name=ed.name; p.sprite=ed.sprite;
-          p.type=ed.type; p.base={...ed.base}; p.desc=ed.desc;
-          p.evoDef=ed.evo; calcStats(p); p.hp=p.maxHp;
-          for (const mid of ed.moves) {
-            if (!p.moves.find(m=>m.id===mid)&&p.moves.length<4) {
-              const mv=MOVES[mid]; if(mv) p.moves.push({...mv,id:mid,curPP:mv.pp});
-            }
-          }
-          msg+=` ${old} evolved into ${p.name}!!`;
-          Audio.jingle('evolve');
-          Particles.spawn(200,300,40,'#ff0',6,40,8);
-        }
-      }
-    }
-    this.queueText(msg, () => {
-      if (!this.isWild) {
+  execMove(atk,def,mv,who,cb){
+    if(Math.random()*100>mv.acc){SFX.j('miss');this.qt(`${atk.name} used ${mv.name}... missed!`,cb);return}
+    if(mv.pow===0&&mv.fx){this.applyFx(atk,def,mv,who,cb);return}
+    // Damage
+    const isSp=mv.cat==='special';
+    let aStat=isSp?(atk.spAtk||atk.atk)*(1+(atk.mods?.spAtk||atk.mods?.atk||0)*.25):atk.atk*(1+(atk.mods?.atk||0)*.25);
+    if(atk.status==='burn'&&!isSp)aStat*=.5;
+    let dStat=isSp?(def.spDef||def.def)*(1+(def.mods?.spDef||def.mods?.def||0)*.25):def.def*(1+(def.mods?.def||0)*.25);
+    const eff=typeEff(mv.type,def.type),stab=mv.type===atk.type?1.5:1,rand=.85+Math.random()*.15;
+    let dmg=Math.floor(((2*atk.level/5+2)*mv.pow*aStat/dStat/50+2)*stab*eff*rand);
+    if(mv.fx&&mv.fx.type==='double')dmg=Math.floor(dmg*1.5);
+    let crit=false;if(Math.random()<.0625){dmg=Math.floor(dmg*1.5);crit=true}
+    if(dmg<1)dmg=1;
+    def.hp=Math.max(0,def.hp-dmg);
+    // Recoil
+    if(mv.fx&&mv.fx.type==='recoil'){const rc=Math.floor(dmg/3);atk.hp=Math.max(0,atk.hp-rc)}
+    // VFX
+    const tgt=who==='player'?'enemy':'player';
+    this.shakeT=15;this.shakeTgt=tgt;this.flashT=20;this.flashTgt=tgt;
+    const px=tgt==='enemy'?580:200,py=tgt==='enemy'?150:300;
+    MoveVFX.play(mv.type,px,py,null);
+    eff>1?SFX.j('superHit'):SFX.j('hit');
+    let msg=`${atk.name} used ${mv.name}! `;
+    if(eff>1)msg+="Super effective! ";if(eff<1)msg+="Not very effective... ";if(crit)msg+="Critical! ";
+    msg+=`(-${dmg})`;
+    // Status infliction
+    if(mv.fx&&mv.fx.chance&&!def.status&&def.hp>0){
+      if(Math.random()*100<mv.fx.chance){def.status=mv.fx.type;if(mv.fx.type==='sleep')def.statusTurns=1+Math.floor(Math.random()*3);
+        msg+=` ${def.name} is now ${mv.fx.type}ed!`;SFX.j('status')}}
+    this.qt(msg,cb);
+  },
+
+  applyFx(atk,def,mv,who,cb){
+    let msg=`${atk.name} used ${mv.name}! `;const fx=mv.fx.type;
+    if(fx==='heal'){const a=Math.floor(atk.maxHp*.35);atk.hp=Math.min(atk.maxHp,atk.hp+a);msg+=`+${a} HP!`;SFX.j('heal')}
+    else if(fx==='atkUp'){atk.mods.atk=Math.min(3,(atk.mods.atk||0)+1);msg+='ATK rose!';Particles.spawn(who==='player'?200:580,who==='player'?300:150,8,'#f44',3,20)}
+    else if(fx==='atkUpBig'){atk.mods.atk=Math.min(3,(atk.mods.atk||0)+2);msg+='ATK sharply rose!';Particles.spawn(who==='player'?200:580,who==='player'?300:150,15,'#f44',4,25)}
+    else if(fx==='defUp'){atk.mods.def=Math.min(3,(atk.mods.def||0)+1);msg+='DEF rose!'}
+    else if(fx==='allUp'){atk.mods.atk=Math.min(3,(atk.mods.atk||0)+1);atk.mods.def=Math.min(3,(atk.mods.def||0)+1);atk.mods.spd=Math.min(3,(atk.mods.spd||0)+1);msg+='All stats rose!';Particles.spawn(who==='player'?200:580,who==='player'?300:150,20,'#0ff',4,25)}
+    else if(fx==='eAtkDown'){def.mods=def.mods||{atk:0,def:0,spd:0};def.mods.atk=Math.max(-3,def.mods.atk-1);msg+=`${def.name}'s ATK fell!`}
+    else if(fx==='eSpdDown'){def.mods=def.mods||{atk:0,def:0,spd:0};def.mods.spd=Math.max(-3,def.mods.spd-1);msg+=`${def.name}'s SPD fell!`}
+    else if(fx==='sleep'||fx==='paralyze'||fx==='confuse'||fx==='burn'||fx==='freeze'){
+      if(!def.status){def.status=fx;if(fx==='sleep')def.statusTurns=1+Math.floor(Math.random()*3);
+        msg+=`${def.name} is now ${fx}${fx==='sleep'?'':'ed'}!`;SFX.j('status')}
+      else msg+='But it failed!'}
+    this.qt(msg,cb);
+  },
+
+  eFaint(){
+    const p=P.party[0],xp=Math.floor(this.enemy.level*8+15);p.xp+=xp;
+    let msg=`${this.enemy.name} fainted! +${xp} XP!`;
+    while(p.xp>=p.xpNext){p.xp-=p.xpNext;p.level++;calcStats(p);p.hp=Math.min(p.hp+15,p.maxHp);
+      msg+=` Lv${p.level}!`;SFX.j('levelUp');
+      const d=CREATURES[p.id];if(d){const mi=Math.min(d.moves.length-1,Math.floor(p.level/5)+1);
+        if(d.moves[mi]&&!p.moves.find(m=>m.id===d.moves[mi])){const nm=MOVES[d.moves[mi]];
+          if(nm){if(p.moves.length<4){p.moves.push({...nm,id:d.moves[mi],curPP:nm.pp});msg+=` Learned ${nm.name}!`}}}}
+      const old=checkEvolve(p);if(old){msg+=` ${old} evolved into ${p.name}!!`;SFX.j('evolve');Particles.spawn(200,300,40,'#ff0',6,40,8)}}
+    this.qt(msg,()=>{
+      if(!this.isWild){
         this.eidx++;
-        if (this.eidx<this.eparty.length) {
-          this.enemy=this.eparty[this.eidx];
-          this.hpAnimEnemy=1; this.slideInEnemy=200;
-          this.queueText(`${this.tname} sent out ${this.enemy.name}!`, () => {this.playerTurn=true;});
-          this.showNextText();
-          return;
-        } else {
-          P.defeated.push(this.tname);
-          const prize=this.eparty.length*100;
-          P.money+=prize;
-          Audio.jingle('victory');
-          this.queueText(`Defeated ${this.tname}! Won $${prize}!`, () => {this.end();});
-          this.showNextText();
-          return;
-        }
-      }
-      Audio.jingle('victory');
-      this.end();
-    });
-    this.showNextText();
+        if(this.eidx<this.eparty.length){this.enemy=this.eparty[this.eidx];this.hpAE=1;this.slideE=200;
+          this.qt(`${this.tname} sent out ${this.enemy.name}!`,()=>{this.turn=true});this.showNext();return}
+        P.defeated.push(this.tname);const prize=this.eparty.length*150;P.money+=prize;
+        if(this.gymName){P.badges.push(this.gymName);SFX.j('gymWin');
+          this.qt(`Defeated Gym Leader ${this.tname}! Got ${this.gymName.toUpperCase()} badge!`,()=>{this.qt(`Won $${prize}!`,()=>{this.end()});this.showNext()})
+        }else if(this.isChamp){SFX.j('gymWin');
+          this.qt(`YOU DEFEATED THE CHAMPION! You are the greatest Lexicographer!`,()=>{this.qt(`Won $${prize}! Congratulations!`,()=>{this.end()});this.showNext()})
+        }else{SFX.j('victory');this.qt(`Defeated ${this.tname}! Won $${prize}!`,()=>{this.end()})}
+        this.showNext();return}
+      SFX.j('victory');this.end()});
+    this.showNext();
   },
 
-  playerFainted() {
+  pFaint(){
     const next=P.party.findIndex(c=>c.hp>0);
-    if (next>=0) {
-      this.queueText(`${P.party[0].name} fainted!`, () => {
-        [P.party[0],P.party[next]]=[P.party[next],P.party[0]];
-        this.slideInPlayer=-200;
-        this.queueText(`Go, ${P.party[0].name}!`, () => {this.playerTurn=true;});
-        this.showNextText();
-      });
-      this.showNextText();
-    } else {
-      this.queueText('All creatures fainted! You blacked out...', () => {
-        P.party.forEach(c=>{c.hp=c.maxHp;c.moves.forEach(m=>m.curPP=m.pp);c.mods={atk:0,def:0,spd:0};});
-        P.x=15;P.y=13;P.px=P.x*TS;P.py=P.y*TS;P.mapId='hometown';
-        this.end();
-      });
-      this.showNextText();
-    }
+    if(next>=0){this.qt(`${P.party[0].name} fainted!`,()=>{
+      [P.party[0],P.party[next]]=[P.party[next],P.party[0]];this.slideP=-200;
+      this.qt(`Go, ${P.party[0].name}!`,()=>{this.turn=true});this.showNext()});this.showNext()
+    }else{this.qt('All fainted! Blacked out...',()=>{
+      P.party.forEach(c=>{c.hp=c.maxHp;c.status=null;c.statusTurns=0;c.moves.forEach(m=>m.curPP=m.pp);c.mods={atk:0,def:0,spd:0}});
+      P.x=15;P.y=13;P.px=P.x*TS;P.py=P.y*TS;P.mapId='hometown';this.end()});this.showNext()}
   },
 
-  tryRun() {
-    if (!this.isWild) {
-      this.queueText("Can't run from a trainer!"); this.showNextText(); return;
-    }
-    Audio.jingle('run');
-    const p=P.party[0], e=this.enemy;
-    if (Math.random()<0.6 + p.spd/(p.spd+e.spd)*0.3) {
-      this.queueText('Got away safely!', () => {this.end();}); this.showNextText();
-    } else {
-      this.playerTurn=false;
-      this.queueText("Couldn't escape!", () => {this.enemyTurn();}); this.showNextText();
-    }
-  },
+  tryRun(){if(!this.isWild){this.qt("Can't run from trainer!");this.showNext();return}
+    SFX.j('run');if(Math.random()<.6+P.party[0].spd/(P.party[0].spd+this.enemy.spd)*.3){
+      this.qt('Got away!',()=>{this.end()});this.showNext()
+    }else{this.turn=false;this.qt("Can't escape!",()=>{this._eTurn()});this.showNext()}},
 
-  tryCatch(bonus) {
-    const e=this.enemy;
-    const hpFactor=(1-e.hp/e.maxHp)*100;
-    const rate=(hpFactor+Math.max(1,50-e.level)+bonus*30)/150;
+  tryCatch(bonus){const e=this.enemy;const rate=((1-e.hp/e.maxHp)*100+Math.max(1,50-e.level)+bonus*30)/150;
     let shakes=0;
-    const doShake = () => {
-      shakes++;
-      Audio.jingle('select');
-      if (shakes<3) { setTimeout(doShake, 600); return; }
-      if (Math.random()<rate) {
-        Audio.jingle('catch');
-        Particles.spawn(580,150,25,'#ff0',5,30);
-        this.queueText(`Caught ${e.name}!`, () => {
-          if (P.party.length<6) P.party.push(e);
-          this.queueText(`${e.name} joined your team!`, () => {this.end();});
-          this.showNextText();
-        });
-        this.showNextText();
-      } else {
-        Audio.jingle('catchFail');
-        this.queueText(`${e.name} broke free!`, () => {this.enemyTurn();});
-        this.showNextText();
-      }
-    };
-    this.queueText('Threw a Manuscript...'); this.showNextText();
-    setTimeout(doShake, 600);
+    const doShake=()=>{shakes++;SFX.j('sel');if(shakes<3){setTimeout(doShake,600);return}
+      if(Math.random()<rate){SFX.j('catch');Particles.spawn(580,150,25,'#ff0',5,30);
+        this.qt(`Caught ${e.name}!`,()=>{if(P.party.length<6)P.party.push(e);this.qt(`${e.name} joined!`,()=>{this.end()});this.showNext()});this.showNext()
+      }else{SFX.j('catchFail');this.qt(`${e.name} broke free!`,()=>{this._eTurn()});this.showNext()}};
+    this.qt('Threw a Manuscript...');this.showNext();setTimeout(doShake,600)},
+
+  switchTo(i){if(P.party[i].hp<=0||i===0)return;this.turn=false;[P.party[0],P.party[i]]=[P.party[i],P.party[0]];
+    this.menuState='main';this.slideP=-200;this.qt(`Go, ${P.party[0].name}!`,()=>{this._eTurn()});this.showNext()},
+
+  useItem(item){
+    if(item.fx==='heal'){const c=P.party[0];if(c.hp>=c.maxHp)return;c.hp=Math.min(c.maxHp,c.hp+item.val);item.count--;
+      this.turn=false;this.menuState='main';SFX.j('heal');this.qt(`Used ${item.name}! +${item.val} HP!`,()=>{this._eTurn()});this.showNext()
+    }else if(item.fx==='catch'){if(!this.isWild)return;item.count--;this.turn=false;this.menuState='main';this.tryCatch(item.val)
+    }else if(item.fx==='revive'){const f=P.party.find(c=>c.hp<=0);if(!f)return;f.hp=Math.floor(f.maxHp/2);item.count--;
+      this.turn=false;this.menuState='main';SFX.j('heal');this.qt(`${f.name} revived!`,()=>{this._eTurn()});this.showNext()}
   },
 
-  end() {
-    this.active=false;
-    P.party.forEach(c=>{c.mods={atk:0,def:0,spd:0};});
-    gameState='overworld';
-    const map=MAPS[P.mapId];
-    if (map.music) Audio.bgm(map.music);
-  }
+  end(){this.active=false;P.party.forEach(c=>{c.mods={atk:0,def:0,spd:0,spAtk:0,spDef:0}});
+    gameState='overworld';const m=MAPS[P.mapId];if(m&&m.music)SFX.bgm(m.music)},
+
+  // Drawing...continued in next part
 };
 
-function drawBattleBG() {
-  // Sky gradient
-  const grad=X.createLinearGradient(0,0,0,H-150);
-  grad.addColorStop(0,'#87CEEB');
-  grad.addColorStop(0.6,'#b4e0fa');
-  grad.addColorStop(1,'#5a8f3c');
-  X.fillStyle=grad;
-  X.fillRect(0,0,W,H-150);
-
-  // Clouds
-  X.fillStyle='rgba(255,255,255,0.6)';
-  [[80+Math.sin(frame*0.005)*20,50],[350+Math.sin(frame*0.007+1)*15,40],[600+Math.sin(frame*0.004+2)*25,60]].forEach(([cx,cy])=>{
-    X.beginPath();
-    X.arc(cx,cy,25,0,Math.PI*2); X.arc(cx+25,cy-8,20,0,Math.PI*2);
-    X.arc(cx-15,cy-5,18,0,Math.PI*2); X.arc(cx+10,cy+5,15,0,Math.PI*2);
-    X.fill();
-  });
-
-  // Ground
-  X.fillStyle='#5a8f3c';
-  X.fillRect(0,280,W,H-280-150);
-  X.fillStyle='#4a7f2c';
-  X.beginPath(); X.arc(180,300,80,Math.PI,0); X.fill();
-  X.beginPath(); X.arc(620,290,100,Math.PI,0); X.fill();
-  // Grass tufts
-  X.fillStyle='#3a6f1c';
-  for(let i=0;i<12;i++) {
-    const gx=i*70+10+Math.sin(i)*10;
-    X.fillRect(gx,350+Math.sin(i*2)*5,4,15);
-    X.fillRect(gx+6,355+Math.sin(i*2+1)*3,3,12);
-  }
-}
-
-function startWildEncounter() {
-  if (P.party.length===0||P.party.every(c=>c.hp<=0)) return;
-  const map=MAPS[P.mapId];
-  const possible=map.encounters||[];
-  const cid=possible[Math.floor(Math.random()*possible.length)];
+function startWild(){if(!P.party.length||P.party.every(c=>c.hp<=0))return;
+  const map=MAPS[P.mapId],pos=map.enc||[],cid=pos[Math.floor(Math.random()*pos.length)];
   const maxLv=Math.max(...P.party.map(c=>c.level));
-  const lv=Math.max(2,Math.floor(maxLv*(0.6+Math.random()*0.6)));
-  const wild=makeCreature(cid,lv);
-  EncounterTransition.start(() => { Battle.startWild(wild); });
-}
+  const lv=Math.max(2,Math.floor(maxLv*(.6+Math.random()*.6)));
+  EncTrans.start(()=>{B.startWild(makeCreature(cid,lv))})}
 
-function startTrainerBattle(npc) {
-  const creatures=npc.battle.creatures.map(c=>makeCreature(c.id,c.lv||c.level||5));
-  EncounterTransition.start(() => { Battle.startTrainer(creatures, npc.name); });
-}
+function startTrainer(npc){
+  const creatures=npc.battle.creatures.map(c=>makeCreature(c.id,c.lv||5));
+  EncTrans.start(()=>{B.startTrainer(creatures,npc.name,npc.gym||null,npc.champion||false)})}
 
-// --- Title Screen ---
-function drawTitle() {
-  // Background
-  const grad=X.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#1a0a2e'); grad.addColorStop(0.5,'#16213e'); grad.addColorStop(1,'#0f3460');
-  X.fillStyle=grad; X.fillRect(0,0,W,H);
-
-  // Stars
-  for (let i=0;i<50;i++) {
-    const sx=(i*137+frame*0.2)%W, sy=(i*73)%300;
-    X.fillStyle=`rgba(255,255,255,${0.3+Math.sin(frame*0.02+i)*0.3})`;
-    X.fillRect(sx,sy,2,2);
-  }
-
-  // Title
-  X.save();
-  X.font='bold 56px monospace'; X.textAlign='center';
-  X.fillStyle='#a06000';
-  X.fillText('LEXICON LEGENDS', W/2+3, 183);
-  X.fillStyle='#f0c040';
-  X.fillText('LEXICON LEGENDS', W/2, 180);
-  // Glow
-  X.shadowColor='#f0c040'; X.shadowBlur=20;
-  X.fillText('LEXICON LEGENDS', W/2, 180);
-  X.restore();
-
-  X.fillStyle='#88aacc'; X.font='18px monospace'; X.textAlign='center';
-  X.fillText('A Literary Creature RPG', W/2, 220);
-
-  // Floating creature previews
-  const previews=['metaphor_front','simile_front','hyperbole_front'];
-  previews.forEach((s,i) => {
-    const ox=200+i*200, oy=300+Math.sin(frame*0.03+i*2)*15;
-    Sprites.draw(s, ox-32, oy, 64, 64);
-  });
-
-  // Start prompt
-  const blink = Math.sin(frame*0.06)>0;
-  if (blink) {
-    X.fillStyle='#f0c040'; X.font='20px monospace'; X.textAlign='center';
-    X.fillText('CLICK TO START', W/2, 500);
-  }
-
-  X.fillStyle='#556'; X.font='12px monospace';
-  X.fillText('Arrow Keys / WASD to move | SPACE to interact | M for menu', W/2, 560);
-  X.fillText('Click buttons in battle', W/2, 578);
-}
-
-// --- Starter Selection ---
-function drawStarterSelect() {
-  const grad=X.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,'#1a0a2e'); grad.addColorStop(1,'#0f3460');
-  X.fillStyle=grad; X.fillRect(0,0,W,H);
-
-  X.fillStyle='#f0c040'; X.font='bold 28px monospace'; X.textAlign='center';
-  X.fillText('Choose Your Starter!', W/2, 60);
-
-  const starters = [
-    {id:'metaphor',x:100,desc:'Rhetoric Type\nHigh Attack\nShapeshifter of meaning'},
-    {id:'simile',x:310,desc:'Poetic Type\nBalanced Stats\nGentle but versatile'},
-    {id:'hyperbole',x:520,desc:'Dramatic Type\nGlass Cannon\nTHE STRONGEST (maybe)'},
-  ];
-
-  starters.forEach((s,i) => {
-    const def=CREATURES[s.id];
-    const hover = starterHover===i;
-    const y = 100;
-
-    // Card
-    X.fillStyle=hover?'rgba(240,192,64,0.15)':'rgba(255,255,255,0.05)';
-    roundRect(s.x, y, 180, 380, 12); X.fill();
-    X.strokeStyle=hover?'#f0c040':TYPES[def.type].color; X.lineWidth=hover?3:2;
-    roundRect(s.x, y, 180, 380, 12); X.stroke();
-
-    // Sprite
-    Sprites.draw(def.sprite, s.x+42, y+30, 96, 96);
-
-    // Name
-    X.fillStyle='#f0c040'; X.font='bold 18px monospace'; X.textAlign='center';
-    X.fillText(def.name, s.x+90, y+150);
-
-    // Type
-    X.fillStyle=TYPES[def.type].color; X.font='14px monospace';
-    X.fillText(TYPES[def.type].name, s.x+90, y+175);
-
-    // Stats
-    X.fillStyle='#aaa'; X.font='12px monospace';
-    X.fillText(`HP:${def.base.hp} ATK:${def.base.atk}`, s.x+90, y+205);
-    X.fillText(`DEF:${def.base.def} SPD:${def.base.spd}`, s.x+90, y+225);
-
-    // Description
-    X.fillStyle='#888'; X.font='11px monospace';
-    const lines = s.desc.split('\n');
-    lines.forEach((line,li) => {
-      X.fillText(line, s.x+90, y+260+li*16);
-    });
-
-    // Desc from creature
-    X.fillStyle='#666'; X.font='italic 10px monospace';
-    wrapText(def.desc, s.x+15, y+330, 150, 14);
-  });
-}
-
-let starterHover = -1;
-
-function handleStarterClick(mx, my) {
-  const starters = [{id:'metaphor',x:100},{id:'simile',x:310},{id:'hyperbole',x:520}];
-  for (let i=0;i<starters.length;i++) {
-    if (mx>starters[i].x&&mx<starters[i].x+180&&my>100&&my<480) {
-      Audio.jingle('select');
-      const c=makeCreature(starters[i].id, 5);
-      P.party.push(c);
-      gameState='dialogue';
-      Dialogue.start([
-        {s:'Prof. Narrator',t:`Excellent choice! ${c.name} will serve you well!`},
-        {s:'Prof. Narrator',t:'Explore the tall grass to find creatures, battle trainers, and grow stronger!'},
-        {s:'Prof. Narrator',t:'Head east to Route 1 when ready. Step on red crosses to heal!'},
-        {s:'Prof. Narrator',t:'Press M to open the menu. Good luck, Lexicographer!'},
-      ]);
-      Audio.bgm('town');
-      return;
-    }
-  }
-}
-
-function handleStarterHover(mx, my) {
-  starterHover=-1;
-  const xs=[100,310,520];
-  for(let i=0;i<3;i++) {
-    if (mx>xs[i]&&mx<xs[i]+180&&my>100&&my<480) { starterHover=i; return; }
-  }
-}
-
-// --- Menu System (Overworld) ---
-const GameMenu = {
-  open:false,
-  screen:null, // null, 'party', 'bag'
-  toggle() {
-    if (gameState!=='overworld') return;
-    this.open=!this.open;
-    this.screen=null;
-    if (this.open) { gameState='menu'; Audio.jingle('select'); }
-    else gameState='overworld';
-  },
-  close() { this.open=false; this.screen=null; gameState='overworld'; },
-  draw() {
-    if (this.screen==='party') { this.drawParty(); return; }
-    if (this.screen==='bag') { this.drawBag(); return; }
-
-    X.fillStyle='rgba(10,10,30,0.92)';
-    roundRect(W/2-120,H/2-140,240,280,12); X.fill();
-    X.strokeStyle='#e2b340'; X.lineWidth=3;
-    roundRect(W/2-120,H/2-140,240,280,12); X.stroke();
-
-    X.fillStyle='#f0c040'; X.font='bold 22px monospace'; X.textAlign='center';
-    X.fillText('MENU', W/2, H/2-105);
-
-    const btns=[
-      {label:'Team',y:H/2-80,action:()=>{this.screen='party';}},
-      {label:'Bag',y:H/2-30,action:()=>{this.screen='bag';}},
-      {label:'Save',y:H/2+20,action:()=>{this.save();}},
-      {label:'Close',y:H/2+70,action:()=>{this.close();}},
-    ];
-    btns.forEach(b => {
-      X.fillStyle='rgba(255,255,255,0.05)';
-      roundRect(W/2-100,b.y,200,40,8); X.fill();
-      X.strokeStyle='#555'; X.lineWidth=1;
-      roundRect(W/2-100,b.y,200,40,8); X.stroke();
-      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='center';
-      X.fillText(b.label, W/2, b.y+26);
-    });
-  },
-  drawParty() {
-    X.fillStyle='rgba(10,10,30,0.95)';
-    roundRect(40,30,W-80,H-60,12); X.fill();
-    X.strokeStyle='#e2b340'; X.lineWidth=3;
-    roundRect(40,30,W-80,H-60,12); X.stroke();
-
-    X.fillStyle='#f0c040'; X.font='bold 20px monospace'; X.textAlign='left';
-    X.fillText('YOUR TEAM', 70, 65);
-
-    P.party.forEach((c,i) => {
-      const cy=90+i*75;
-      X.fillStyle=i%2===0?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.1)';
-      roundRect(60,cy,W-120,65,8); X.fill();
-
-      Sprites.draw(c.sprite, 70, cy+5, 48, 48);
-
-      X.fillStyle='#f0c040'; X.font='bold 15px monospace'; X.textAlign='left';
-      X.fillText(c.name, 130, cy+20);
-      X.fillStyle='#aaa'; X.font='13px monospace';
-      X.fillText(`Lv.${c.level}  ${TYPES[c.type].name}`, 130, cy+38);
-      X.fillText(`ATK:${c.atk} DEF:${c.def} SPD:${c.spd}`, 130, cy+55);
-
-      // HP bar
-      const barX=420,barW=200,barH=12;
-      X.fillStyle='#333'; roundRect(barX,cy+12,barW,barH,4); X.fill();
-      const pct=Math.max(0,c.hp/c.maxHp);
-      if(pct>0){X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';roundRect(barX,cy+12,barW*pct,barH,4);X.fill();}
-      X.fillStyle='#ddd'; X.font='11px monospace'; X.textAlign='right';
-      X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, barX+barW, cy+44);
-
-      // XP
-      X.fillStyle='#222'; X.fillRect(barX,cy+30,barW,5);
-      X.fillStyle='#2196f3'; X.fillRect(barX,cy+30,barW*(c.xp/c.xpNext),5);
-      X.textAlign='right'; X.fillStyle='#888'; X.font='10px monospace';
-      X.fillText(`XP:${c.xp}/${c.xpNext}`, barX+barW, cy+56);
-
-      // Moves
-      X.textAlign='left'; X.fillStyle='#666'; X.font='10px monospace';
-      X.fillText(c.moves.map(m=>m.name).join(', '), 340, cy+55);
-    });
-
-    // Back
-    X.fillStyle='#444'; roundRect(60,H-65,100,30,6); X.fill();
-    X.fillStyle='#eee'; X.font='13px monospace'; X.textAlign='center';
-    X.fillText('← Back', 110, H-45);
-  },
-  drawBag() {
-    X.fillStyle='rgba(10,10,30,0.95)';
-    roundRect(40,30,W-80,H-60,12); X.fill();
-    X.strokeStyle='#e2b340'; X.lineWidth=3;
-    roundRect(40,30,W-80,H-60,12); X.stroke();
-
-    X.fillStyle='#f0c040'; X.font='bold 20px monospace'; X.textAlign='left';
-    X.fillText('YOUR BAG', 70, 65);
-    X.fillStyle='#888'; X.font='13px monospace';
-    X.fillText(`$${P.money}`, 250, 65);
-
-    const items=P.bag.filter(i=>i.count>0);
-    items.forEach((item,i) => {
-      const iy=90+i*50;
-      X.fillStyle=i%2===0?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.1)';
-      roundRect(60,iy,W-120,42,6); X.fill();
-      X.fillStyle='#eee'; X.font='15px monospace'; X.textAlign='left';
-      X.fillText(item.name, 80, iy+18);
-      X.fillStyle='#888'; X.font='12px monospace';
-      X.fillText(item.desc, 80, iy+34);
-      X.fillStyle='#f0c040'; X.textAlign='right'; X.font='14px monospace';
-      X.fillText(`x${item.count}`, W-80, iy+25);
-    });
-    // Use items in overworld
-    items.forEach((item,i) => {
-      const iy=90+i*50;
-      X.fillStyle='#2e7d32'; roundRect(W-180,iy+8,60,26,4); X.fill();
-      X.fillStyle='#fff'; X.font='11px monospace'; X.textAlign='center';
-      X.fillText('USE', W-150, iy+26);
-    });
-
-    X.fillStyle='#444'; roundRect(60,H-65,100,30,6); X.fill();
-    X.fillStyle='#eee'; X.font='13px monospace'; X.textAlign='center';
-    X.fillText('← Back', 110, H-45);
-  },
-  save() {
-    try {
-      localStorage.setItem('lexicon_save', JSON.stringify({
-        p:{x:P.x,y:P.y,mapId:P.mapId,bag:P.bag,defeated:P.defeated,money:P.money},
-        party:P.party.map(c=>({id:c.id,level:c.level,hp:c.hp,xp:c.xp,moves:c.moves.map(m=>({id:m.id,curPP:m.curPP}))}))
-      }));
-      Notification.show('Game saved!');
-    } catch(e) { Notification.show('Save failed!'); }
-    this.close();
-  },
-  handleClick(mx, my) {
-    if (this.screen==='party') {
-      if (mx>60&&mx<160&&my>H-65&&my<H-35) { this.screen=null; return; }
-      return;
-    }
-    if (this.screen==='bag') {
-      if (mx>60&&mx<160&&my>H-65&&my<H-35) { this.screen=null; return; }
-      // Use items
-      const items=P.bag.filter(i=>i.count>0);
-      for(let i=0;i<items.length;i++) {
-        const iy=90+i*50;
-        if (mx>W-180&&mx<W-120&&my>iy+8&&my<iy+34) {
-          const item=items[i];
-          if (item.fx==='heal') {
-            const c=P.party.find(p=>p.hp<p.maxHp&&p.hp>0);
-            if(c){c.hp=Math.min(c.maxHp,c.hp+item.val);item.count--;Audio.jingle('heal');Notification.show(`${c.name} healed!`);}
-          } else if (item.fx==='revive') {
-            const f=P.party.find(c=>c.hp<=0);
-            if(f){f.hp=Math.floor(f.maxHp/2);item.count--;Audio.jingle('heal');Notification.show(`${f.name} revived!`);}
-          }
-          return;
-        }
-      }
-      return;
-    }
-    // Main menu buttons
-    const btns=[{y:H/2-80},{y:H/2-30},{y:H/2+20},{y:H/2+70}];
-    for(let i=0;i<btns.length;i++) {
-      if (mx>W/2-100&&mx<W/2+100&&my>btns[i].y&&my<btns[i].y+40) {
-        Audio.jingle('select');
-        if(i===0) this.screen='party';
-        else if(i===1) this.screen='bag';
-        else if(i===2) this.save();
-        else this.close();
-        return;
-      }
-    }
-  }
+// === BATTLE DRAWING ===
+B.draw=function(){
+  drawBattleBG();
+  // Platforms
+  X.fillStyle='#6b8f45';X.beginPath();X.ellipse(580+this.slideE,200,120,30,0,0,Math.PI*2);X.fill();
+  X.fillStyle='#7a9f55';X.beginPath();X.ellipse(580+this.slideE,198,100,22,0,0,Math.PI*2);X.fill();
+  X.fillStyle='#7a9f55';X.beginPath();X.ellipse(200+this.slideP,380,130,35,0,0,Math.PI*2);X.fill();
+  X.fillStyle='#8aaf65';X.beginPath();X.ellipse(200+this.slideP,378,110,28,0,0,Math.PI*2);X.fill();
+  // Enemy sprite
+  if(this.enemy){let ex=530+this.slideE,ey=105;
+    if(this.shakeT>0&&this.shakeTgt==='enemy')ex+=Math.sin(this.shakeT*2)*8;
+    if(this.flashT>0&&this.flashTgt==='enemy'&&Math.floor(this.flashT/3)%2===0)X.globalAlpha=.3;
+    SP.draw(this.enemy.sprite,ex,ey,96,96);X.globalAlpha=1}
+  // Player sprite
+  const p=P.party[0];
+  if(p){let px=150+this.slideP,py=240;
+    if(this.shakeT>0&&this.shakeTgt==='player')px+=Math.sin(this.shakeT*2)*8;
+    if(this.flashT>0&&this.flashTgt==='player'&&Math.floor(this.flashT/3)%2===0)X.globalAlpha=.3;
+    SP.draw(p.sprite,px,py,112,112);X.globalAlpha=1}
+  Particles.draw();
+  // Info panels
+  if(this.enemy)this.drawInfo(this.enemy,30,30,this.hpAE,false);
+  if(p)this.drawInfo(p,W-290,320,this.hpAP,true);
+  this.drawMenu();
 };
 
-// --- Click Handler ---
-C.addEventListener('click', (e) => {
-  const rect = C.getBoundingClientRect();
-  const scaleX = W / rect.width, scaleY = H / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
+B.drawInfo=function(c,x,y,hpR,xp){
+  X.fillStyle='rgba(10,10,30,.9)';roundRect(x,y,250,xp?95:78,10);X.fill();
+  X.strokeStyle='#e2b340';X.lineWidth=2;roundRect(x,y,250,xp?95:78,10);X.stroke();
+  X.fillStyle='#f0c040';X.font='bold 15px monospace';X.textAlign='left';X.fillText(c.name,x+12,y+20);
+  X.fillStyle='#aaa';X.font='12px monospace';X.fillText(`Lv${c.level}`,x+180,y+20);
+  // Type badge
+  X.fillStyle=TYPES[c.type].color;roundRect(x+12,y+26,65,14,4);X.fill();
+  X.fillStyle='#fff';X.font='10px monospace';X.textAlign='center';X.fillText(TYPES[c.type].name,x+44,y+37);
+  // Status
+  if(c.status){const sc={'burn':'#f44','poison':'#a4f','freeze':'#4af','sleep':'#aaa','paralyze':'#ff0','confuse':'#f4a'};
+    X.fillStyle=sc[c.status]||'#fff';roundRect(x+82,y+26,45,14,4);X.fill();
+    X.fillStyle='#000';X.font='bold 9px monospace';X.fillText(c.status.toUpperCase().slice(0,3),x+104,y+37)}
+  X.textAlign='left';
+  // HP bar
+  const bx=x+12,by=y+46,bw=226,bh=14;
+  X.fillStyle='#333';roundRect(bx,by,bw,bh,4);X.fill();
+  const pct=Math.max(0,Math.min(1,hpR));
+  if(pct>0){X.fillStyle=pct>.5?'#4caf50':pct>.25?'#ff9800':'#f44336';roundRect(bx,by,bw*pct,bh,4);X.fill();
+    X.fillStyle='rgba(255,255,255,.15)';X.fillRect(bx+2,by+2,bw*pct-4,bh/2-2)}
+  X.fillStyle='#ddd';X.font='11px monospace';X.textAlign='right';
+  X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`,x+238,y+58);X.textAlign='left';
+  if(xp){X.fillStyle='#222';X.fillRect(bx,by+20,bw,6);X.fillStyle='#2196f3';X.fillRect(bx,by+20,bw*(c.xp/c.xpNext),6);
+    X.fillStyle='#888';X.font='9px monospace';X.textAlign='right';X.fillText(`XP:${c.xp}/${c.xpNext}`,x+238,by+36);X.textAlign='left'}
+};
 
-  if (gameState==='title') {
-    Audio.init();
-    gameState='starterSelect';
-    Audio.jingle('start');
-  } else if (gameState==='starterSelect') {
-    handleStarterClick(mx, my);
-  } else if (gameState==='dialogue') {
-    Dialogue.advance();
-  } else if (gameState==='battleText') {
-    Battle.advanceText();
-  } else if (gameState==='battle') {
-    Battle.handleClick(mx, my);
-  } else if (gameState==='menu') {
-    GameMenu.handleClick(mx, my);
-  }
-});
+B.drawMenu=function(){
+  X.fillStyle='rgba(10,10,30,.95)';X.fillRect(0,H-150,W,150);
+  X.strokeStyle='#e2b340';X.lineWidth=3;X.beginPath();X.moveTo(0,H-150);X.lineTo(W,H-150);X.stroke();
+  if(gameState==='battleText'){X.fillStyle='#eee';X.font='16px monospace';X.textAlign='left';
+    wrapText(this.curText,30,H-115,W-60,24);
+    if(!this.typing){X.fillStyle=`rgba(255,255,255,${.5+Math.sin(frame*.1)*.5})`;X.font='14px monospace';X.textAlign='right';X.fillText('▼',W-30,H-15)}
+    return}
+  if(this.menuState==='main'){
+    X.fillStyle='#eee';X.font='16px monospace';X.textAlign='left';X.fillText('What will',30,H-110);
+    X.fillText(`${P.party[0]?.name||'???'} do?`,30,H-85);
+    const btns=[{l:'FIGHT',c:'#c62828',x:W/2+10,y:H-130},{l:'BAG',c:'#2e7d32',x:W/2+170,y:H-130},
+      {l:'TEAM',c:'#1565c0',x:W/2+10,y:H-70},{l:'RUN',c:'#6a1b9a',x:W/2+170,y:H-70}];
+    btns.forEach(b=>{X.fillStyle=b.c;roundRect(b.x,b.y,140,48,8);X.fill();
+      X.strokeStyle='rgba(255,255,255,.2)';X.lineWidth=2;roundRect(b.x,b.y,140,48,8);X.stroke();
+      X.fillStyle='rgba(255,255,255,.08)';X.fillRect(b.x+4,b.y+4,132,20);
+      X.fillStyle='#fff';X.font='bold 16px monospace';X.textAlign='center';X.fillText(b.l,b.x+70,b.y+30)})
+  }else if(this.menuState==='moves'){
+    const p=P.party[0];if(!p)return;
+    p.moves.forEach((m,i)=>{const mx=(i%2)*220+30,my=H-135+Math.floor(i/2)*55;
+      X.fillStyle=(TYPES[m.type]?TYPES[m.type].color:'#555')+'33';roundRect(mx,my,200,45,8);X.fill();
+      X.strokeStyle=TYPES[m.type]?TYPES[m.type].color:'#555';X.lineWidth=2;roundRect(mx,my,200,45,8);X.stroke();
+      X.fillStyle='#eee';X.font='14px monospace';X.textAlign='left';X.fillText(m.name,mx+10,my+18);
+      X.fillStyle=TYPES[m.type]?TYPES[m.type].color:'#888';X.font='11px monospace';
+      X.fillText(`${TYPES[m.type]?.name||'?'} ${m.cat==='special'?'Sp':'Ph'} Pow:${m.pow||'-'}`,mx+10,my+34);
+      X.fillStyle='#888';X.textAlign='right';X.fillText(`PP:${m.curPP}/${m.pp}`,mx+190,my+34)});
+    X.fillStyle='#444';roundRect(500,H-80,120,40,8);X.fill();
+    X.fillStyle='#eee';X.font='14px monospace';X.textAlign='center';X.fillText('← BACK',560,H-55)
+  }else if(this.menuState==='bag'){
+    const items=P.bag.filter(i=>i.count>0);
+    items.forEach((item,i)=>{const iy=H-140+i*28;
+      X.fillStyle=i%2?'rgba(0,0,0,.1)':'rgba(255,255,255,.05)';X.fillRect(30,iy,W-60,26);
+      X.fillStyle='#eee';X.font='14px monospace';X.textAlign='left';X.fillText(item.name,50,iy+18);
+      X.fillStyle='#888';X.textAlign='right';X.fillText(`x${item.count}`,W-50,iy+18)});
+    X.fillStyle='#444';roundRect(W-160,H-30,120,25,6);X.fill();
+    X.fillStyle='#eee';X.font='12px monospace';X.textAlign='center';X.fillText('← BACK',W-100,H-13)
+  }else if(this.menuState==='team'){
+    P.party.forEach((c,i)=>{const cy=H-140+i*24;const pct=Math.max(0,c.hp/c.maxHp);
+      X.fillStyle=i===0?'rgba(255,255,100,.1)':'rgba(255,255,255,.03)';X.fillRect(30,cy,W-60,22);
+      X.fillStyle=c.hp>0?'#eee':'#666';X.font='13px monospace';X.textAlign='left';
+      X.fillText(`${c.name} Lv${c.level}`,50,cy+16);
+      X.fillStyle='#333';X.fillRect(300,cy+5,150,10);
+      X.fillStyle=pct>.5?'#4caf50':pct>.25?'#ff9800':'#f44336';X.fillRect(300,cy+5,150*pct,10);
+      X.fillStyle='#aaa';X.font='11px monospace';X.textAlign='right';X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`,W-50,cy+16)});
+    X.fillStyle='#444';roundRect(W-160,H-30,120,25,6);X.fill();
+    X.fillStyle='#eee';X.font='12px monospace';X.textAlign='center';X.fillText('← BACK',W-100,H-13)}
+};
 
-C.addEventListener('mousemove', (e) => {
-  const rect = C.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (W / rect.width);
-  const my = (e.clientY - rect.top) * (H / rect.height);
-  if (gameState==='starterSelect') handleStarterHover(mx, my);
-});
+B.click=function(mx,my){
+  if(gameState==='battleText'){this.advText();return}
+  if(!this.turn)return;
+  if(this.menuState==='main'){
+    if(mx>W/2+10&&mx<W/2+150&&my>H-130&&my<H-82){SFX.j('sel');this.menuState='moves'}
+    else if(mx>W/2+170&&mx<W/2+310&&my>H-130&&my<H-82){SFX.j('sel');this.menuState='bag'}
+    else if(mx>W/2+10&&mx<W/2+150&&my>H-70&&my<H-22){SFX.j('sel');this.menuState='team'}
+    else if(mx>W/2+170&&mx<W/2+310&&my>H-70&&my<H-22)this.tryRun()
+  }else if(this.menuState==='moves'){
+    const p=P.party[0];if(!p)return;
+    for(let i=0;i<p.moves.length;i++){const bx=(i%2)*220+30,by=H-135+Math.floor(i/2)*55;
+      if(mx>bx&&mx<bx+200&&my>by&&my<by+45){this.useMove(i);return}}
+    if(mx>500&&mx<620&&my>H-80&&my<H-40)this.menuState='main'
+  }else if(this.menuState==='bag'){
+    const items=P.bag.filter(i=>i.count>0);
+    for(let i=0;i<items.length;i++){const iy=H-140+i*28;if(mx>30&&mx<W-30&&my>iy&&my<iy+26){this.useItem(items[i]);return}}
+    if(mx>W-160&&mx<W-40&&my>H-30&&my<H-5)this.menuState='main'
+  }else if(this.menuState==='team'){
+    for(let i=0;i<P.party.length;i++){const cy=H-140+i*24;if(mx>30&&mx<W-30&&my>cy&&my<cy+22){this.switchTo(i);return}}
+    if(mx>W-160&&mx<W-40&&my>H-30&&my<H-5)this.menuState='main'}
+};
 
-// --- Main Game Loop ---
-function gameLoop(time) {
-  requestAnimationFrame(gameLoop);
-  frame++;
-  keysJust = {};
-
-  // Overworld movement (continuous key reading)
-  if (gameState==='overworld') {
-    updatePlayer();
-  }
-
-  // Updates
-  Transition.update();
-  EncounterTransition.update();
-  Notification.update();
-  if (gameState==='dialogue') Dialogue.update();
-  if (gameState==='battle'||gameState==='battleText') Battle.update();
-
-  // Render
-  X.fillStyle='#000'; X.fillRect(0,0,W,H);
-
-  if (gameState==='title') {
-    drawTitle();
-  } else if (gameState==='starterSelect') {
-    drawStarterSelect();
-  } else if (gameState==='overworld'||gameState==='dialogue'||gameState==='menu') {
-    drawOverworld();
-    if (gameState==='dialogue') Dialogue.draw();
-    if (gameState==='menu') GameMenu.draw();
-  } else if (gameState==='battle'||gameState==='battleText') {
-    Battle.draw();
-  }
-
-  // Overlays
-  Particles.draw();
-  Transition.draw();
-  EncounterTransition.draw();
-  Notification.draw();
+function drawBattleBG(){
+  const grad=X.createLinearGradient(0,0,0,H-150);
+  grad.addColorStop(0,'#87CEEB');grad.addColorStop(.6,'#b4e0fa');grad.addColorStop(1,'#5a8f3c');
+  X.fillStyle=grad;X.fillRect(0,0,W,H-150);
+  X.fillStyle='rgba(255,255,255,.5)';
+  [[80+Math.sin(frame*.005)*20,50],[350+Math.sin(frame*.007+1)*15,40],[600+Math.sin(frame*.004+2)*25,60]].forEach(([cx,cy])=>{
+    X.beginPath();X.arc(cx,cy,25,0,Math.PI*2);X.arc(cx+25,cy-8,20,0,Math.PI*2);X.arc(cx-15,cy-5,18,0,Math.PI*2);X.fill()});
+  X.fillStyle='#5a8f3c';X.fillRect(0,280,W,H-280-150);
+  X.fillStyle='#4a7f2c';X.beginPath();X.arc(180,300,80,Math.PI,0);X.fill();X.beginPath();X.arc(620,290,100,Math.PI,0);X.fill();
+  X.fillStyle='#3a6f1c';for(let i=0;i<12;i++){const gx=i*70+10;X.fillRect(gx,350+Math.sin(i*2)*5,4,15);X.fillRect(gx+6,355,3,12)}
 }
 
-// --- Load Save ---
-function tryLoadSave() {
-  try {
-    const s=JSON.parse(localStorage.getItem('lexicon_save'));
-    if (s&&s.party&&s.party.length>0) {
-      P.x=s.p.x; P.y=s.p.y; P.px=P.x*TS; P.py=P.y*TS;
-      P.mapId=s.p.mapId; P.bag=s.p.bag; P.defeated=s.p.defeated||[];
-      P.money=s.p.money||500;
-      P.party=s.party.map(c=>{
-        const cr=makeCreature(c.id,c.level);
-        cr.hp=c.hp; cr.xp=c.xp;
-        cr.moves=c.moves.map(m=>{const d=MOVES[m.id];return{...d,id:m.id,curPP:m.curPP};});
-        return cr;
-      });
-      return true;
-    }
-  } catch(e) {}
-  return false;
+// === OVERWORLD RENDERING ===
+const TPAL={[T.G]:'#3a7d44',[T.P]:'#c4a35a',[T.TG]:'#2d6b35',[T.TR]:'#1a4d2e',[T.W]:'#2563a8',
+  [T.BL]:'#6d5c4e',[T.DR]:'#8b4513',[T.SN]:'#c4a35a',[T.FL]:'#3a7d44',[T.FN]:'#8b7355',
+  [T.HL]:'#ff6b6b',[T.BR]:'#a0845c',[T.SD]:'#d4b483',[T.RK]:'#808080',[T.ST]:'#aa8866',
+  [T.CP]:'#8b2252',[T.SH]:'#2e7d32'};
+
+function drawOverworld(){
+  const map=MAPS[P.mapId];if(!map)return;
+  const cx=Math.max(0,Math.min(P.px-W/2+TS/2,map.w*TS-W));
+  const cy=Math.max(0,Math.min(P.py-H/2+TS/2,map.h*TS-H));
+  const sx=Math.floor(cx/TS),sy=Math.floor(cy/TS);
+  const ex=Math.min(map.w-1,sx+Math.ceil(W/TS)+1);
+  const ey=Math.min(map.h-1,sy+Math.ceil(H/TS)+1);
+  for(let y=sy;y<=ey;y++)for(let x=sx;x<=ex;x++)drawTile(map.data[y][x],x*TS-cx,y*TS-cy,x,y);
+  // NPCs
+  for(const npc of(map.npcs||[])){const nx=npc.x*TS-cx,ny=npc.y*TS-cy;
+    if(nx>-TS&&nx<W+TS&&ny>-TS&&ny<H+TS){
+      X.fillStyle='rgba(0,0,0,.2)';X.beginPath();X.ellipse(nx+TS/2,ny+TS-3,10,3,0,0,Math.PI*2);X.fill();
+      SP.draw(npc.sp,nx+2,ny+2,TS-4,TS-4);
+      // Exclamation if has battle
+      if(npc.battle&&!P.defeated.includes(npc.name)){X.fillStyle='#f44';X.font='bold 14px monospace';X.textAlign='center';X.fillText('!',nx+16,ny-4)}}}
+  // Player
+  const ppx=P.px-cx,ppy=P.py-cy;
+  X.fillStyle='rgba(0,0,0,.25)';X.beginPath();X.ellipse(ppx+TS/2,ppy+TS-2,10,4,0,0,Math.PI*2);X.fill();
+  const dirs={down:'d',up:'u',left:'l',right:'r'};
+  SP.draw(`p_${dirs[P.dir]}${P.walkFrame}`,ppx+2,ppy,TS-4,TS);
+  // Tall grass overlay
+  if(map.data[P.y]&&map.data[P.y][P.x]===T.TG){const ox=P.x*TS-cx,oy=P.y*TS-cy;
+    X.fillStyle='rgba(30,84,40,.6)';for(let i=0;i<3;i++){const gx=ox+5+i*9,sw=Math.sin(frame*.04+P.x+P.y+i)*2;X.fillRect(gx+sw,oy+16,3,16)}}
+  drawHUD(map,cx,cy);
 }
 
-// --- Init ---
+function drawTile(tile,sx,sy,tx,ty){
+  X.fillStyle=TPAL[tile]||'#3a7d44';X.fillRect(sx,sy,TS,TS);
+  switch(tile){
+    case T.G:X.fillStyle='#3e8348';if((tx+ty)%3===0)X.fillRect(sx+8,sy+12,2,8);if((tx+ty)%5===1)X.fillRect(sx+20,sy+6,2,10);break;
+    case T.TG:X.fillStyle='#1e5428';for(let i=0;i<4;i++){const gx=sx+3+i*7,sw=Math.sin(frame*.04+tx+ty+i)*2;X.fillRect(gx+sw,sy+4,2,24);X.fillRect(gx+sw-3,sy+2,8,4)}X.fillStyle='#25632f';X.fillRect(sx+2+Math.sin(frame*.05+tx),sy+10,3,16);break;
+    case T.TR:X.fillStyle='#5d3a1a';X.fillRect(sx+12,sy+18,8,14);X.fillStyle='#1a5c2e';X.beginPath();X.arc(sx+16,sy+12,13,0,Math.PI*2);X.fill();X.fillStyle='#1a6e32';X.beginPath();X.arc(sx+14,sy+9,9,0,Math.PI*2);X.fill();X.fillStyle='#22803a';X.beginPath();X.arc(sx+18,sy+8,7,0,Math.PI*2);X.fill();break;
+    case T.W:X.fillStyle='#1d5faa';const wo=Math.sin(frame*.025+tx*.5+ty*.3)*3;X.fillRect(sx,sy+12+wo,TS,4);X.fillStyle='#3a9fd8';X.fillRect(sx+4,sy+5+wo,12,2);X.fillRect(sx+18,sy+20+wo,8,2);break;
+    case T.BL:X.fillStyle='#5a4a3e';X.fillRect(sx+1,sy+1,30,30);X.fillStyle='#4a3828';X.fillRect(sx,sy,TS,5);X.fillStyle='#756050';X.fillRect(sx,sy+28,TS,4);X.fillStyle='#ffd700';X.fillRect(sx+8,sy+10,14,10);X.fillStyle='#fff8dc';X.fillRect(sx+10,sy+12,10,6);X.fillStyle='#4a3828';X.fillRect(sx+14,sy+10,2,10);X.fillRect(sx+8,sy+14,14,2);break;
+    case T.DR:X.fillStyle='#5a4a3e';X.fillRect(sx+1,sy+1,30,30);X.fillStyle='#8b4513';X.fillRect(sx+8,sy+2,16,30);X.fillStyle='#a0522d';X.fillRect(sx+10,sy+4,12,26);X.fillStyle='#ffd700';X.beginPath();X.arc(sx+19,sy+18,2,0,Math.PI*2);X.fill();break;
+    case T.HL:X.fillStyle='#cc4444';X.fillRect(sx+2,sy+2,28,28);X.fillStyle='#ff6b6b';X.fillRect(sx+4,sy+4,24,24);X.fillStyle='#fff';X.fillRect(sx+12,sy+6,8,20);X.fillRect(sx+6,sy+12,20,8);X.fillStyle=`rgba(255,100,100,${.2+Math.sin(frame*.08)*.15})`;X.beginPath();X.arc(sx+16,sy+16,18,0,Math.PI*2);X.fill();break;
+    case T.FN:X.fillStyle='#6d5c4e';X.fillRect(sx+2,sy+10,28,4);X.fillRect(sx+2,sy+20,28,4);X.fillStyle='#8b7355';X.fillRect(sx+4,sy+5,4,24);X.fillRect(sx+24,sy+5,4,24);break;
+    case T.SN:X.fillStyle='#c4a35a';X.fillRect(sx,sy,TS,TS);X.fillStyle='#8b7355';X.fillRect(sx+12,sy+18,8,14);X.fillStyle='#deb887';X.fillRect(sx+4,sy+4,24,16);X.fillStyle='#5a3e28';X.fillRect(sx+7,sy+8,18,2);X.fillRect(sx+7,sy+14,14,2);
+      if(Math.abs(P.x-tx)<=1&&Math.abs(P.y-ty)<=1){X.fillStyle='#f0c040';X.font='bold 12px monospace';X.textAlign='center';X.fillText('!',sx+16,sy-2)}break;
+    case T.FL:X.fillStyle='#3a7d44';X.fillRect(sx,sy,TS,TS);const fc=['#ff69b4','#ff6347','#ffd700','#da70d6','#87ceeb'];
+      for(let i=0;i<4;i++){X.fillStyle=fc[(tx+ty+i)%fc.length];const fx=sx+4+i*7,fy=sy+10+Math.sin(frame*.03+i+tx)*2;X.beginPath();X.arc(fx,fy,3,0,Math.PI*2);X.fill();X.fillStyle='#ffff00';X.beginPath();X.arc(fx,fy,1,0,Math.PI*2);X.fill();X.fillStyle='#2d6b35';X.fillRect(fx-.5,fy+3,1,12)}break;
+    case T.P:X.fillStyle='#b89a4a';if((tx+ty)%4===0)X.fillRect(sx+4,sy+4,4,4);if((tx+ty)%6===2)X.fillRect(sx+20,sy+20,5,5);if((tx+ty)%5===3)X.fillRect(sx+14,sy+8,3,3);break;
+    case T.BR:X.fillStyle='#8b7355';X.fillRect(sx,sy,TS,3);X.fillRect(sx,sy+29,TS,3);X.fillStyle='#6d5c4e';X.fillRect(sx+4,sy+3,3,26);X.fillRect(sx+25,sy+3,3,26);break;
+    case T.RK:X.fillStyle='#808080';X.beginPath();X.arc(sx+16,sy+18,12,0,Math.PI*2);X.fill();X.fillStyle='#999';X.beginPath();X.arc(sx+14,sy+14,8,0,Math.PI*2);X.fill();break;
+    case T.CP:X.fillStyle='#6b1a3a';X.fillRect(sx,sy,TS,TS);X.fillStyle='#8b2252';X.fillRect(sx+2,sy+2,12,12);X.fillRect(sx+18,sy+18,12,12);break;
+    case T.SH:X.fillStyle='#1a5c2e';X.fillRect(sx+2,sy+2,28,28);X.fillStyle='#2e7d32';X.fillRect(sx+4,sy+4,24,24);X.fillStyle='#ffd700';X.font='bold 16px monospace';X.textAlign='center';X.fillText('$',sx+16,sy+22);
+      X.fillStyle=`rgba(46,125,50,${.2+Math.sin(frame*.06)*.15})`;X.beginPath();X.arc(sx+16,sy+16,18,0,Math.PI*2);X.fill();break;
+  }
+}
+
+function drawHUD(map,cx,cy){
+  X.fillStyle='rgba(0,0,0,.7)';roundRect(8,8,220,24+P.party.length*18,8);X.fill();
+  X.strokeStyle='rgba(255,255,255,.15)';X.lineWidth=1;roundRect(8,8,220,24+P.party.length*18,8);X.stroke();
+  X.fillStyle='#f0c040';X.font='bold 13px monospace';X.textAlign='left';X.fillText(map.name,18,25);
+  // Badges
+  if(P.badges.length){X.fillStyle='#aaa';X.font='10px monospace';X.fillText(`Badges: ${P.badges.length}`,140,25)}
+  P.party.forEach((c,i)=>{const cy=40+i*18;X.fillStyle=c.hp>0?'#ddd':'#666';X.font='12px monospace';X.textAlign='left';
+    X.fillText(`${c.name} ${c.level}`,18,cy);
+    const bx=150,bw=65,bh=6;X.fillStyle='#333';X.fillRect(bx,cy-6,bw,bh);
+    const pct=Math.max(0,c.hp/c.maxHp);X.fillStyle=pct>.5?'#4caf50':pct>.25?'#ff9800':'#f44336';X.fillRect(bx,cy-6,bw*pct,bh);
+    if(c.status){X.fillStyle='#f88';X.font='8px monospace';X.fillText(c.status.slice(0,3).toUpperCase(),bx+bw+3,cy)}});
+  // Money
+  X.fillStyle='rgba(0,0,0,.6)';roundRect(8,38+P.party.length*18,80,18,4);X.fill();
+  X.fillStyle='#ffd700';X.font='11px monospace';X.textAlign='left';X.fillText(`$${P.money}`,15,52+P.party.length*18);
+  // Minimap
+  const mw=100,mh=80,mx=W-mw-10,my=10;
+  X.fillStyle='rgba(0,0,0,.7)';roundRect(mx-4,my-4,mw+8,mh+8,6);X.fill();
+  const scx=mw/map.w,scy=mh/map.h;
+  for(let y=0;y<map.h;y++)for(let x=0;x<map.w;x++){X.fillStyle=TPAL[map.data[y][x]]||'#3a7d44';X.fillRect(mx+x*scx,my+y*scy,Math.ceil(scx),Math.ceil(scy))}
+  X.fillStyle='#ff0';X.fillRect(mx+P.x*scx-1,my+P.y*scy-1,3,3);
+  X.fillStyle='#f0c040';for(const n of(map.npcs||[]))X.fillRect(mx+n.x*scx,my+n.y*scy,2,2);
+}
+
+// === GAME MENU ===
+const GM={isOpen:false,screen:null,
+  toggle(){if(gameState!=='overworld')return;this.isOpen=!this.isOpen;this.screen=null;
+    if(this.isOpen){gameState='menu';SFX.j('sel')}else gameState='overworld'},
+  close(){this.isOpen=false;this.screen=null;gameState='overworld'},
+  draw(){
+    if(this.screen==='party'){this.drawParty();return}
+    if(this.screen==='bag'){this.drawBag();return}
+    if(this.screen==='lexicon'){this.drawLexicon();return}
+    X.fillStyle='rgba(10,10,30,.92)';roundRect(W/2-120,H/2-160,240,320,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(W/2-120,H/2-160,240,320,12);X.stroke();
+    X.fillStyle='#f0c040';X.font='bold 22px monospace';X.textAlign='center';X.fillText('MENU',W/2,H/2-125);
+    const btns=[{l:'Team',y:H/2-100},{l:'Bag',y:H/2-50},{l:'Lexicon Log',y:H/2},{l:'Save',y:H/2+50},{l:'Close',y:H/2+100}];
+    btns.forEach(b=>{X.fillStyle='rgba(255,255,255,.05)';roundRect(W/2-100,b.y,200,40,8);X.fill();
+      X.strokeStyle='#555';X.lineWidth=1;roundRect(W/2-100,b.y,200,40,8);X.stroke();
+      X.fillStyle='#eee';X.font='16px monospace';X.textAlign='center';X.fillText(b.l,W/2,b.y+26)})},
+  drawParty(){
+    X.fillStyle='rgba(10,10,30,.95)';roundRect(40,30,W-80,H-60,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(40,30,W-80,H-60,12);X.stroke();
+    X.fillStyle='#f0c040';X.font='bold 20px monospace';X.textAlign='left';X.fillText('YOUR TEAM',70,65);
+    P.party.forEach((c,i)=>{const cy=85+i*78;
+      X.fillStyle=i%2?'rgba(0,0,0,.1)':'rgba(255,255,255,.03)';roundRect(60,cy,W-120,68,8);X.fill();
+      SP.draw(c.sprite,70,cy+5,48,48);
+      X.fillStyle='#f0c040';X.font='bold 15px monospace';X.textAlign='left';X.fillText(c.name,130,cy+18);
+      X.fillStyle=TYPES[c.type].color;X.font='11px monospace';X.fillText(TYPES[c.type].name,130,cy+32);
+      if(c.status){X.fillStyle='#f88';X.fillText(` [${c.status}]`,130+TYPES[c.type].name.length*7,cy+32)}
+      X.fillStyle='#aaa';X.font='12px monospace';X.fillText(`Lv${c.level} ATK:${c.atk} DEF:${c.def} SPD:${c.spd} SpA:${c.spAtk}`,130,cy+47);
+      X.fillText(`Moves: ${c.moves.map(m=>m.name).join(', ')}`,130,cy+62);
+      const bx=420,bw=200,bh=10;X.fillStyle='#333';roundRect(bx,cy+10,bw,bh,3);X.fill();
+      const pct=Math.max(0,c.hp/c.maxHp);if(pct>0){X.fillStyle=pct>.5?'#4caf50':pct>.25?'#ff9800':'#f44336';roundRect(bx,cy+10,bw*pct,bh,3);X.fill()}
+      X.fillStyle='#ddd';X.font='10px monospace';X.textAlign='right';X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`,bx+bw,cy+34);
+      X.fillStyle='#222';X.fillRect(bx,cy+26,bw,4);X.fillStyle='#2196f3';X.fillRect(bx,cy+26,bw*(c.xp/c.xpNext),4);
+      X.fillText(`XP:${c.xp}/${c.xpNext}`,bx+bw,cy+46);X.textAlign='left'});
+    X.fillStyle='#444';roundRect(60,H-65,100,30,6);X.fill();
+    X.fillStyle='#eee';X.font='13px monospace';X.textAlign='center';X.fillText('← Back',110,H-45)},
+  drawBag(){
+    X.fillStyle='rgba(10,10,30,.95)';roundRect(40,30,W-80,H-60,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(40,30,W-80,H-60,12);X.stroke();
+    X.fillStyle='#f0c040';X.font='bold 20px monospace';X.textAlign='left';X.fillText('BAG',70,65);
+    X.fillStyle='#ffd700';X.font='14px monospace';X.fillText(`$${P.money}`,200,65);
+    const items=P.bag.filter(i=>i.count>0);
+    items.forEach((item,i)=>{const iy=85+i*50;
+      X.fillStyle=i%2?'rgba(0,0,0,.1)':'rgba(255,255,255,.03)';roundRect(60,iy,W-120,42,6);X.fill();
+      X.fillStyle='#eee';X.font='15px monospace';X.textAlign='left';X.fillText(item.name,80,iy+18);
+      X.fillStyle='#888';X.font='12px monospace';X.fillText(item.desc,80,iy+34);
+      X.fillStyle='#f0c040';X.textAlign='right';X.font='14px monospace';X.fillText(`x${item.count}`,W-80,iy+25);
+      X.fillStyle='#2e7d32';roundRect(W-180,iy+8,60,26,4);X.fill();
+      X.fillStyle='#fff';X.font='11px monospace';X.textAlign='center';X.fillText('USE',W-150,iy+26)});
+    X.fillStyle='#444';roundRect(60,H-65,100,30,6);X.fill();
+    X.fillStyle='#eee';X.font='13px monospace';X.textAlign='center';X.fillText('← Back',110,H-45)},
+  drawLexicon(){
+    X.fillStyle='rgba(10,10,30,.95)';roundRect(40,30,W-80,H-60,12);X.fill();
+    X.strokeStyle='#e2b340';X.lineWidth=3;roundRect(40,30,W-80,H-60,12);X.stroke();
+    X.fillStyle='#f0c040';X.font='bold 20px monospace';X.textAlign='left';X.fillText('LEXICON LOG',70,65);
+    X.fillStyle='#aaa';X.font='12px monospace';X.fillText(`${P.lexLog.size} seen`,250,65);
+    const all=Object.keys(CREATURES).filter(k=>CREATURES[k].rate>0||P.lexLog.has(k));
+    all.forEach((id,i)=>{const row=Math.floor(i/4),col=i%4;
+      const bx=70+col*170,by=85+row*60;
+      const seen=P.lexLog.has(id);
+      X.fillStyle=seen?'rgba(255,255,255,.05)':'rgba(0,0,0,.2)';roundRect(bx,by,155,50,6);X.fill();
+      if(seen){const c=CREATURES[id];
+        SP.draw(c.sprite,bx+5,by+5,36,36);
+        X.fillStyle=TYPES[c.type].color;X.font='12px monospace';X.textAlign='left';X.fillText(c.name,bx+45,by+20);
+        X.fillStyle='#888';X.font='10px monospace';X.fillText(TYPES[c.type].name,bx+45,by+35);
+      }else{X.fillStyle='#333';X.font='12px monospace';X.textAlign='left';X.fillText('???',bx+45,by+25)}});
+    X.fillStyle='#444';roundRect(60,H-65,100,30,6);X.fill();
+    X.fillStyle='#eee';X.font='13px monospace';X.textAlign='center';X.fillText('← Back',110,H-45)},
+  save(){try{localStorage.setItem('lex_save',JSON.stringify({
+      p:{x:P.x,y:P.y,mapId:P.mapId,bag:P.bag,defeated:P.defeated,money:P.money,badges:P.badges,lexLog:[...P.lexLog],rivalStarter:P.rivalStarter,starterChoice:P.starterChoice},
+      party:P.party.map(c=>({id:c.id,level:c.level,hp:c.hp,xp:c.xp,status:c.status,statusTurns:c.statusTurns,moves:c.moves.map(m=>({id:m.id,curPP:m.curPP}))}))
+    }));Notif.show('Saved!')}catch(e){Notif.show('Save failed!')}this.close()},
+  click(mx,my){
+    if(this.screen==='party'){if(mx>60&&mx<160&&my>H-65&&my<H-35)this.screen=null;return}
+    if(this.screen==='bag'){
+      if(mx>60&&mx<160&&my>H-65&&my<H-35){this.screen=null;return}
+      const items=P.bag.filter(i=>i.count>0);
+      for(let i=0;i<items.length;i++){const iy=85+i*50;
+        if(mx>W-180&&mx<W-120&&my>iy+8&&my<iy+34){const item=items[i];
+          if(item.fx==='heal'){const c=P.party.find(p=>p.hp<p.maxHp&&p.hp>0);if(c){c.hp=Math.min(c.maxHp,c.hp+item.val);item.count--;SFX.j('heal');Notif.show(`${c.name} healed!`)}}
+          else if(item.fx==='revive'){const f=P.party.find(c=>c.hp<=0);if(f){f.hp=Math.floor(f.maxHp/2);item.count--;SFX.j('heal');Notif.show(`${f.name} revived!`)}}
+          return}}return}
+    if(this.screen==='lexicon'){if(mx>60&&mx<160&&my>H-65&&my<H-35)this.screen=null;return}
+    const btns=[{y:H/2-100},{y:H/2-50},{y:H/2},{y:H/2+50},{y:H/2+100}];
+    for(let i=0;i<btns.length;i++){if(mx>W/2-100&&mx<W/2+100&&my>btns[i].y&&my<btns[i].y+40){
+      SFX.j('sel');if(i===0)this.screen='party';else if(i===1)this.screen='bag';else if(i===2)this.screen='lexicon';else if(i===3)this.save();else this.close();return}}}
+};
+
+// === TITLE SCREEN ===
+function drawTitle(){
+  const grad=X.createLinearGradient(0,0,0,H);grad.addColorStop(0,'#1a0a2e');grad.addColorStop(.5,'#16213e');grad.addColorStop(1,'#0f3460');
+  X.fillStyle=grad;X.fillRect(0,0,W,H);
+  for(let i=0;i<50;i++){const sx=(i*137+frame*.2)%W,sy=(i*73)%300;
+    X.fillStyle=`rgba(255,255,255,${.3+Math.sin(frame*.02+i)*.3})`;X.fillRect(sx,sy,2,2)}
+  X.save();X.font='bold 52px monospace';X.textAlign='center';
+  X.fillStyle='#a06000';X.fillText('LEXICON LEGENDS',W/2+3,183);
+  X.fillStyle='#f0c040';X.fillText('LEXICON LEGENDS',W/2,180);
+  X.shadowColor='#f0c040';X.shadowBlur=20;X.fillText('LEXICON LEGENDS',W/2,180);X.restore();
+  X.fillStyle='#88aacc';X.font='18px monospace';X.textAlign='center';X.fillText('A Literary Creature RPG',W/2,220);
+  ['cr_metaphor','cr_simile','cr_hyperbole'].forEach((s,i)=>{SP.draw(s,168+i*200,290+Math.sin(frame*.03+i*2)*15,64,64)});
+  if(Math.sin(frame*.06)>0){X.fillStyle='#f0c040';X.font='20px monospace';X.textAlign='center';X.fillText('CLICK TO START',W/2,440)}
+  X.fillStyle='#556';X.font='12px monospace';X.textAlign='center';
+  X.fillText('Arrow Keys/WASD: Move | SPACE: Interact | M: Menu',W/2,520);
+  X.fillText('Click buttons in battle | All in your browser!',W/2,540);
+}
+
+// === STARTER SELECT ===
+let starterHover=-1;
+function drawStarterSelect(){
+  const grad=X.createLinearGradient(0,0,0,H);grad.addColorStop(0,'#1a0a2e');grad.addColorStop(1,'#0f3460');
+  X.fillStyle=grad;X.fillRect(0,0,W,H);
+  X.fillStyle='#f0c040';X.font='bold 28px monospace';X.textAlign='center';X.fillText('Choose Your Starter!',W/2,55);
+  const starters=[
+    {id:'metaphor',x:80,desc:'Rhetoric Type\nHigh Sp.Atk\nShapeshifter'},
+    {id:'simile',x:300,desc:'Poetic Type\nBalanced\nVersatile'},
+    {id:'hyperbole',x:520,desc:'Dramatic Type\nGlass Cannon\nTHE STRONGEST'}];
+  starters.forEach((s,i)=>{const d=CREATURES[s.id],hov=starterHover===i,y=80;
+    X.fillStyle=hov?'rgba(240,192,64,.15)':'rgba(255,255,255,.05)';roundRect(s.x,y,200,420,12);X.fill();
+    X.strokeStyle=hov?'#f0c040':TYPES[d.type].color;X.lineWidth=hov?3:2;roundRect(s.x,y,200,420,12);X.stroke();
+    SP.draw(d.sprite,s.x+52,y+30,96,96);
+    X.fillStyle='#f0c040';X.font='bold 18px monospace';X.textAlign='center';X.fillText(d.name,s.x+100,y+150);
+    X.fillStyle=TYPES[d.type].color;X.font='14px monospace';X.fillText(TYPES[d.type].name,s.x+100,y+175);
+    X.fillStyle='#aaa';X.font='12px monospace';
+    X.fillText(`HP:${d.base.hp} ATK:${d.base.atk} DEF:${d.base.def}`,s.x+100,y+200);
+    X.fillText(`SPD:${d.base.spd} SpA:${d.base.spAtk}`,s.x+100,y+218);
+    X.fillStyle='#888';X.font='11px monospace';s.desc.split('\n').forEach((l,li)=>X.fillText(l,s.x+100,y+250+li*16));
+    X.fillStyle='#666';X.font='10px monospace';wrapText(d.desc,s.x+15,y+320,170,14)})
+}
+
+function clickStarter(mx,my){
+  const ids=['metaphor','simile','hyperbole'],xs=[80,300,520];
+  for(let i=0;i<3;i++){if(mx>xs[i]&&mx<xs[i]+200&&my>80&&my<500){
+    SFX.j('sel');const c=makeCreature(ids[i],5);P.party.push(c);P.starterChoice=ids[i];
+    P.rivalStarter=RIVAL.getStarter(ids[i]);
+    gameState='dialogue';
+    Dlg.start([
+      {s:'Prof. Narrator',t:`Excellent! ${c.name} will serve you well!`},
+      {s:'Prof. Narrator',t:'Explore tall grass to find creatures, battle trainers, and grow stronger!'},
+      {s:'Prof. Narrator',t:'Beat the 3 Gym Leaders to earn badges, then challenge the Champion!'},
+      {s:'Quinn',t:`Hey! I\'m Quinn, your rival. I picked ${CREATURES[P.rivalStarter].name}!`},
+      {s:'Quinn',t:'I\'ll be the greatest Lexicographer, not you! See you around!'},
+      {s:'Prof. Narrator',t:'Head east to Route 1. Press M for menu. Good luck!'},
+    ]);SFX.bgm('town');return}}}
+
+// === CLICK HANDLER ===
+C.addEventListener('click',e=>{
+  const r=C.getBoundingClientRect(),sx=W/r.width,sy=H/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  if(gameState==='title'){SFX.init();gameState='starterSelect';SFX.j('start');
+    // Check save
+    try{const s=JSON.parse(localStorage.getItem('lex_save'));
+      if(s&&s.party&&s.party.length>0){
+        P.x=s.p.x;P.y=s.p.y;P.px=P.x*TS;P.py=P.y*TS;P.mapId=s.p.mapId;P.bag=s.p.bag;
+        P.defeated=s.p.defeated||[];P.money=s.p.money||500;P.badges=s.p.badges||[];
+        P.lexLog=new Set(s.p.lexLog||[]);P.rivalStarter=s.p.rivalStarter;P.starterChoice=s.p.starterChoice;
+        P.party=s.party.map(c=>{const cr=makeCreature(c.id,c.level);cr.hp=c.hp;cr.xp=c.xp;cr.status=c.status;cr.statusTurns=c.statusTurns;
+          cr.moves=c.moves.map(m=>{const d=MOVES[m.id];return{...d,id:m.id,curPP:m.curPP}});return cr});
+        gameState='overworld';const m=MAPS[P.mapId];if(m&&m.music)SFX.bgm(m.music);Notif.show('Save loaded!');return}}catch(e){}}
+  else if(gameState==='starterSelect')clickStarter(mx,my);
+  else if(gameState==='dialogue')Dlg.advance();
+  else if(gameState==='battleText')B.advText();
+  else if(gameState==='battle')B.click(mx,my);
+  else if(gameState==='menu')GM.click(mx,my);
+  else if(gameState==='shop')Shop.click(mx,my);
+});
+C.addEventListener('mousemove',e=>{
+  const r=C.getBoundingClientRect(),mx=(e.clientX-r.left)*(W/r.width),my=(e.clientY-r.top)*(H/r.height);
+  if(gameState==='starterSelect'){starterHover=-1;[80,300,520].forEach((x,i)=>{if(mx>x&&mx<x+200&&my>80&&my<500)starterHover=i})}
+});
+
+// === KEYBOARD ===
+document.addEventListener('keydown',e=>{
+  if(!keys[e.code])kj[e.code]=1;keys[e.code]=1;
+  if(gameState==='overworld'){if(e.code==='KeyM')GM.toggle();if(e.code==='Space'||e.code==='Enter')interact()}
+  if(gameState==='dialogue'&&(e.code==='Space'||e.code==='Enter'||e.code==='KeyZ'))Dlg.advance();
+  if(gameState==='menu'&&(e.code==='Escape'||e.code==='KeyM'))GM.close();
+  if(gameState==='shop'&&e.code==='Escape')Shop.close();
+  e.preventDefault();
+});
+
+// === GAME LOOP ===
+function gameLoop(){
+  requestAnimationFrame(gameLoop);frame++;kj={};
+  if(gameState==='overworld')updatePlayer();
+  Trans.update();EncTrans.update();Notif.update();
+  if(gameState==='dialogue')Dlg.update();
+  if(gameState==='battle'||gameState==='battleText')B.update();
+  X.fillStyle='#000';X.fillRect(0,0,W,H);
+  if(gameState==='title')drawTitle();
+  else if(gameState==='starterSelect')drawStarterSelect();
+  else if(gameState==='overworld'||gameState==='dialogue'||gameState==='menu'||gameState==='shop'){
+    drawOverworld();if(gameState==='dialogue')Dlg.draw();if(gameState==='menu')GM.draw();if(gameState==='shop')Shop.draw()}
+  else if(gameState==='battle'||gameState==='battleText')B.draw();
+  Particles.draw();Trans.draw();EncTrans.draw();Notif.draw();
+}
 requestAnimationFrame(gameLoop);
-
 </script>
 </body>
 </html>
