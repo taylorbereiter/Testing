@@ -3,2011 +3,2494 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lexicon Legends - A Literary RPG</title>
+<title>Lexicon Legends</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #111; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Courier New', monospace; overflow: hidden; }
-#gameContainer { position: relative; width: 800px; height: 600px; border: 3px solid #444; border-radius: 8px; overflow: hidden; image-rendering: pixelated; }
-canvas { display: block; width: 100%; height: 100%; }
-#ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-#ui-overlay.active { pointer-events: all; }
-.hidden { display: none !important; }
-#title-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, #1a0a2e 0%, #16213e 50%, #0f3460 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-#title-screen h1 { font-size: 48px; color: #f0c040; text-shadow: 3px 3px 0 #a06000, 0 0 20px #f0c04066; margin-bottom: 10px; letter-spacing: 4px; }
-#title-screen h2 { font-size: 18px; color: #88aacc; margin-bottom: 60px; letter-spacing: 2px; }
-#title-screen .start-btn { font-family: 'Courier New', monospace; font-size: 22px; color: #f0c040; background: none; border: 2px solid #f0c040; padding: 12px 40px; cursor: pointer; letter-spacing: 3px; transition: all 0.2s; pointer-events: all; }
-#title-screen .start-btn:hover { background: #f0c04022; transform: scale(1.05); }
-#battle-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; display: none; }
-#battle-bg { width: 100%; height: 100%; }
-.battle-creature-info { position: absolute; background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #e2b340; border-radius: 10px; padding: 10px 15px; color: #eee; min-width: 220px; }
-#enemy-info { top: 20px; left: 30px; }
-#player-info { bottom: 160px; right: 30px; }
-.creature-name { font-size: 16px; font-weight: bold; color: #f0c040; }
-.creature-level { font-size: 13px; color: #aaa; margin-left: 8px; }
-.creature-type-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 5px; }
-.hp-bar-container { width: 100%; height: 12px; background: #333; border-radius: 6px; margin-top: 5px; overflow: hidden; border: 1px solid #555; }
-.hp-bar { height: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); transition: width 0.5s ease; border-radius: 6px; }
-.hp-bar.low { background: linear-gradient(90deg, #f44336, #ff5722); }
-.hp-bar.medium { background: linear-gradient(90deg, #ff9800, #ffc107); }
-.hp-text { font-size: 11px; color: #aaa; margin-top: 2px; text-align: right; }
-.xp-bar-container { width: 100%; height: 6px; background: #222; border-radius: 3px; margin-top: 3px; overflow: hidden; }
-.xp-bar { height: 100%; background: linear-gradient(90deg, #2196f3, #03a9f4); transition: width 0.3s ease; border-radius: 3px; }
-#battle-menu { position: absolute; bottom: 0; left: 0; width: 100%; height: 150px; background: linear-gradient(180deg, #1a1a2e, #0f0f23); border-top: 3px solid #e2b340; display: flex; }
-#battle-text { flex: 1; padding: 15px 20px; color: #eee; font-size: 15px; line-height: 1.6; display: flex; align-items: center; overflow: hidden; }
-#battle-actions { width: 320px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 5px; padding: 10px; }
-.battle-btn { font-family: 'Courier New', monospace; font-size: 14px; color: #eee; border: 2px solid #555; border-radius: 8px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; text-align: center; padding: 5px; pointer-events: all; }
-.battle-btn:hover { transform: scale(1.03); border-color: #f0c040; }
-.battle-btn.fight { background: linear-gradient(135deg, #c62828, #b71c1c); }
-.battle-btn.bag { background: linear-gradient(135deg, #2e7d32, #1b5e20); }
-.battle-btn.team { background: linear-gradient(135deg, #1565c0, #0d47a1); }
-.battle-btn.run { background: linear-gradient(135deg, #6a1b9a, #4a148c); }
-.move-btn { background: linear-gradient(135deg, #37474f, #263238); }
-.move-btn .move-type { font-size: 10px; display: block; color: #aaa; }
-.move-btn .move-pp { font-size: 10px; color: #888; }
-#battle-sprites { position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 150px); }
-.battle-sprite { position: absolute; font-size: 80px; transition: all 0.3s; }
-#enemy-sprite { top: 60px; right: 100px; }
-#player-sprite { bottom: 40px; left: 100px; }
-.shake { animation: shake 0.3s ease-in-out; }
-@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
-.flash { animation: flash 0.4s ease-in-out; }
-@keyframes flash { 0%,100% { opacity: 1; } 50% { opacity: 0.1; } }
-#hud { position: absolute; top: 10px; left: 10px; color: #eee; font-size: 12px; z-index: 10; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; border: 1px solid #444; pointer-events: none; }
-#dialogue-box { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 90%; background: linear-gradient(180deg, #1a1a2e, #0f0f23); border: 2px solid #e2b340; border-radius: 10px; padding: 15px 20px; color: #eee; font-size: 15px; line-height: 1.6; z-index: 60; display: none; pointer-events: all; cursor: pointer; min-height: 80px; }
-#dialogue-box .speaker { color: #f0c040; font-weight: bold; margin-bottom: 5px; }
-#dialogue-box .continue-hint { position: absolute; bottom: 8px; right: 15px; color: #888; font-size: 11px; animation: blink 1s infinite; }
-@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-#game-menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(180deg, #1a1a2e, #0f0f23); border: 3px solid #e2b340; border-radius: 12px; padding: 20px; z-index: 70; display: none; min-width: 350px; pointer-events: all; }
-#game-menu h3 { color: #f0c040; font-size: 20px; margin-bottom: 15px; text-align: center; }
-.menu-btn { display: block; width: 100%; font-family: 'Courier New', monospace; font-size: 16px; color: #eee; background: linear-gradient(135deg, #37474f, #263238); border: 2px solid #555; border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; text-align: left; padding-left: 20px; }
-.menu-btn:hover { border-color: #f0c040; background: linear-gradient(135deg, #455a64, #37474f); }
-#party-screen, #bag-screen, #catch-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, #1a1a2e, #0f0f23); z-index: 80; display: none; padding: 20px; overflow-y: auto; pointer-events: all; }
-#party-screen h3, #bag-screen h3 { color: #f0c040; font-size: 22px; margin-bottom: 15px; }
-.party-slot { display: flex; align-items: center; background: linear-gradient(135deg, #263238, #1a2530); border: 2px solid #444; border-radius: 10px; padding: 12px 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.15s; }
-.party-slot:hover { border-color: #f0c040; }
-.party-slot.active { border-color: #4caf50; }
-.party-slot .slot-sprite { font-size: 36px; margin-right: 15px; }
-.party-slot .slot-info { flex: 1; }
-.party-slot .slot-name { color: #f0c040; font-size: 16px; }
-.party-slot .slot-level { color: #aaa; font-size: 13px; }
-.party-slot .slot-hp-bar { width: 100%; height: 8px; background: #333; border-radius: 4px; margin-top: 4px; overflow: hidden; }
-.party-slot .slot-hp-fill { height: 100%; background: #4caf50; border-radius: 4px; }
-.back-btn { font-family: 'Courier New', monospace; font-size: 14px; color: #f0c040; background: none; border: 2px solid #f0c040; padding: 8px 20px; border-radius: 8px; cursor: pointer; margin-top: 15px; }
-.back-btn:hover { background: #f0c04022; }
-.item-slot { display: flex; align-items: center; background: linear-gradient(135deg, #263238, #1a2530); border: 2px solid #444; border-radius: 10px; padding: 12px 15px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
-.item-slot:hover { border-color: #f0c040; }
-.item-slot .item-icon { font-size: 24px; margin-right: 12px; }
-.item-slot .item-name { color: #eee; font-size: 14px; flex: 1; }
-.item-slot .item-count { color: #aaa; font-size: 13px; }
-#catch-screen { display: none; flex-direction: column; align-items: center; justify-content: center; }
-.catch-anim { font-size: 100px; animation: catchBounce 0.5s ease-in-out infinite alternate; }
-@keyframes catchBounce { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(-20px) rotate(15deg); } }
-.catch-text { color: #eee; font-size: 20px; margin-top: 20px; }
-#minimap { position: absolute; top: 10px; right: 10px; width: 120px; height: 120px; background: rgba(0,0,0,0.7); border: 2px solid #555; border-radius: 8px; z-index: 10; pointer-events: none; overflow: hidden; }
-#notification { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); border: 2px solid #f0c040; border-radius: 10px; padding: 15px 25px; color: #f0c040; font-size: 18px; z-index: 90; display: none; text-align: center; pointer-events: none; }
-.type-rhetoric { color: #ff5722; }
-.type-narrative { color: #2196f3; }
-.type-poetic { color: #4caf50; }
-.type-dramatic { color: #ff9800; }
-.type-satirical { color: #9c27b0; }
-.type-gothic { color: #607d8b; }
-.badge-rhetoric { background: #ff5722; color: white; }
-.badge-narrative { background: #2196f3; color: white; }
-.badge-poetic { background: #4caf50; color: white; }
-.badge-dramatic { background: #ff9800; color: white; }
-.badge-satirical { background: #9c27b0; color: white; }
-.badge-gothic { background: #607d8b; color: white; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:monospace;overflow:hidden}
+#gameContainer{position:relative;width:800px;height:600px;image-rendering:pixelated;image-rendering:crisp-edges}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
 </style>
 </head>
 <body>
 <div id="gameContainer">
-  <canvas id="gameCanvas" width="800" height="600"></canvas>
-  <div id="ui-overlay">
-    <div id="title-screen">
-      <h1>LEXICON LEGENDS</h1>
-      <h2>A Literary Creature RPG</h2>
-      <button class="start-btn" onclick="Game.start()">PRESS START</button>
-      <p style="color:#556;margin-top:30px;font-size:12px">Arrow Keys / WASD to move | SPACE to interact | M for menu</p>
-    </div>
-    <div id="hud" class="hidden">
-      <div id="hud-area">???</div>
-      <div id="hud-party"></div>
-    </div>
-    <div id="minimap" class="hidden"><canvas id="minimapCanvas" width="120" height="120"></canvas></div>
-    <div id="battle-ui">
-      <canvas id="battleCanvas" width="800" height="450"></canvas>
-      <div id="battle-sprites">
-        <div class="battle-creature-info" id="enemy-info">
-          <span class="creature-name" id="enemy-name">???</span>
-          <span class="creature-level" id="enemy-level">Lv.5</span>
-          <span class="creature-type-badge" id="enemy-type-badge">???</span>
-          <div class="hp-bar-container"><div class="hp-bar" id="enemy-hp-bar"></div></div>
-          <div class="hp-text" id="enemy-hp-text">??/??</div>
-        </div>
-        <div id="enemy-sprite" class="battle-sprite"></div>
-        <div id="player-sprite" class="battle-sprite"></div>
-        <div class="battle-creature-info" id="player-info">
-          <span class="creature-name" id="player-name">???</span>
-          <span class="creature-level" id="player-level">Lv.5</span>
-          <span class="creature-type-badge" id="player-type-badge">???</span>
-          <div class="hp-bar-container"><div class="hp-bar" id="player-hp-bar"></div></div>
-          <div class="hp-text" id="player-hp-text">??/??</div>
-          <div class="xp-bar-container"><div class="xp-bar" id="player-xp-bar"></div></div>
-        </div>
-      </div>
-      <div id="battle-menu">
-        <div id="battle-text">What will you do?</div>
-        <div id="battle-actions">
-          <button class="battle-btn fight" onclick="Battle.showMoves()">FIGHT</button>
-          <button class="battle-btn bag" onclick="Battle.openBag()">BAG</button>
-          <button class="battle-btn team" onclick="Battle.openTeam()">TEAM</button>
-          <button class="battle-btn run" onclick="Battle.tryRun()">RUN</button>
-        </div>
-      </div>
-    </div>
-    <div id="dialogue-box" onclick="Dialogue.advance()">
-      <div class="speaker" id="dialogue-speaker"></div>
-      <div id="dialogue-text"></div>
-      <div class="continue-hint">▼ click to continue</div>
-    </div>
-    <div id="game-menu">
-      <h3>MENU</h3>
-      <button class="menu-btn" onclick="Menu.showParty()">📋 Team</button>
-      <button class="menu-btn" onclick="Menu.showBag()">🎒 Bag</button>
-      <button class="menu-btn" onclick="Menu.showSave()">💾 Save</button>
-      <button class="menu-btn" onclick="Menu.close()">✖ Close</button>
-    </div>
-    <div id="party-screen">
-      <h3>YOUR TEAM</h3>
-      <div id="party-list"></div>
-      <button class="back-btn" onclick="Menu.closeParty()">← Back</button>
-    </div>
-    <div id="bag-screen">
-      <h3>YOUR BAG</h3>
-      <div id="bag-list"></div>
-      <button class="back-btn" onclick="Menu.closeBag()">← Back</button>
-    </div>
-    <div id="catch-screen">
-      <div class="catch-anim" id="catch-anim-icon">📖</div>
-      <div class="catch-text" id="catch-text">...</div>
-    </div>
-    <div id="notification"></div>
-  </div>
+<canvas id="c" width="800" height="600"></canvas>
 </div>
 <script>
-// ============================================================
-// LEXICON LEGENDS - A Literary Creature RPG
-// ============================================================
+// ===================================================================
+// LEXICON LEGENDS - Full Rewrite - Pokémon Quality
+// ===================================================================
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+X.imageSmoothingEnabled = false;
 
-// --- Audio System ---
+// --- Constants ---
+const W = 800, H = 600, TS = 32;
+const FPS = 60;
+let frame = 0, dt = 0, lastTime = 0;
+let gameState = 'title';
+let keys = {}, keysJust = {};
+
+// --- Input ---
+document.addEventListener('keydown', e => {
+  if (!keys[e.code]) keysJust[e.code] = true;
+  keys[e.code] = true;
+  // Handle single-press actions
+  if (gameState==='overworld') {
+    if (e.code==='KeyM') GameMenu.toggle();
+    if (e.code==='Space'||e.code==='Enter') interact();
+  }
+  if (gameState==='dialogue') {
+    if (e.code==='Space'||e.code==='Enter'||e.code==='KeyZ') Dialogue.advance();
+  }
+  if (gameState==='menu') {
+    if (e.code==='Escape'||e.code==='KeyM') GameMenu.close();
+  }
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function justPressed(code) { return keysJust[code]; }
+
+// --- Audio Engine ---
 const Audio = {
   ctx: null,
+  masterGain: null,
+  bgmOsc: [],
   init() {
+    if (this.ctx) return;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.15;
+    this.masterGain.connect(this.ctx.destination);
   },
-  play(freq, duration, type = 'square', vol = 0.08) {
+  tone(freq, dur, type='square', vol=0.5, delay=0) {
     if (!this.ctx) this.init();
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     o.type = type;
     o.frequency.value = freq;
-    g.gain.value = vol;
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-    o.connect(g);
-    g.connect(this.ctx.destination);
-    o.start();
-    o.stop(this.ctx.currentTime + duration);
+    g.gain.value = 0;
+    g.gain.setValueAtTime(vol * 0.15, this.ctx.currentTime + delay);
+    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + dur);
+    o.connect(g); g.connect(this.masterGain);
+    o.start(this.ctx.currentTime + delay);
+    o.stop(this.ctx.currentTime + delay + dur);
   },
-  battleStart() { [440,554,659,880].forEach((f,i) => setTimeout(() => this.play(f, 0.15, 'square', 0.06), i*80)); },
-  hit() { this.play(200, 0.1, 'sawtooth', 0.1); setTimeout(() => this.play(150, 0.15, 'sawtooth', 0.08), 50); },
-  miss() { this.play(300, 0.1, 'sine', 0.05); this.play(200, 0.2, 'sine', 0.03); },
-  levelUp() { [523,659,784,1047].forEach((f,i) => setTimeout(() => this.play(f, 0.2, 'square', 0.06), i*100)); },
-  catch() { [440,440,440,880].forEach((f,i) => setTimeout(() => this.play(f, i===3?0.4:0.15, 'square', 0.06), i*200)); },
-  heal() { [523,587,659,784].forEach((f,i) => setTimeout(() => this.play(f, 0.15, 'sine', 0.06), i*80)); },
-  menuOpen() { this.play(600, 0.08, 'square', 0.04); },
-  step() { this.play(100 + Math.random()*50, 0.05, 'sine', 0.02); },
-  select() { this.play(500, 0.08, 'square', 0.04); },
-  evolve() { [261,329,392,523,659,784,1047].forEach((f,i) => setTimeout(() => this.play(f, 0.25, 'square', 0.07), i*120)); },
-  victory() { [523,523,523,659,784,784,659,784,1047].forEach((f,i) => setTimeout(() => this.play(f, i>=7?0.3:0.15, 'square', 0.06), i*120)); },
-  run() { this.play(400, 0.1); this.play(300, 0.1); },
+  jingle(type) {
+    this.init();
+    const j = {
+      start: [[523,0.12],[659,0.12],[784,0.12],[1047,0.25]],
+      hit: [[200,0.06,'sawtooth'],[150,0.1,'sawtooth']],
+      superHit: [[250,0.06,'sawtooth'],[200,0.08,'sawtooth'],[350,0.12,'sawtooth']],
+      miss: [[400,0.08,'sine'],[300,0.15,'sine']],
+      levelUp: [[523,0.15],[587,0.15],[659,0.15],[784,0.15],[1047,0.3]],
+      catch: [[440,0.12],[440,0.12],[440,0.12],[660,0.1],[880,0.3]],
+      catchFail: [[400,0.1],[300,0.1],[200,0.2]],
+      heal: [[523,0.1,'sine'],[659,0.1,'sine'],[784,0.1,'sine'],[1047,0.15,'sine']],
+      victory: [[523,0.12],[523,0.08],[659,0.12],[784,0.2],[659,0.08],[784,0.08],[1047,0.35]],
+      run: [[500,0.08],[400,0.08],[300,0.12]],
+      select: [[600,0.06],[800,0.06]],
+      bump: [[150,0.06,'sine']],
+      evolve: [[261,0.15],[329,0.15],[392,0.15],[523,0.15],[659,0.15],[784,0.2],[1047,0.35]],
+      encounter: [[200,0.08,'sawtooth'],[300,0.08,'sawtooth'],[200,0.08,'sawtooth'],[400,0.15,'square']],
+      step: [[80,0.03,'sine']],
+    };
+    const notes = j[type];
+    if (!notes) return;
+    let t = 0;
+    for (const n of notes) {
+      this.tone(n[0], n[1], n[2]||'square', n[3]||0.5, t);
+      t += n[1] * 0.9;
+    }
+  },
+  bgm(song) {
+    this.stopBgm();
+    if (!this.ctx) this.init();
+    // Simple looping melody
+    const songs = {
+      town: { tempo: 0.25, notes: [523,587,659,784,659,587,523,440,523,587,659,523,440,392,440,523], bass: [261,261,329,329,261,261,220,220,261,261,329,329,220,220,196,261] },
+      route: { tempo: 0.2, notes: [440,523,587,659,587,523,440,392,440,523,659,784,659,523,440,392], bass: [220,220,293,293,220,220,196,196,220,220,329,329,220,220,196,196] },
+      battle: { tempo: 0.15, notes: [659,659,784,659,523,659,784,1047,784,659,523,440,523,659,784,659], bass: [329,329,392,329,261,329,392,523,392,329,261,220,261,329,392,329] },
+    };
+    const s = songs[song]; if (!s) return;
+    let i = 0;
+    this._bgmInterval = setInterval(() => {
+      this.tone(s.notes[i % s.notes.length], s.tempo * 0.8, 'square', 0.2);
+      this.tone(s.bass[i % s.bass.length], s.tempo * 0.9, 'triangle', 0.15);
+      i++;
+    }, s.tempo * 1000);
+  },
+  stopBgm() { if (this._bgmInterval) { clearInterval(this._bgmInterval); this._bgmInterval = null; } }
+};
+
+// --- Pixel Art Sprite System ---
+const Sprites = {
+  cache: {},
+  draw(name, x, y, w, h, flipX=false, palette=null) {
+    const data = this.getData(name);
+    if (!data) return;
+    const pw = data[0].length, ph = data.length;
+    const sx = w / pw, sy = h / ph;
+    X.save();
+    if (flipX) { X.translate(x + w, y); X.scale(-1, 1); x = 0; y = 0; }
+    for (let py = 0; py < ph; py++) {
+      for (let px = 0; px < pw; px++) {
+        const c = data[py][px];
+        if (c === '.') continue;
+        const color = palette ? (palette[c] || c) : this.colorMap[c];
+        if (!color) continue;
+        X.fillStyle = color;
+        X.fillRect(Math.floor(x + px * sx), Math.floor(y + py * sy), Math.ceil(sx), Math.ceil(sy));
+      }
+    }
+    X.restore();
+  },
+  colorMap: {
+    'R': '#e74c3c', 'r': '#c0392b', 'G': '#2ecc71', 'g': '#27ae60', 'B': '#3498db', 'b': '#2980b9',
+    'Y': '#f1c40f', 'y': '#f39c12', 'W': '#ecf0f1', 'w': '#bdc3c7', 'K': '#2c3e50', 'k': '#1a252f',
+    'S': '#e8c170', 's': '#d4a055', 'P': '#9b59b6', 'p': '#8e44ad', 'O': '#e67e22', 'o': '#d35400',
+    'T': '#1abc9c', 't': '#16a085', 'C': '#95a5a6', 'c': '#7f8c8d', 'N': '#5d4e37', 'n': '#3e2f1c',
+    'M': '#e84393', 'm': '#c44569', 'L': '#6ab04c', 'l': '#009432', 'D': '#a29bfe', 'd': '#6c5ce7',
+    'F': '#fd79a8', 'f': '#e84393', 'H': '#fdcb6e', 'h': '#e17055', 'X': '#636e72', 'x': '#2d3436',
+  },
+  getData(name) {
+    if (this.data[name]) return this.data[name].map(r => r.split(''));
+    return null;
+  },
+  data: {
+    // Player character - 16x16
+    player_down: [
+      '....RRRR....',
+      '...RRRRRR...',
+      '...RRRRRR...',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..SSSSSS....',
+      '..S.SS.S....',
+      '...BBBB.....',
+      '..BBBBBB....',
+      '..BBBBBB....',
+      '..BB..BB....',
+      '..SS..SS....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+    player_up: [
+      '....RRRR....',
+      '...RRRRRR...',
+      '...RRRRRR...',
+      '..SSSSSSSS..',
+      '..SSSSSSSS..',
+      '..SSSSSSSS..',
+      '..S.SS.S....',
+      '...BBBB.....',
+      '..BBBBBB....',
+      '..BBBBBB....',
+      '..BB..BB....',
+      '..SS..SS....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+    player_left: [
+      '...RRRR.....',
+      '..RRRRRR....',
+      '..RRRRRR....',
+      '.SSSSSSSS...',
+      '.SK.SSSSS...',
+      '.SSSSSSSS...',
+      '..S.SS.S....',
+      '..BBBB......',
+      '.BBBBBB.....',
+      '.BBBBBB.....',
+      '.BB..BB.....',
+      '.SS..SS.....',
+      '.SS..SS.....',
+      '.KK..KK.....',
+    ],
+    player_right: [
+      '.....RRRR...',
+      '....RRRRRR..',
+      '....RRRRRR..',
+      '...SSSSSSSS.',
+      '...SSSSS.KS.',
+      '...SSSSSSSS.',
+      '....S.SS.S..',
+      '......BBBB..',
+      '.....BBBBBB.',
+      '.....BBBBBB.',
+      '.....BB..BB.',
+      '.....SS..SS.',
+      '.....SS..SS.',
+      '.....KK..KK.',
+    ],
+    player_walk_down: [
+      '....RRRR....',
+      '...RRRRRR...',
+      '...RRRRRR...',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..SSSSSS....',
+      '..S.SS.S....',
+      '...BBBB.....',
+      '..BBBBBB....',
+      '..BBBBBB....',
+      '..BB..BB....',
+      '..SS...SS...',
+      '...SS.SS....',
+      '...KK.KK....',
+    ],
+    // Creatures - battle sprites (larger, more detailed)
+    metaphor_front: [
+      '......RRRR......',
+      '....RRRRRRRR....',
+      '...RRRRRRRRRR...',
+      '..RRR.WW.WWRRR..',
+      '..RRR.KK.KKRRR..',
+      '..RRRRRRRRRRRR..',
+      '...RRRR..RRRR...',
+      '....RRRRRRRR....',
+      '...RROOOOOORR...',
+      '..RROOOOOOOOOR..',
+      '..RROOOOOOOOOR..',
+      '...RROOOOOORR...',
+      '....RRRRRRRR....',
+      '.....RRRRRR.....',
+      '....RR....RR....',
+      '...RR......RR...',
+    ],
+    simile_front: [
+      '......GGGG......',
+      '....GG.TT.GG....',
+      '...G.TTTTTT.G...',
+      '..GGTTTTTTTTGG..',
+      '..GT.WW..WW.TG..',
+      '..GT.KK..KK.TG..',
+      '..GTTTTTTTTTTG..',
+      '...GTTT..TTTG...',
+      '....GGTTTTGG....',
+      '..GG..GGGG..GG..',
+      '.G..GG....GG..G.',
+      'G..G........G..G',
+      '..G..........G..',
+      '..G..........G..',
+      '...GG......GG...',
+      '....GGGGGGGG....',
+    ],
+    hyperbole_front: [
+      '......YYYY......',
+      '....YYYYYYYY....',
+      '...YOOOOOOOY....',
+      '..YOOOOOOOOOY...',
+      '..YO.WW.WW.OY..',
+      '..YO.KK.KK.OY..',
+      '..YOOOOOOOOOY...',
+      '...YOOMMMOOY....',
+      '...YOOOOOOOY....',
+      '..YYOOOOOOOYY...',
+      '.YY.YYYYYYYY.YY.',
+      'YO...YYYYYY...OY',
+      'YO....YYYY....OY',
+      '.Y....YYYY....Y.',
+      '..YY..Y..Y..YY..',
+      '...YYYY..YYYY...',
+    ],
+    irony_front: [
+      '....PPPPPPPP....',
+      '...PP.PPPP.PP...',
+      '..PP..PPPP..PP..',
+      '..P.WW.PP.WW.P..',
+      '..P.KK.PP.KK.P..',
+      '..PP..PPPP..PP..',
+      '...PP.P..P.PP...',
+      '....PPPPPPPP....',
+      '...PPDDDDDDPP..',
+      '..PPDDDDDDDDPP.',
+      '..PDDDDDDDDDP..',
+      '..PDDDDDDDDDP..',
+      '...PDDDDDDDP...',
+      '....PPPPPPP.....',
+      '...PP.....PP....',
+      '..PP.......PP...',
+    ],
+    allegory_front: [
+      '....BBBBBBBB....',
+      '...BB.BBBB.BB...',
+      '..BB.BBBBBB.BB..',
+      '..B.WW.BB.WW.B..',
+      '..B.KK.BB.KK.B..',
+      '..BB.BBBBBB.BB..',
+      '...BB.B..B.BB...',
+      '....BBBBBBBB....',
+      '...BBNNNNNNBB...',
+      '..BBNNNNNNNNBB..',
+      '..BNNNNNNNNNNB..',
+      '..BNNNNNNNNNNB..',
+      '...BNNNNNNNNB...',
+      '....BBBBBBBB....',
+      '...BB......BB...',
+      '..BB........BB..',
+    ],
+    foreshadowing_front: [
+      '....XXXXXXXX....',
+      '...XX..XX..XX...',
+      '..XX..XXXX..XX..',
+      '..X.WW.XX.WW.X..',
+      '..X.Kk.XX.kK.X..',
+      '..XX..XXXX..XX..',
+      '...XX.X..X.XX...',
+      '....XXXXXXXX....',
+      '...XXKKKKKKXX...',
+      '..XXKKKKKKKKXX..',
+      '..XKKKKKKKKKKX..',
+      '..XKKKKKKKKKKX..',
+      '...XKKKKKKKKX...',
+      '....XXXXXXXX....',
+      '...XX......XX...',
+      '..XX........XX..',
+    ],
+    alliteration_front: [
+      '....LLLLLLLL....',
+      '...LL.YYYY.LL...',
+      '..LL.YYYYYY.LL..',
+      '..L.WW.YY.WW.L..',
+      '..L.KK.YY.KK.L..',
+      '..LL.YYYYYY.LL..',
+      '...LL.Y..Y.LL...',
+      '....LLLLLLLL....',
+      '...LLHHHHHHLL...',
+      '..LLHHHHHHHHLL..',
+      '..LHHHHHHHHHL...',
+      '..LHHHHHHHHHL...',
+      '...LHHHHHHL....',
+      '....LLLLLLLL....',
+      '...LL......LL...',
+      '..LL........LL..',
+    ],
+    generic_front: [
+      '....CCCCCCCC....',
+      '...CC.CCCC.CC...',
+      '..CC..CCCC..CC..',
+      '..C.WW.CC.WW.C..',
+      '..C.KK.CC.KK.C..',
+      '..CC..CCCC..CC..',
+      '...CC.C..C.CC...',
+      '....CCCCCCCC....',
+      '...CCWWWWWWCC...',
+      '..CCWWWWWWWWCC..',
+      '..CWWWWWWWWWWC..',
+      '..CWWWWWWWWWWC..',
+      '...CWWWWWWWWC...',
+      '....CCCCCCCC....',
+      '...CC......CC...',
+      '..CC........CC..',
+    ],
+    // NPC sprites
+    npc_professor: [
+      '...WWWWWW...',
+      '..WWWWWWWW..',
+      '..WWWWWWWW..',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..SSSSSS....',
+      '...WWWW.....',
+      '..WWWWWW....',
+      '..WWWWWW....',
+      '..WW..WW....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+    npc_girl: [
+      '...YYYYYY...',
+      '..YYYYYYYY..',
+      '..YYYYYYYY..',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..S.MM.S....',
+      '...MMMM.....',
+      '..MMMMMM....',
+      '..MMMMMM....',
+      '..MM..MM....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+    npc_nurse: [
+      '...RRRRRR...',
+      '..RWWWWWR...',
+      '..RWWWWWR...',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..SSSSSS....',
+      '...WWWW.....',
+      '..WWRWWW....',
+      '..WRRWWW....',
+      '..WW..WW....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+    npc_trainer: [
+      '...BBBBBB...',
+      '..BBBBBBBB..',
+      '..BBBBBBBB..',
+      '..SSSSSSSS..',
+      '..SK..KS....',
+      '..SSSSSS....',
+      '...GGGG.....',
+      '..GGGGGG....',
+      '..GGGGGG....',
+      '..GG..GG....',
+      '..SS..SS....',
+      '..KK..KK....',
+    ],
+  }
 };
 
 // --- Type System ---
 const TYPES = {
-  rhetoric:  { name: 'Rhetoric',  color: '#ff5722', icon: '🔥', strong: ['poetic','gothic'],    weak: ['narrative','satirical'] },
-  narrative: { name: 'Narrative', color: '#2196f3', icon: '🌊', strong: ['rhetoric','dramatic'], weak: ['poetic','gothic'] },
-  poetic:    { name: 'Poetic',    color: '#4caf50', icon: '🌿', strong: ['narrative','satirical'],weak: ['rhetoric','dramatic'] },
-  dramatic:  { name: 'Dramatic',  color: '#ff9800', icon: '⚡', strong: ['poetic','gothic'],     weak: ['narrative','satirical'] },
-  satirical: { name: 'Satirical', color: '#9c27b0', icon: '🔮', strong: ['rhetoric','dramatic'], weak: ['poetic','gothic'] },
-  gothic:    { name: 'Gothic',    color: '#607d8b', icon: '🌑', strong: ['narrative','satirical'],weak: ['rhetoric','dramatic'] }
+  rhetoric:  { name:'Rhetoric',  color:'#e74c3c', strong:['poetic','gothic'],    weak:['narrative','satirical'] },
+  narrative: { name:'Narrative', color:'#3498db', strong:['rhetoric','dramatic'], weak:['poetic','gothic'] },
+  poetic:    { name:'Poetic',    color:'#2ecc71', strong:['narrative','satirical'],weak:['rhetoric','dramatic'] },
+  dramatic:  { name:'Dramatic',  color:'#f39c12', strong:['poetic','gothic'],     weak:['narrative','satirical'] },
+  satirical: { name:'Satirical', color:'#9b59b6', strong:['rhetoric','dramatic'], weak:['poetic','gothic'] },
+  gothic:    { name:'Gothic',    color:'#636e72', strong:['narrative','satirical'],weak:['rhetoric','dramatic'] },
 };
 
-function getTypeEffectiveness(atkType, defType) {
-  const t = TYPES[atkType];
-  if (t.strong.includes(defType)) return 2;
-  if (t.weak.includes(defType)) return 0.5;
+function typeEffect(atk, def) {
+  if (TYPES[atk].strong.includes(def)) return 2;
+  if (TYPES[atk].weak.includes(def)) return 0.5;
   return 1;
 }
 
-// --- Creature Definitions ---
-const CREATURE_DEFS = {
+// --- Creature Database ---
+const CREATURES = {
   metaphor: {
-    name: 'Metaphor', type: 'rhetoric', sprite: '🎭',
-    baseStats: { hp: 45, atk: 55, def: 40, spd: 50 },
-    desc: 'A shapeshifting figure that IS the thing it describes. Never merely "like" something.',
-    moves: ['burning_rhetoric','persuade','transform','rebut'],
-    evolution: { level: 16, into: 'extended_metaphor' },
-    encounterRate: 0.15
+    name:'Metaphor', type:'rhetoric', sprite:'metaphor_front',
+    base:{hp:45,atk:55,def:40,spd:50},
+    desc:'A shapeshifting figure that IS the thing it describes.',
+    moves:['burning_rhetoric','persuade','transform','rebut'],
+    evo:{level:16,into:'extended_metaphor'}, rate:0.15
   },
   extended_metaphor: {
-    name: 'Extended Metaphor', type: 'rhetoric', sprite: '🎭✨',
-    baseStats: { hp: 70, atk: 80, def: 60, spd: 65 },
-    desc: 'A sustained transformation that carries meaning across entire passages.',
-    moves: ['burning_rhetoric','persuade','transform','grand_oration'],
-    evolution: null,
-    encounterRate: 0
+    name:'Extended Metaphor', type:'rhetoric', sprite:'metaphor_front',
+    base:{hp:70,atk:80,def:60,spd:65},
+    desc:'A sustained transformation across entire passages.',
+    moves:['burning_rhetoric','persuade','transform','grand_oration'],
+    evo:null, rate:0
   },
   simile: {
-    name: 'Simile', type: 'poetic', sprite: '🦋',
-    baseStats: { hp: 40, atk: 45, def: 45, spd: 55 },
-    desc: 'Gentle as a breeze, sharp as a tack. Always comparing, never quite committing.',
-    moves: ['rhyme','like_lightning','gentle_verse','stanza_slam'],
-    evolution: { level: 14, into: 'epic_simile' },
-    encounterRate: 0.18
+    name:'Simile', type:'poetic', sprite:'simile_front',
+    base:{hp:40,atk:45,def:45,spd:55},
+    desc:'Gentle as a breeze, sharp as a tack.',
+    moves:['rhyme','like_lightning','gentle_verse','stanza_slam'],
+    evo:{level:14,into:'epic_simile'}, rate:0.18
   },
   epic_simile: {
-    name: 'Epic Simile', type: 'poetic', sprite: '🦋👑',
-    baseStats: { hp: 65, atk: 70, def: 65, spd: 70 },
-    desc: 'A Homeric comparison so grand it becomes its own mini-narrative.',
-    moves: ['rhyme','like_lightning','stanza_slam','meter_strike'],
-    evolution: null,
-    encounterRate: 0
+    name:'Epic Simile', type:'poetic', sprite:'simile_front',
+    base:{hp:65,atk:70,def:65,spd:70},
+    desc:'A Homeric comparison so grand it becomes its own narrative.',
+    moves:['rhyme','like_lightning','stanza_slam','meter_strike'],
+    evo:null, rate:0
   },
   hyperbole: {
-    name: 'Hyperbole', type: 'dramatic', sprite: '💥',
-    baseStats: { hp: 50, atk: 70, def: 30, spd: 60 },
-    desc: 'THE MOST POWERFUL CREATURE IN THE ENTIRE UNIVERSE. (Allegedly.)',
-    moves: ['monologue','climax','exaggerate','tragic_flaw'],
-    evolution: { level: 18, into: 'hyperbolic_titan' },
-    encounterRate: 0.12
+    name:'Hyperbole', type:'dramatic', sprite:'hyperbole_front',
+    base:{hp:50,atk:70,def:30,spd:60},
+    desc:'THE MOST POWERFUL CREATURE IN THE UNIVERSE. (Allegedly.)',
+    moves:['monologue','climax','exaggerate','tragic_flaw'],
+    evo:{level:18,into:'hyperbolic_titan'}, rate:0.12
   },
   hyperbolic_titan: {
-    name: 'Hyperbolic Titan', type: 'dramatic', sprite: '💥🌋',
-    baseStats: { hp: 75, atk: 100, def: 45, spd: 75 },
-    desc: 'So exaggerated it warps reality itself. Glass cannon supreme.',
-    moves: ['climax','exaggerate','grand_finale','tragic_flaw'],
-    evolution: null,
-    encounterRate: 0
+    name:'Hyperbolic Titan', type:'dramatic', sprite:'hyperbole_front',
+    base:{hp:75,atk:100,def:45,spd:75},
+    desc:'So exaggerated it warps reality. Glass cannon supreme.',
+    moves:['climax','exaggerate','grand_finale','tragic_flaw'],
+    evo:null, rate:0
   },
   irony: {
-    name: 'Irony', type: 'satirical', sprite: '🃏',
-    baseStats: { hp: 50, atk: 50, def: 50, spd: 50 },
-    desc: 'Says one thing, means another. Its attacks are... unexpected.',
-    moves: ['mock','subvert','double_meaning','lampoon'],
-    evolution: { level: 20, into: 'dramatic_irony' },
-    encounterRate: 0.10
+    name:'Irony', type:'satirical', sprite:'irony_front',
+    base:{hp:50,atk:50,def:50,spd:50},
+    desc:'Says one thing, means another. Attacks are... unexpected.',
+    moves:['mock','subvert','double_meaning','lampoon'],
+    evo:{level:20,into:'dramatic_irony'}, rate:0.10
   },
   dramatic_irony: {
-    name: 'Dramatic Irony', type: 'satirical', sprite: '🃏🎪',
-    baseStats: { hp: 75, atk: 75, def: 70, spd: 70 },
-    desc: 'The audience knows what the characters don\'t. Devastating.',
-    moves: ['mock','subvert','cosmic_joke','lampoon'],
-    evolution: null,
-    encounterRate: 0
+    name:'Dramatic Irony', type:'satirical', sprite:'irony_front',
+    base:{hp:75,atk:75,def:70,spd:70},
+    desc:'The audience knows what the characters don\'t.',
+    moves:['mock','subvert','cosmic_joke','lampoon'],
+    evo:null, rate:0
   },
   alliteration: {
-    name: 'Alliteration', type: 'poetic', sprite: '🔔',
-    baseStats: { hp: 42, atk: 48, def: 48, spd: 52 },
-    desc: 'Brilliantly, beautifully, boisterously begins every battle.',
-    moves: ['rhyme','sonic_surge','gentle_verse','meter_strike'],
-    evolution: { level: 15, into: 'assonance' },
-    encounterRate: 0.16
+    name:'Alliteration', type:'poetic', sprite:'alliteration_front',
+    base:{hp:42,atk:48,def:48,spd:52},
+    desc:'Brilliantly, beautifully begins every battle.',
+    moves:['rhyme','sonic_surge','gentle_verse','meter_strike'],
+    evo:{level:15,into:'assonance'}, rate:0.16
   },
   assonance: {
-    name: 'Assonance', type: 'poetic', sprite: '🔔🎵',
-    baseStats: { hp: 62, atk: 68, def: 65, spd: 68 },
-    desc: 'The moaning, groaning tones that flow through prose and poem alike.',
-    moves: ['rhyme','sonic_surge','stanza_slam','meter_strike'],
-    evolution: null,
-    encounterRate: 0
+    name:'Assonance', type:'poetic', sprite:'alliteration_front',
+    base:{hp:62,atk:68,def:65,spd:68},
+    desc:'Moaning, groaning tones that flow through prose.',
+    moves:['rhyme','sonic_surge','stanza_slam','meter_strike'],
+    evo:null, rate:0
   },
   onomatopoeia: {
-    name: 'Onomatopoeia', type: 'dramatic', sprite: '💢',
-    baseStats: { hp: 48, atk: 60, def: 35, spd: 55 },
-    desc: 'CRASH! BANG! WHOOSH! It is the sound it makes.',
-    moves: ['sonic_surge','monologue','climax','exaggerate'],
-    evolution: null,
-    encounterRate: 0.14
+    name:'Onomatopoeia', type:'dramatic', sprite:'generic_front',
+    base:{hp:48,atk:60,def:35,spd:55},
+    desc:'CRASH! BANG! WHOOSH! It IS the sound it makes.',
+    moves:['sonic_surge','monologue','climax','exaggerate'],
+    evo:null, rate:0.14
   },
   allegory: {
-    name: 'Allegory', type: 'narrative', sprite: '📚',
-    baseStats: { hp: 55, atk: 45, def: 55, spd: 40 },
-    desc: 'Everything it does has a deeper meaning. A walking symbol.',
-    moves: ['plot_twist','flashback','deeper_meaning','cliffhanger'],
-    evolution: { level: 22, into: 'parable' },
-    encounterRate: 0.08
+    name:'Allegory', type:'narrative', sprite:'allegory_front',
+    base:{hp:55,atk:45,def:55,spd:40},
+    desc:'Everything it does has deeper meaning.',
+    moves:['plot_twist','flashback','deeper_meaning','cliffhanger'],
+    evo:{level:22,into:'parable'}, rate:0.08
   },
   parable: {
-    name: 'Parable', type: 'narrative', sprite: '📚✝️',
-    baseStats: { hp: 80, atk: 70, def: 75, spd: 55 },
-    desc: 'A story with a moral so powerful it transcends the page.',
-    moves: ['plot_twist','deeper_meaning','cliffhanger','deus_ex_machina'],
-    evolution: null,
-    encounterRate: 0
+    name:'Parable', type:'narrative', sprite:'allegory_front',
+    base:{hp:80,atk:70,def:75,spd:55},
+    desc:'A story with a moral so powerful it transcends the page.',
+    moves:['plot_twist','deeper_meaning','cliffhanger','deus_ex_machina'],
+    evo:null, rate:0
   },
   personification: {
-    name: 'Personification', type: 'narrative', sprite: '🌳👤',
-    baseStats: { hp: 50, atk: 50, def: 50, spd: 45 },
-    desc: 'The wind whispers, the sun smiles, and this creature gives life to all.',
-    moves: ['animate','plot_twist','flashback','cliffhanger'],
-    evolution: null,
-    encounterRate: 0.13
+    name:'Personification', type:'narrative', sprite:'generic_front',
+    base:{hp:50,atk:50,def:50,spd:45},
+    desc:'The wind whispers, the sun smiles.',
+    moves:['animate','plot_twist','flashback','cliffhanger'],
+    evo:null, rate:0.13
   },
   oxymoron: {
-    name: 'Oxymoron', type: 'rhetoric', sprite: '☯️',
-    baseStats: { hp: 44, atk: 52, def: 52, spd: 46 },
-    desc: 'A living contradiction. Deafening silence. Bittersweet.',
-    moves: ['burning_rhetoric','paradox_strike','rebut','transform'],
-    evolution: null,
-    encounterRate: 0.12
+    name:'Oxymoron', type:'rhetoric', sprite:'generic_front',
+    base:{hp:44,atk:52,def:52,spd:46},
+    desc:'A living contradiction. Deafening silence.',
+    moves:['burning_rhetoric','paradox_strike','rebut','transform'],
+    evo:null, rate:0.12
   },
   foreshadowing: {
-    name: 'Foreshadowing', type: 'gothic', sprite: '🌘',
-    baseStats: { hp: 48, atk: 55, def: 42, spd: 58 },
-    desc: 'You feel like you\'ve seen this before... and what comes next won\'t be good.',
-    moves: ['dark_omen','haunt','shadow_strike','forebode'],
-    evolution: { level: 17, into: 'prophecy' },
-    encounterRate: 0.11
+    name:'Foreshadowing', type:'gothic', sprite:'foreshadowing_front',
+    base:{hp:48,atk:55,def:42,spd:58},
+    desc:'You feel like you\'ve seen this before...',
+    moves:['dark_omen','haunt','shadow_strike','forebode'],
+    evo:{level:17,into:'prophecy'}, rate:0.11
   },
   prophecy: {
-    name: 'Prophecy', type: 'gothic', sprite: '🌘🔮',
-    baseStats: { hp: 72, atk: 80, def: 60, spd: 72 },
-    desc: 'What was hinted at is now inevitable. The future bows to its will.',
-    moves: ['dark_omen','haunt','shadow_strike','doom_foretold'],
-    evolution: null,
-    encounterRate: 0
+    name:'Prophecy', type:'gothic', sprite:'foreshadowing_front',
+    base:{hp:72,atk:80,def:60,spd:72},
+    desc:'What was hinted at is now inevitable.',
+    moves:['dark_omen','haunt','shadow_strike','doom_foretold'],
+    evo:null, rate:0
   },
   pathetic_fallacy: {
-    name: 'Pathetic Fallacy', type: 'gothic', sprite: '🌧️',
-    baseStats: { hp: 52, atk: 48, def: 50, spd: 42 },
-    desc: 'When it\'s sad, it rains. When it\'s angry, lightning strikes.',
-    moves: ['dark_omen','storm_of_emotion','haunt','forebode'],
-    evolution: null,
-    encounterRate: 0.12
+    name:'Pathetic Fallacy', type:'gothic', sprite:'generic_front',
+    base:{hp:52,atk:48,def:50,spd:42},
+    desc:'When it\'s sad, it rains. When angry, lightning.',
+    moves:['dark_omen','storm_of_emotion','haunt','forebode'],
+    evo:null, rate:0.12
   },
   soliloquy: {
-    name: 'Soliloquy', type: 'dramatic', sprite: '🎤',
-    baseStats: { hp: 55, atk: 58, def: 40, spd: 48 },
-    desc: 'Talks to itself at great length. Surprisingly powerful monologues.',
-    moves: ['monologue','climax','inner_conflict','tragic_flaw'],
-    evolution: null,
-    encounterRate: 0.10
+    name:'Soliloquy', type:'dramatic', sprite:'generic_front',
+    base:{hp:55,atk:58,def:40,spd:48},
+    desc:'Talks to itself at great length. Surprisingly powerful.',
+    moves:['monologue','climax','inner_conflict','tragic_flaw'],
+    evo:null, rate:0.10
   },
   euphemism: {
-    name: 'Euphemism', type: 'satirical', sprite: '🎀',
-    baseStats: { hp: 46, atk: 40, def: 55, spd: 48 },
-    desc: 'Puts things... delicately. "Passed away" hits different than "died."',
-    moves: ['mock','soften_blow','double_meaning','lampoon'],
-    evolution: null,
-    encounterRate: 0.13
+    name:'Euphemism', type:'satirical', sprite:'generic_front',
+    base:{hp:46,atk:40,def:55,spd:48},
+    desc:'Puts things... delicately.',
+    moves:['mock','soften_blow','double_meaning','lampoon'],
+    evo:null, rate:0.13
   },
   anaphora: {
-    name: 'Anaphora', type: 'rhetoric', sprite: '📣',
-    baseStats: { hp: 50, atk: 55, def: 45, spd: 50 },
-    desc: 'I have a dream. I have a dream. I have a dream. Repetition is power.',
-    moves: ['burning_rhetoric','persuade','repetition_strike','rebut'],
-    evolution: null,
-    encounterRate: 0.10
+    name:'Anaphora', type:'rhetoric', sprite:'generic_front',
+    base:{hp:50,atk:55,def:45,spd:50},
+    desc:'I have a dream. I have a dream. Repetition is power.',
+    moves:['burning_rhetoric','persuade','repetition_strike','rebut'],
+    eo:null, rate:0.10
   },
   litotes: {
-    name: 'Litotes', type: 'satirical', sprite: '🤏',
-    baseStats: { hp: 42, atk: 42, def: 58, spd: 50 },
-    desc: 'Not unimpressive. Its understatement is not without considerable power.',
-    moves: ['mock','understate','double_meaning','subvert'],
-    evolution: null,
-    encounterRate: 0.14
-  }
+    name:'Litotes', type:'satirical', sprite:'generic_front',
+    base:{hp:42,atk:42,def:58,spd:50},
+    desc:'Not unimpressive. Understatement is power.',
+    moves:['mock','understate','double_meaning','subvert'],
+    evo:null, rate:0.14
+  },
 };
 
-// --- Move Definitions ---
+// --- Move Database ---
 const MOVES = {
-  // Rhetoric moves
-  burning_rhetoric: { name: 'Burning Rhetoric', type: 'rhetoric', power: 50, accuracy: 95, pp: 20, desc: 'A fiery argument that scorches the opposition.' },
-  persuade:         { name: 'Persuade', type: 'rhetoric', power: 40, accuracy: 100, pp: 25, desc: 'A compelling argument. Never misses.' },
-  rebut:            { name: 'Rebut', type: 'rhetoric', power: 60, accuracy: 85, pp: 15, desc: 'A powerful counterargument.' },
-  transform:        { name: 'Transform', type: 'rhetoric', power: 0, accuracy: 100, pp: 10, desc: 'Raises attack by reshaping meaning.', effect: 'atkUp' },
-  grand_oration:    { name: 'Grand Oration', type: 'rhetoric', power: 90, accuracy: 80, pp: 5, desc: 'A speech so powerful it shakes the foundations.' },
-  paradox_strike:   { name: 'Paradox Strike', type: 'rhetoric', power: 55, accuracy: 90, pp: 15, desc: 'An impossible contradiction that somehow lands.' },
-  repetition_strike:{ name: 'Repetition Strike', type: 'rhetoric', power: 35, accuracy: 100, pp: 20, desc: 'Hits twice. Again and again.', effect: 'double' },
-  // Narrative moves
-  plot_twist:       { name: 'Plot Twist', type: 'narrative', power: 70, accuracy: 85, pp: 10, desc: 'Nobody saw this coming. High damage.' },
-  flashback:        { name: 'Flashback', type: 'narrative', power: 0, accuracy: 100, pp: 10, desc: 'Revisit the past. Heals some HP.', effect: 'heal' },
-  cliffhanger:      { name: 'Cliffhanger', type: 'narrative', power: 55, accuracy: 90, pp: 15, desc: 'Leaves the opponent in suspense.' },
-  deeper_meaning:   { name: 'Deeper Meaning', type: 'narrative', power: 45, accuracy: 95, pp: 20, desc: 'There\'s more to this than meets the eye.' },
-  animate:          { name: 'Animate', type: 'narrative', power: 0, accuracy: 100, pp: 10, desc: 'Brings something to life. Boosts all stats.', effect: 'allUp' },
-  deus_ex_machina:  { name: 'Deus Ex Machina', type: 'narrative', power: 120, accuracy: 60, pp: 3, desc: 'An improbable divine intervention. Devastating but unreliable.' },
-  // Poetic moves
-  rhyme:            { name: 'Rhyme', type: 'poetic', power: 40, accuracy: 100, pp: 25, desc: 'A perfectly paired couplet. Never misses.' },
-  like_lightning:   { name: 'Like Lightning', type: 'poetic', power: 60, accuracy: 90, pp: 15, desc: 'Strikes swift as a simile.' },
-  gentle_verse:     { name: 'Gentle Verse', type: 'poetic', power: 0, accuracy: 100, pp: 15, desc: 'Soothing poetry heals wounds.', effect: 'heal' },
-  stanza_slam:      { name: 'Stanza Slam', type: 'poetic', power: 70, accuracy: 85, pp: 10, desc: 'A full stanza of devastating verse.' },
-  meter_strike:     { name: 'Meter Strike', type: 'poetic', power: 80, accuracy: 80, pp: 8, desc: 'Perfectly metered iambic pentameter hurts.' },
-  sonic_surge:      { name: 'Sonic Surge', type: 'poetic', power: 50, accuracy: 95, pp: 18, desc: 'A wave of beautiful sound.' },
-  // Dramatic moves
-  monologue:        { name: 'Monologue', type: 'dramatic', power: 50, accuracy: 95, pp: 20, desc: 'A passionate speech that deals damage.' },
-  climax:           { name: 'Climax', type: 'dramatic', power: 80, accuracy: 80, pp: 8, desc: 'The peak of the action. Massive impact.' },
-  exaggerate:       { name: 'Exaggerate', type: 'dramatic', power: 0, accuracy: 100, pp: 10, desc: 'Exaggerates own power. Raises attack greatly.', effect: 'atkUpBig' },
-  tragic_flaw:      { name: 'Tragic Flaw', type: 'dramatic', power: 65, accuracy: 90, pp: 12, desc: 'Exploits the fatal weakness of the foe.' },
-  grand_finale:     { name: 'Grand Finale', type: 'dramatic', power: 100, accuracy: 75, pp: 5, desc: 'The final curtain falls. Devastation.' },
-  inner_conflict:   { name: 'Inner Conflict', type: 'dramatic', power: 55, accuracy: 95, pp: 15, desc: 'Internal struggle manifested as damage.' },
-  // Satirical moves
-  mock:             { name: 'Mock', type: 'satirical', power: 45, accuracy: 100, pp: 25, desc: 'Ridicule that never misses its mark.' },
-  subvert:          { name: 'Subvert', type: 'satirical', power: 60, accuracy: 90, pp: 15, desc: 'Turns expectations upside down.' },
-  double_meaning:   { name: 'Double Meaning', type: 'satirical', power: 50, accuracy: 95, pp: 18, desc: 'Hits the opponent on two levels.' },
-  lampoon:          { name: 'Lampoon', type: 'satirical', power: 70, accuracy: 85, pp: 10, desc: 'A savage public mockery.' },
-  soften_blow:      { name: 'Soften Blow', type: 'satirical', power: 0, accuracy: 100, pp: 15, desc: 'Makes bad news sound okay. Raises defense.', effect: 'defUp' },
-  understate:       { name: 'Understate', type: 'satirical', power: 0, accuracy: 100, pp: 10, desc: 'Not bad. Lowers enemy attack.', effect: 'enemyAtkDown' },
-  cosmic_joke:      { name: 'Cosmic Joke', type: 'satirical', power: 90, accuracy: 80, pp: 5, desc: 'The universe laughs. The opponent doesn\'t.' },
-  // Gothic moves
-  dark_omen:        { name: 'Dark Omen', type: 'gothic', power: 50, accuracy: 95, pp: 20, desc: 'A chilling portent of doom.' },
-  haunt:            { name: 'Haunt', type: 'gothic', power: 40, accuracy: 100, pp: 25, desc: 'A spectral presence that lingers. Never misses.' },
-  shadow_strike:    { name: 'Shadow Strike', type: 'gothic', power: 65, accuracy: 88, pp: 12, desc: 'Strikes from the darkness.' },
-  forebode:         { name: 'Forebode', type: 'gothic', power: 0, accuracy: 100, pp: 10, desc: 'Creates a sense of dread. Lowers enemy speed.', effect: 'enemySpdDown' },
-  storm_of_emotion: { name: 'Storm of Emotion', type: 'gothic', power: 60, accuracy: 90, pp: 12, desc: 'Nature rages with feeling.' },
-  doom_foretold:    { name: 'Doom Foretold', type: 'gothic', power: 100, accuracy: 70, pp: 5, desc: 'What was foreseen comes to pass.' }
+  burning_rhetoric:{name:'Burning Rhetoric',type:'rhetoric',pow:50,acc:95,pp:20,desc:'Fiery argument.'},
+  persuade:{name:'Persuade',type:'rhetoric',pow:40,acc:100,pp:25,desc:'Never misses.'},
+  rebut:{name:'Rebut',type:'rhetoric',pow:60,acc:85,pp:15,desc:'Powerful counter.'},
+  transform:{name:'Transform',type:'rhetoric',pow:0,acc:100,pp:10,desc:'Raises attack.',fx:'atkUp'},
+  grand_oration:{name:'Grand Oration',type:'rhetoric',pow:90,acc:80,pp:5,desc:'Shakes foundations.'},
+  paradox_strike:{name:'Paradox Strike',type:'rhetoric',pow:55,acc:90,pp:15,desc:'Impossible contradiction.'},
+  repetition_strike:{name:'Repetition Strike',type:'rhetoric',pow:35,acc:100,pp:20,desc:'Hits twice.',fx:'double'},
+  plot_twist:{name:'Plot Twist',type:'narrative',pow:70,acc:85,pp:10,desc:'Nobody saw this coming.'},
+  flashback:{name:'Flashback',type:'narrative',pow:0,acc:100,pp:10,desc:'Heals HP.',fx:'heal'},
+  cliffhanger:{name:'Cliffhanger',type:'narrative',pow:55,acc:90,pp:15,desc:'Suspense damage.'},
+  deeper_meaning:{name:'Deeper Meaning',type:'narrative',pow:45,acc:95,pp:20,desc:'More than meets the eye.'},
+  animate:{name:'Animate',type:'narrative',pow:0,acc:100,pp:10,desc:'Boosts all stats.',fx:'allUp'},
+  deus_ex_machina:{name:'Deus Ex Machina',type:'narrative',pow:120,acc:60,pp:3,desc:'Divine intervention.'},
+  rhyme:{name:'Rhyme',type:'poetic',pow:40,acc:100,pp:25,desc:'Perfect couplet.'},
+  like_lightning:{name:'Like Lightning',type:'poetic',pow:60,acc:90,pp:15,desc:'Swift simile.'},
+  gentle_verse:{name:'Gentle Verse',type:'poetic',pow:0,acc:100,pp:15,desc:'Heals wounds.',fx:'heal'},
+  stanza_slam:{name:'Stanza Slam',type:'poetic',pow:70,acc:85,pp:10,desc:'Devastating verse.'},
+  meter_strike:{name:'Meter Strike',type:'poetic',pow:80,acc:80,pp:8,desc:'Iambic pentameter.'},
+  sonic_surge:{name:'Sonic Surge',type:'poetic',pow:50,acc:95,pp:18,desc:'Wave of sound.'},
+  monologue:{name:'Monologue',type:'dramatic',pow:50,acc:95,pp:20,desc:'Passionate speech.'},
+  climax:{name:'Climax',type:'dramatic',pow:80,acc:80,pp:8,desc:'Peak action.'},
+  exaggerate:{name:'Exaggerate',type:'dramatic',pow:0,acc:100,pp:10,desc:'Raises atk sharply.',fx:'atkUpBig'},
+  tragic_flaw:{name:'Tragic Flaw',type:'dramatic',pow:65,acc:90,pp:12,desc:'Exploits weakness.'},
+  grand_finale:{name:'Grand Finale',type:'dramatic',pow:100,acc:75,pp:5,desc:'Final curtain.'},
+  inner_conflict:{name:'Inner Conflict',type:'dramatic',pow:55,acc:95,pp:15,desc:'Internal struggle.'},
+  mock:{name:'Mock',type:'satirical',pow:45,acc:100,pp:25,desc:'Ridicule.'},
+  subvert:{name:'Subvert',type:'satirical',pow:60,acc:90,pp:15,desc:'Expectations flipped.'},
+  double_meaning:{name:'Double Meaning',type:'satirical',pow:50,acc:95,pp:18,desc:'Hits on two levels.'},
+  lampoon:{name:'Lampoon',type:'satirical',pow:70,acc:85,pp:10,desc:'Savage mockery.'},
+  soften_blow:{name:'Soften Blow',type:'satirical',pow:0,acc:100,pp:15,desc:'Raises defense.',fx:'defUp'},
+  understate:{name:'Understate',type:'satirical',pow:0,acc:100,pp:10,desc:'Lowers enemy atk.',fx:'eAtkDown'},
+  cosmic_joke:{name:'Cosmic Joke',type:'satirical',pow:90,acc:80,pp:5,desc:'Universe laughs.'},
+  dark_omen:{name:'Dark Omen',type:'gothic',pow:50,acc:95,pp:20,desc:'Chilling portent.'},
+  haunt:{name:'Haunt',type:'gothic',pow:40,acc:100,pp:25,desc:'Never misses.'},
+  shadow_strike:{name:'Shadow Strike',type:'gothic',pow:65,acc:88,pp:12,desc:'From darkness.'},
+  forebode:{name:'Forebode',type:'gothic',pow:0,acc:100,pp:10,desc:'Lowers enemy spd.',fx:'eSpdDown'},
+  storm_of_emotion:{name:'Storm of Emotion',type:'gothic',pow:60,acc:90,pp:12,desc:'Nature rages.'},
+  doom_foretold:{name:'Doom Foretold',type:'gothic',pow:100,acc:70,pp:5,desc:'Prophecy fulfilled.'},
 };
 
-// --- Map Data ---
-const TILE = { GRASS: 0, PATH: 1, TALL_GRASS: 2, TREE: 3, WATER: 4, BUILDING: 5, DOOR: 6, SIGN: 7, NPC: 8, FLOWER: 9, FENCE: 10, HEAL: 11, BRIDGE: 12 };
-const TILE_COLORS = {
-  [TILE.GRASS]: '#3a7d44', [TILE.PATH]: '#c4a35a', [TILE.TALL_GRASS]: '#2d6b35',
-  [TILE.TREE]: '#1a4d2e', [TILE.WATER]: '#2563a8', [TILE.BUILDING]: '#6d5c4e',
-  [TILE.DOOR]: '#8b4513', [TILE.SIGN]: '#c4a35a', [TILE.NPC]: '#3a7d44',
-  [TILE.FLOWER]: '#3a7d44', [TILE.FENCE]: '#8b7355', [TILE.HEAL]: '#ff6b6b',
-  [TILE.BRIDGE]: '#a0845c'
-};
-const TILE_DETAILS = {
-  [TILE.TREE]: '#0d3318', [TILE.WATER]: '#1d4f8a', [TILE.TALL_GRASS]: '#1e5428',
-  [TILE.FLOWER]: '#ff69b4', [TILE.BUILDING]: '#5a4a3e', [TILE.FENCE]: '#6d5c4e',
-  [TILE.HEAL]: '#ff4444', [TILE.SIGN]: '#8b7355', [TILE.BRIDGE]: '#8b7355'
-};
-const WALKABLE = [TILE.GRASS, TILE.PATH, TILE.TALL_GRASS, TILE.DOOR, TILE.SIGN, TILE.NPC, TILE.FLOWER, TILE.HEAL, TILE.BRIDGE];
-
-const MAPS = {
-  hometown: {
-    name: 'Inkwell Town',
-    width: 30, height: 25,
-    encounters: ['simile','alliteration','litotes'],
-    encounterRate: 0.12,
-    music: 'town',
-    data: (function() {
-      const m = [];
-      for (let y = 0; y < 25; y++) {
-        const row = [];
-        for (let x = 0; x < 30; x++) {
-          // borders
-          if (y === 0 || y === 24 || x === 0 || x === 29) { row.push(TILE.TREE); continue; }
-          // paths
-          if ((y === 12 && x >= 3 && x <= 26) || (x === 15 && y >= 3 && y <= 22)) { row.push(TILE.PATH); continue; }
-          if (y === 12 && x === 27) { row.push(TILE.PATH); continue; }
-          // buildings
-          if (y >= 3 && y <= 5 && x >= 5 && x <= 9) { if (y === 5 && x === 7) row.push(TILE.DOOR); else row.push(TILE.BUILDING); continue; }
-          if (y >= 3 && y <= 5 && x >= 18 && x <= 22) { if (y === 5 && x === 20) row.push(TILE.HEAL); else row.push(TILE.BUILDING); continue; }
-          // lab
-          if (y >= 8 && y <= 10 && x >= 5 && x <= 11) { if (y === 10 && x === 8) row.push(TILE.DOOR); else row.push(TILE.BUILDING); continue; }
-          // pond
-          if (y >= 16 && y <= 19 && x >= 3 && x <= 7) { row.push(TILE.WATER); continue; }
-          // flowers
-          if ((y === 15 && (x === 3 || x === 5 || x === 7)) || (y === 20 && (x === 4 || x === 6))) { row.push(TILE.FLOWER); continue; }
-          // tall grass patches
-          if (y >= 14 && y <= 22 && x >= 20 && x <= 27) { row.push(TILE.TALL_GRASS); continue; }
-          // sign
-          if (y === 11 && x === 14) { row.push(TILE.SIGN); continue; }
-          // fence around lab
-          if (y === 7 && x >= 4 && x <= 12) { row.push(TILE.FENCE); continue; }
-          if ((y >= 7 && y <= 11) && (x === 4 || x === 12)) { row.push(TILE.FENCE); continue; }
-          if (y === 11 && x >= 4 && x <= 7) { row.push(TILE.FENCE); continue; }
-          if (y === 11 && x >= 9 && x <= 12) { row.push(TILE.FENCE); continue; }
-          row.push(TILE.GRASS);
-        }
-        m.push(row);
-      }
-      return m;
-    })(),
-    npcs: [
-      { x: 13, y: 11, sprite: '👨‍🔬', name: 'Prof. Narrator', dialogue: [
-        { speaker: 'Prof. Narrator', text: 'Welcome to the world of Lexicon Legends!' },
-        { speaker: 'Prof. Narrator', text: 'Literary creatures roam the tall grass. Each one embodies a literary device!' },
-        { speaker: 'Prof. Narrator', text: 'Catch them, train them, and become the greatest Lexicographer!' }
-      ]},
-      { x: 10, y: 15, sprite: '👧', name: 'Lily', dialogue: [
-        { speaker: 'Lily', text: 'I love the Similes around here! They\'re gentle as a summer breeze~' },
-        { speaker: 'Lily', text: 'Try the tall grass to the east if you want to find some!' }
-      ]},
-      { x: 20, y: 7, sprite: '👩‍⚕️', name: 'Nurse Joy', dialogue: [
-        { speaker: 'Nurse Joy', text: 'Welcome to the Lexicon Center! Step on the red tile to heal your team!' }
-      ]}
-    ],
-    signs: [
-      { x: 14, y: 11, text: 'INKWELL TOWN - Where Every Story Begins' }
-    ],
-    connections: [
-      { x: 28, y: 12, toMap: 'route1', toX: 1, toY: 15 }
-    ]
-  },
-  route1: {
-    name: 'Prose Path',
-    width: 40, height: 30,
-    encounters: ['metaphor','simile','hyperbole','onomatopoeia','personification','oxymoron'],
-    encounterRate: 0.15,
-    music: 'route',
-    data: (function() {
-      const m = [];
-      for (let y = 0; y < 30; y++) {
-        const row = [];
-        for (let x = 0; x < 40; x++) {
-          if (y === 0 || y === 29 || x === 39) { row.push(TILE.TREE); continue; }
-          if (x === 0 && y !== 15) { row.push(TILE.TREE); continue; }
-          if (x === 0 && y === 15) { row.push(TILE.PATH); continue; }
-          // main path
-          if (y === 15 && x <= 20) { row.push(TILE.PATH); continue; }
-          if (x === 20 && y >= 8 && y <= 15) { row.push(TILE.PATH); continue; }
-          if (y === 8 && x >= 20 && x <= 35) { row.push(TILE.PATH); continue; }
-          if (x === 35 && y >= 4 && y <= 8) { row.push(TILE.PATH); continue; }
-          if (y === 4 && x >= 35 && x <= 38) { row.push(TILE.PATH); continue; }
-          // tall grass areas
-          if (y >= 10 && y <= 14 && x >= 5 && x <= 15) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 16 && y <= 22 && x >= 8 && x <= 18) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 3 && y <= 7 && x >= 24 && x <= 33) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 10 && y <= 16 && x >= 25 && x <= 37) { row.push(TILE.TALL_GRASS); continue; }
-          // water
-          if (y >= 20 && y <= 25 && x >= 25 && x <= 32) { row.push(TILE.WATER); continue; }
-          // bridge
-          if (y === 22 && x >= 22 && x <= 24) { row.push(TILE.BRIDGE); continue; }
-          // trees scattered
-          if ((x === 3 && y === 5) || (x === 7 && y === 3) || (x === 12 && y === 24) || (x === 35 && y === 20)) { row.push(TILE.TREE); continue; }
-          // flowers
-          if ((y === 18 && x === 3) || (y === 6 && x === 18) || (y === 25 && x === 15)) { row.push(TILE.FLOWER); continue; }
-          row.push(TILE.GRASS);
-        }
-        m.push(row);
-      }
-      return m;
-    })(),
-    npcs: [
-      { x: 10, y: 14, sprite: '🧑', name: 'Bug Catcher Tim', dialogue: [
-        { speaker: 'Tim', text: 'Hey! You look like a trainer! Let\'s battle!' }
-      ], battle: { creatures: [{ id: 'simile', level: 5 }, { id: 'alliteration', level: 4 }] }},
-      { x: 30, y: 7, sprite: '👩', name: 'Lass Emily', dialogue: [
-        { speaker: 'Emily', text: 'The creatures get tougher as you go north!' },
-        { speaker: 'Emily', text: 'Make sure to train in the tall grass!' }
-      ]},
-      { x: 22, y: 15, sprite: '🧓', name: 'Old Man Webster', dialogue: [
-        { speaker: 'Webster', text: 'In my day, we only had Metaphors and Similes...' },
-        { speaker: 'Webster', text: 'Now there\'s all these newfangled literary devices!' }
-      ]}
-    ],
-    signs: [
-      { x: 1, y: 14, text: '← Inkwell Town' },
-      { x: 20, y: 7, text: '↑ Verse Valley →' }
-    ],
-    connections: [
-      { x: 0, y: 15, toMap: 'hometown', toX: 27, toY: 12 },
-      { x: 38, y: 4, toMap: 'verse_valley', toX: 1, toY: 15 }
-    ]
-  },
-  verse_valley: {
-    name: 'Verse Valley',
-    width: 35, height: 30,
-    encounters: ['allegory','foreshadowing','pathetic_fallacy','irony','euphemism','soliloquy','anaphora','hyperbole'],
-    encounterRate: 0.18,
-    music: 'dungeon',
-    data: (function() {
-      const m = [];
-      for (let y = 0; y < 30; y++) {
-        const row = [];
-        for (let x = 0; x < 35; x++) {
-          if (y === 0 || y === 29 || x === 34) { row.push(TILE.TREE); continue; }
-          if (x === 0 && y !== 15) { row.push(TILE.TREE); continue; }
-          if (x === 0 && y === 15) { row.push(TILE.PATH); continue; }
-          // winding path
-          if (y === 15 && x <= 10) { row.push(TILE.PATH); continue; }
-          if (x === 10 && y >= 10 && y <= 15) { row.push(TILE.PATH); continue; }
-          if (y === 10 && x >= 10 && x <= 25) { row.push(TILE.PATH); continue; }
-          if (x === 25 && y >= 10 && y <= 20) { row.push(TILE.PATH); continue; }
-          if (y === 20 && x >= 25 && x <= 30) { row.push(TILE.PATH); continue; }
-          // heal station
-          if (y >= 5 && y <= 7 && x >= 15 && x <= 19) { if (y === 7 && x === 17) row.push(TILE.HEAL); else row.push(TILE.BUILDING); continue; }
-          // lots of tall grass
-          if (y >= 2 && y <= 8 && x >= 2 && x <= 8) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 12 && y <= 18 && x >= 13 && x <= 22) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 22 && y <= 27 && x >= 5 && x <= 15) { row.push(TILE.TALL_GRASS); continue; }
-          if (y >= 22 && y <= 27 && x >= 27 && x <= 32) { row.push(TILE.TALL_GRASS); continue; }
-          // water/dark areas
-          if (y >= 16 && y <= 19 && x >= 2 && x <= 6) { row.push(TILE.WATER); continue; }
-          // scattered trees
-          if ((x+y) % 7 === 0 && !((y === 15 && x < 11) || (x === 10 && y > 9 && y < 16) || (y === 10 && x > 9 && x < 26) || (x === 25 && y > 9 && y < 21) || (y === 20 && x > 24 && x < 31))) {
-            if (Math.random() < 0.3) { row.push(TILE.TREE); continue; }
-          }
-          row.push(TILE.GRASS);
-        }
-        m.push(row);
-      }
-      return m;
-    })(),
-    npcs: [
-      { x: 8, y: 10, sprite: '🧙', name: 'Sage Dickens', dialogue: [
-        { speaker: 'Sage Dickens', text: 'It was the best of times, it was the worst of times...' },
-        { speaker: 'Sage Dickens', text: 'The creatures here are powerful. Gothic types lurk in the shadows.' },
-        { speaker: 'Sage Dickens', text: 'Seek the Legendary Protagonist at the end of the valley!' }
-      ]},
-      { x: 20, y: 19, sprite: '🧑‍🎤', name: 'Poet Blake', dialogue: [
-        { speaker: 'Blake', text: 'Tiger, tiger, burning bright... want to battle?' }
-      ], battle: { creatures: [{ id: 'metaphor', level: 12 }, { id: 'hyperbole', level: 11 }, { id: 'foreshadowing', level: 13 }] }},
-      { x: 30, y: 20, sprite: '👸', name: 'Champion Austen', dialogue: [
-        { speaker: 'Champion Austen', text: 'It is a truth universally acknowledged that a trainer with a full party must be in want of a battle!' },
-        { speaker: 'Champion Austen', text: 'Show me what your literary creatures can do!' }
-      ], battle: { creatures: [{ id: 'irony', level: 15 }, { id: 'allegory', level: 16 }, { id: 'foreshadowing', level: 15 }, { id: 'hyperbole', level: 17 }] }},
-    ],
-    signs: [
-      { x: 1, y: 14, text: '← Prose Path' },
-      { x: 25, y: 9, text: 'Verse Valley - Beware of Gothic types!' }
-    ],
-    connections: [
-      { x: 0, y: 15, toMap: 'route1', toX: 37, toY: 4 }
-    ]
-  }
-};
-
-// Regenerate verse_valley data without randomness (deterministic)
-MAPS.verse_valley.data = (function() {
-  const m = [];
-  for (let y = 0; y < 30; y++) {
-    const row = [];
-    for (let x = 0; x < 35; x++) {
-      if (y === 0 || y === 29 || x === 34) { row.push(TILE.TREE); continue; }
-      if (x === 0 && y !== 15) { row.push(TILE.TREE); continue; }
-      if (x === 0 && y === 15) { row.push(TILE.PATH); continue; }
-      if (y === 15 && x <= 10) { row.push(TILE.PATH); continue; }
-      if (x === 10 && y >= 10 && y <= 15) { row.push(TILE.PATH); continue; }
-      if (y === 10 && x >= 10 && x <= 25) { row.push(TILE.PATH); continue; }
-      if (x === 25 && y >= 10 && y <= 20) { row.push(TILE.PATH); continue; }
-      if (y === 20 && x >= 25 && x <= 30) { row.push(TILE.PATH); continue; }
-      if (y >= 5 && y <= 7 && x >= 15 && x <= 19) { if (y === 7 && x === 17) row.push(TILE.HEAL); else row.push(TILE.BUILDING); continue; }
-      if (y >= 2 && y <= 8 && x >= 2 && x <= 8) { row.push(TILE.TALL_GRASS); continue; }
-      if (y >= 12 && y <= 18 && x >= 13 && x <= 22) { row.push(TILE.TALL_GRASS); continue; }
-      if (y >= 22 && y <= 27 && x >= 5 && x <= 15) { row.push(TILE.TALL_GRASS); continue; }
-      if (y >= 22 && y <= 27 && x >= 27 && x <= 32) { row.push(TILE.TALL_GRASS); continue; }
-      if (y >= 16 && y <= 19 && x >= 2 && x <= 6) { row.push(TILE.WATER); continue; }
-      row.push(TILE.GRASS);
-    }
-    m.push(row);
-  }
-  return m;
-})();
-
-// --- Player State ---
-const Player = {
-  x: 15, y: 13, dir: 'down', moving: false, stepTimer: 0,
-  mapId: 'hometown',
-  party: [],
-  bag: [
-    { id: 'ink_potion', name: 'Ink Potion', icon: '🧪', desc: 'Restores 30 HP', count: 5, effect: 'heal', value: 30 },
-    { id: 'quill_potion', name: 'Quill Potion', icon: '🧴', desc: 'Restores 60 HP', count: 3, effect: 'heal', value: 60 },
-    { id: 'manuscript', name: 'Manuscript', icon: '📜', desc: 'Catches wild creatures', count: 10, effect: 'catch', value: 1 },
-    { id: 'rare_manuscript', name: 'Rare Manuscript', icon: '📕', desc: 'Better catch rate', count: 3, effect: 'catch', value: 2 },
-    { id: 'revive_scroll', name: 'Revive Scroll', icon: '📃', desc: 'Revives a fainted creature', count: 2, effect: 'revive', value: 1 }
-  ],
-  badges: [],
-  defeatedTrainers: [],
-  money: 500,
-  stepsInGrass: 0
-};
-
-function createCreature(id, level) {
-  const def = CREATURE_DEFS[id];
-  if (!def) return null;
+// --- Creature Factory ---
+function makeCreature(id, level) {
+  const d = CREATURES[id]; if (!d) return null;
   const c = {
-    id, name: def.name, type: def.type, sprite: def.sprite, level,
-    moves: def.moves.slice(0, Math.min(4, 1 + Math.floor(level / 5) + 1)).map(mid => {
-      const mv = MOVES[mid];
-      return { ...mv, id: mid, currentPP: mv.pp };
-    }),
-    baseStats: { ...def.baseStats },
-    statMods: { atk: 0, def: 0, spd: 0 },
-    xp: 0, xpToNext: Math.floor(level * level * 1.5 + 10),
-    evolutionDef: def.evolution,
-    desc: def.desc
+    id, name:d.name, type:d.type, sprite:d.sprite, level,
+    base:{...d.base}, mods:{atk:0,def:0,spd:0}, desc:d.desc, evoDef:d.evo,
+    xp:0, moves:[]
   };
-  // Calculate actual stats
-  c.maxHp = Math.floor(def.baseStats.hp + level * 2.5 + 10);
+  // Assign moves based on level
+  const available = d.moves.slice(0, Math.min(4, 2 + Math.floor(level/5)));
+  c.moves = available.map(mid => ({...MOVES[mid], id:mid, curPP:MOVES[mid].pp}));
+  calcStats(c);
   c.hp = c.maxHp;
-  c.atk = Math.floor(def.baseStats.atk + level * 1.5);
-  c.def = Math.floor(def.baseStats.def + level * 1.5);
-  c.spd = Math.floor(def.baseStats.spd + level * 1.5);
   return c;
 }
-
-function recalcStats(c) {
-  const def = CREATURE_DEFS[c.id] || { baseStats: c.baseStats };
-  c.maxHp = Math.floor(def.baseStats.hp + c.level * 2.5 + 10);
-  c.atk = Math.floor(def.baseStats.atk + c.level * 1.5);
-  c.def = Math.floor(def.baseStats.def + c.level * 1.5);
-  c.spd = Math.floor(def.baseStats.spd + c.level * 1.5);
-  c.xpToNext = Math.floor(c.level * c.level * 1.5 + 10);
+function calcStats(c) {
+  c.maxHp = Math.floor(c.base.hp + c.level*2.5 + 10);
+  c.atk = Math.floor(c.base.atk + c.level*1.5);
+  c.def = Math.floor(c.base.def + c.level*1.5);
+  c.spd = Math.floor(c.base.spd + c.level*1.5);
+  c.xpNext = Math.floor(c.level*c.level*1.5 + 10);
 }
 
-// --- Game State ---
-const GameState = {
-  TITLE: 'title', OVERWORLD: 'overworld', BATTLE: 'battle',
-  DIALOGUE: 'dialogue', MENU: 'menu', PARTY: 'party',
-  BAG: 'bag', CATCH: 'catch', TRANSITION: 'transition'
+// --- Player ---
+const P = {
+  x:15, y:13, px:15*TS, py:13*TS, // px/py = pixel position for smooth movement
+  dir:'down', walking:false, walkFrame:0, walkTimer:0,
+  mapId:'hometown',
+  party: [],
+  bag: [
+    {id:'ink_potion',name:'Ink Potion',desc:'Restores 30 HP',count:5,fx:'heal',val:30},
+    {id:'quill_potion',name:'Quill Potion',desc:'Restores 60 HP',count:3,fx:'heal',val:60},
+    {id:'manuscript',name:'Manuscript',desc:'Catches creatures',count:10,fx:'catch',val:1},
+    {id:'rare_ms',name:'Rare Manuscript',desc:'Better catch rate',count:3,fx:'catch',val:2},
+    {id:'revive',name:'Revive Scroll',desc:'Revives fainted',count:2,fx:'revive',val:1},
+  ],
+  defeated: [],
+  money: 500,
+  moving: false, moveDir:null, moveProgress:0,
 };
 
-let state = GameState.TITLE;
-let canvas, ctx, minimapCanvas, minimapCtx, battleCanvas, battleCtx;
-let keys = {};
-let animFrame = 0;
-let camera = { x: 0, y: 0 };
-const TILE_SIZE = 32;
-let transitionAlpha = 0;
-let transitionCallback = null;
+// --- Smooth Movement ---
+const MOVE_SPEED = 3; // pixels per frame
 
-// --- Initialize ---
-function init() {
-  canvas = document.getElementById('gameCanvas');
-  ctx = canvas.getContext('2d');
-  minimapCanvas = document.getElementById('minimapCanvas');
-  minimapCtx = minimapCanvas.getContext('2d');
-  battleCanvas = document.getElementById('battleCanvas');
-  battleCtx = battleCanvas.getContext('2d');
-
-  document.addEventListener('keydown', e => {
-    keys[e.key.toLowerCase()] = true;
-    if (state === GameState.DIALOGUE && (e.key === ' ' || e.key === 'Enter')) Dialogue.advance();
-    if (state === GameState.OVERWORLD && e.key.toLowerCase() === 'm') Menu.open();
-    if (state === GameState.OVERWORLD && (e.key === ' ' || e.key === 'Enter')) interact();
-    e.preventDefault();
-  });
-  document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-
-  gameLoop();
-}
-
-// --- Game Loop ---
-function gameLoop() {
-  animFrame++;
-  update();
-  render();
-  requestAnimationFrame(gameLoop);
-}
-
-function update() {
-  if (state === GameState.OVERWORLD) {
-    updateOverworld();
-  } else if (state === GameState.TRANSITION) {
-    updateTransition();
+function updatePlayer() {
+  if (P.moving) {
+    P.moveProgress += MOVE_SPEED;
+    const dirs = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+    const [dx,dy] = dirs[P.moveDir];
+    P.px = (P.x + dx * (P.moveProgress/TS)) * TS;
+    P.py = (P.y + dy * (P.moveProgress/TS)) * TS;
+    P.walkTimer++;
+    if (P.walkTimer % 8 === 0) P.walkFrame = 1 - P.walkFrame;
+    if (P.moveProgress >= TS) {
+      P.x += dx; P.y += dy;
+      P.px = P.x * TS; P.py = P.y * TS;
+      P.moving = false; P.moveProgress = 0;
+      onStepComplete();
+    }
+    return;
   }
-}
 
-function updateOverworld() {
-  if (Player.moving) return;
-  let dx = 0, dy = 0;
-  if (keys['arrowup'] || keys['w']) { dy = -1; Player.dir = 'up'; }
-  else if (keys['arrowdown'] || keys['s']) { dy = 1; Player.dir = 'down'; }
-  else if (keys['arrowleft'] || keys['a']) { dx = -1; Player.dir = 'left'; }
-  else if (keys['arrowright'] || keys['d']) { dx = 1; Player.dir = 'right'; }
+  let dx=0, dy=0, dir=null;
+  if (keys['ArrowUp']||keys['KeyW']) { dy=-1; dir='up'; }
+  else if (keys['ArrowDown']||keys['KeyS']) { dy=1; dir='down'; }
+  else if (keys['ArrowLeft']||keys['KeyA']) { dx=-1; dir='left'; }
+  else if (keys['ArrowRight']||keys['KeyD']) { dx=1; dir='right'; }
 
-  if (dx === 0 && dy === 0) return;
+  if (!dir) { P.walkFrame=0; return; }
+  P.dir = dir;
 
-  const map = MAPS[Player.mapId];
-  const nx = Player.x + dx;
-  const ny = Player.y + dy;
+  const map = MAPS[P.mapId];
+  const nx = P.x+dx, ny = P.y+dy;
 
-  // Check connections
-  for (const conn of map.connections || []) {
-    if (nx === conn.x && ny === conn.y) {
-      startTransition(() => {
-        Player.mapId = conn.toMap;
-        Player.x = conn.toX;
-        Player.y = conn.toY;
+  // Connection check
+  for (const conn of (map.connections||[])) {
+    if (nx===conn.x && ny===conn.y) {
+      Transition.start(() => {
+        P.mapId=conn.toMap; P.x=conn.toX; P.y=conn.toY;
+        P.px=P.x*TS; P.py=P.y*TS;
+        if (MAPS[conn.toMap].music) Audio.bgm(MAPS[conn.toMap].music);
       });
       return;
     }
   }
 
-  if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) return;
+  if (nx<0||ny<0||nx>=map.width||ny>=map.height) { return; }
   const tile = map.data[ny][nx];
-  if (!WALKABLE.includes(tile)) return;
+  if (!WALKABLE.includes(tile)) { return; }
+  // NPC collision
+  for (const npc of (map.npcs||[])) { if (npc.x===nx&&npc.y===ny) return; }
 
-  // Check NPC collision
-  for (const npc of map.npcs || []) {
-    if (npc.x === nx && npc.y === ny) return;
-  }
+  P.moving = true; P.moveDir = dir; P.moveProgress = 0;
+  if (frame % 3 === 0) Audio.jingle('step');
+}
 
-  Player.x = nx;
-  Player.y = ny;
-  Player.moving = true;
-  Audio.step();
-
-  setTimeout(() => { Player.moving = false; }, 120);
-
-  // Tile effects
-  if (tile === TILE.TALL_GRASS) {
-    Player.stepsInGrass++;
-    if (Math.random() < map.encounterRate) {
-      Player.stepsInGrass = 0;
-      startWildEncounter(map);
-    }
+function onStepComplete() {
+  const map = MAPS[P.mapId];
+  const tile = map.data[P.y][P.x];
+  if (tile === TILE.TALL_GRASS && Math.random() < (map.encounterRate||0.12)) {
+    startWildEncounter();
   }
   if (tile === TILE.HEAL) {
-    Player.party.forEach(c => {
-      c.hp = c.maxHp;
-      c.moves.forEach(m => m.currentPP = m.pp);
-    });
-    Audio.heal();
-    showNotification('Your team has been healed!');
+    P.party.forEach(c => { c.hp=c.maxHp; c.moves.forEach(m => m.curPP=m.pp); });
+    Audio.jingle('heal');
+    Notification.show('Your team was healed!');
   }
 }
 
 function interact() {
-  const map = MAPS[Player.mapId];
-  const dirs = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
-  const [dx, dy] = dirs[Player.dir];
-  const tx = Player.x + dx, ty = Player.y + dy;
+  const map = MAPS[P.mapId];
+  const dirs={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+  const [dx,dy] = dirs[P.dir];
+  const tx=P.x+dx, ty=P.y+dy;
 
-  // Check NPCs
-  for (const npc of map.npcs || []) {
-    if (npc.x === tx && npc.y === ty) {
-      if (npc.battle && !Player.defeatedTrainers.includes(npc.name)) {
-        Dialogue.start(npc.dialogue, () => {
-          startTrainerBattle(npc);
-        });
-      } else if (npc.battle && Player.defeatedTrainers.includes(npc.name)) {
-        Dialogue.start([{ speaker: npc.name, text: 'Good battle earlier! You\'re quite the Lexicographer.' }]);
+  for (const npc of (map.npcs||[])) {
+    if (npc.x===tx && npc.y===ty) {
+      if (npc.battle && !P.defeated.includes(npc.name)) {
+        Dialogue.start(npc.dialogue, () => startTrainerBattle(npc));
+      } else if (npc.battle) {
+        Dialogue.start([{s:npc.name,t:'Great battle earlier!'}]);
       } else {
         Dialogue.start(npc.dialogue);
       }
       return;
     }
   }
-
-  // Check signs
-  for (const sign of map.signs || []) {
-    if (sign.x === tx && sign.y === ty) {
-      Dialogue.start([{ speaker: 'Sign', text: sign.text }]);
+  for (const sign of (map.signs||[])) {
+    if (sign.x===tx && sign.y===ty) {
+      Dialogue.start([{s:'Sign',t:sign.text}]);
       return;
     }
   }
+}
 
-  // Check tile in front
-  if (ty >= 0 && ty < map.height && tx >= 0 && tx < map.width) {
-    const tile = map.data[ty][tx];
-    if (tile === TILE.DOOR) {
-      Dialogue.start([{ speaker: '', text: 'The door is locked. Maybe someday...' }]);
+// --- Map System ---
+const TILE={GRASS:0,PATH:1,TALL_GRASS:2,TREE:3,WATER:4,BUILDING:5,DOOR:6,SIGN:7,FLOWER:9,FENCE:10,HEAL:11,BRIDGE:12};
+const WALKABLE=[TILE.GRASS,TILE.PATH,TILE.TALL_GRASS,TILE.DOOR,TILE.SIGN,TILE.FLOWER,TILE.HEAL,TILE.BRIDGE];
+
+function makeMap(w,h,fill) { const m=[]; for(let y=0;y<h;y++){const r=[];for(let x=0;x<w;x++)r.push(fill);m.push(r);}return m; }
+function setRect(m,x1,y1,x2,y2,t){for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t;}
+function setTile(m,x,y,t){if(y>=0&&y<m.length&&x>=0&&x<m[0].length)m[y][x]=t;}
+
+const MAPS = {};
+
+// Hometown
+(function(){
+  const d=makeMap(30,25,TILE.GRASS);
+  setRect(d,0,0,29,0,TILE.TREE);setRect(d,0,24,29,24,TILE.TREE);setRect(d,0,0,0,24,TILE.TREE);setRect(d,29,0,29,24,TILE.TREE);
+  // Paths
+  setRect(d,3,12,27,12,TILE.PATH); setRect(d,15,3,15,22,TILE.PATH);
+  // Prof lab
+  setRect(d,5,8,11,10,TILE.BUILDING); setTile(d,8,10,TILE.DOOR);
+  setRect(d,4,7,12,7,TILE.FENCE); setRect(d,4,7,4,11,TILE.FENCE); setRect(d,12,7,12,11,TILE.FENCE);
+  setRect(d,4,11,7,11,TILE.FENCE); setRect(d,9,11,12,11,TILE.FENCE);
+  // Player house
+  setRect(d,5,3,9,5,TILE.BUILDING); setTile(d,7,5,TILE.DOOR);
+  // Healing center
+  setRect(d,18,3,22,5,TILE.BUILDING); setTile(d,20,5,TILE.HEAL);
+  // Pond
+  setRect(d,3,16,7,19,TILE.WATER);
+  // Flowers
+  [3,5,7].forEach(x=>setTile(d,x,15,TILE.FLOWER));
+  [4,6].forEach(x=>setTile(d,x,20,TILE.FLOWER));
+  // Tall grass
+  setRect(d,20,14,27,22,TILE.TALL_GRASS);
+  // Sign
+  setTile(d,14,11,TILE.SIGN);
+  // Exit east
+  setTile(d,28,12,TILE.PATH);
+
+  MAPS.hometown = {
+    name:'Inkwell Town', width:30, height:25, data:d,
+    encounters:['simile','alliteration','litotes'], encounterRate:0.10, music:'town',
+    npcs:[
+      {x:13,y:11,sprite:'npc_professor',name:'Prof. Narrator',dialogue:[
+        {s:'Prof. Narrator',t:'Welcome to the world of Lexicon Legends!'},
+        {s:'Prof. Narrator',t:'Literary creatures roam the tall grass. Each embodies a literary device!'},
+        {s:'Prof. Narrator',t:'Catch them, train them, become the greatest Lexicographer!'}
+      ]},
+      {x:10,y:15,sprite:'npc_girl',name:'Lily',dialogue:[
+        {s:'Lily',t:'I love the Similes around here! Gentle as a summer breeze~'},
+        {s:'Lily',t:'Try the tall grass to the east!'}
+      ]},
+      {x:20,y:7,sprite:'npc_nurse',name:'Nurse',dialogue:[
+        {s:'Nurse',t:'Step on the red cross to heal your team!'}
+      ]},
+    ],
+    signs:[{x:14,y:11,text:'INKWELL TOWN - Where Every Story Begins'}],
+    connections:[{x:28,y:12,toMap:'route1',toX:1,toY:15}]
+  };
+})();
+
+// Route 1
+(function(){
+  const d=makeMap(40,30,TILE.GRASS);
+  setRect(d,0,0,39,0,TILE.TREE);setRect(d,0,29,39,29,TILE.TREE);setRect(d,39,0,39,29,TILE.TREE);setRect(d,0,0,0,29,TILE.TREE);
+  setTile(d,0,15,TILE.PATH);
+  // Main path
+  setRect(d,1,15,20,15,TILE.PATH);
+  for(let y=8;y<=15;y++)setTile(d,20,y,TILE.PATH);
+  setRect(d,20,8,35,8,TILE.PATH);
+  for(let y=4;y<=8;y++)setTile(d,35,y,TILE.PATH);
+  setRect(d,35,4,38,4,TILE.PATH);
+  // Tall grass patches
+  setRect(d,5,10,15,14,TILE.TALL_GRASS);
+  setRect(d,8,16,18,22,TILE.TALL_GRASS);
+  setRect(d,24,3,33,7,TILE.TALL_GRASS);
+  setRect(d,25,10,37,16,TILE.TALL_GRASS);
+  // Water
+  setRect(d,25,20,32,25,TILE.WATER);
+  // Bridges
+  setRect(d,22,22,24,22,TILE.BRIDGE);
+  // Scattered trees
+  [[3,5],[7,3],[12,24],[35,20],[2,22],[18,4],[37,18]].forEach(([x,y])=>setTile(d,x,y,TILE.TREE));
+  // Flowers
+  [[3,18],[18,6],[15,25]].forEach(([x,y])=>setTile(d,x,y,TILE.FLOWER));
+
+  MAPS.route1 = {
+    name:'Prose Path', width:40, height:30, data:d,
+    encounters:['metaphor','simile','hyperbole','onomatopoeia','personification','oxymoron'], encounterRate:0.14, music:'route',
+    npcs:[
+      {x:10,y:14,sprite:'npc_trainer',name:'Bug Catcher Tim',dialogue:[
+        {s:'Tim',t:'Hey! You look like a trainer! Let\'s battle!'}
+      ], battle:{creatures:[{id:'simile',lv:5},{id:'alliteration',lv:4}]}},
+      {x:30,y:7,sprite:'npc_girl',name:'Lass Emily',dialogue:[
+        {s:'Emily',t:'The creatures get tougher heading north!'},
+        {s:'Emily',t:'Make sure to train in the tall grass!'}
+      ]},
+      {x:22,y:15,sprite:'npc_professor',name:'Old Man Webster',dialogue:[
+        {s:'Webster',t:'In my day, we only had Metaphors and Similes...'},
+        {s:'Webster',t:'Now there\'s all these newfangled devices!'}
+      ]},
+    ],
+    signs:[{x:1,y:14,text:'← Inkwell Town'},{x:20,y:7,text:'↑ Verse Valley →'}],
+    connections:[{x:0,y:15,toMap:'hometown',toX:27,toY:12},{x:38,y:4,toMap:'verse_valley',toX:1,toY:15}]
+  };
+})();
+
+// Verse Valley
+(function(){
+  const d=makeMap(35,30,TILE.GRASS);
+  setRect(d,0,0,34,0,TILE.TREE);setRect(d,0,29,34,29,TILE.TREE);setRect(d,34,0,34,29,TILE.TREE);setRect(d,0,0,0,29,TILE.TREE);
+  setTile(d,0,15,TILE.PATH);
+  // Winding path
+  setRect(d,1,15,10,15,TILE.PATH);
+  for(let y=10;y<=15;y++)setTile(d,10,y,TILE.PATH);
+  setRect(d,10,10,25,10,TILE.PATH);
+  for(let y=10;y<=20;y++)setTile(d,25,y,TILE.PATH);
+  setRect(d,25,20,30,20,TILE.PATH);
+  // Heal station
+  setRect(d,15,5,19,7,TILE.BUILDING); setTile(d,17,7,TILE.HEAL);
+  // Tall grass
+  setRect(d,2,2,8,8,TILE.TALL_GRASS);
+  setRect(d,13,12,22,18,TILE.TALL_GRASS);
+  setRect(d,5,22,15,27,TILE.TALL_GRASS);
+  setRect(d,27,22,32,27,TILE.TALL_GRASS);
+  // Water
+  setRect(d,2,16,6,19,TILE.WATER);
+
+  MAPS.verse_valley = {
+    name:'Verse Valley', width:35, height:30, data:d,
+    encounters:['allegory','foreshadowing','pathetic_fallacy','irony','euphemism','soliloquy','anaphora','hyperbole'], encounterRate:0.18, music:'route',
+    npcs:[
+      {x:8,y:10,sprite:'npc_professor',name:'Sage Dickens',dialogue:[
+        {s:'Sage Dickens',t:'It was the best of times, it was the worst of times...'},
+        {s:'Sage Dickens',t:'Gothic types lurk in the shadows here.'},
+        {s:'Sage Dickens',t:'Seek the Legendary Protagonist at the valley\'s end!'}
+      ]},
+      {x:20,y:19,sprite:'npc_trainer',name:'Poet Blake',dialogue:[
+        {s:'Blake',t:'Tiger, tiger, burning bright... want to battle?'}
+      ], battle:{creatures:[{id:'metaphor',lv:12},{id:'hyperbole',lv:11},{id:'foreshadowing',lv:13}]}},
+      {x:30,y:20,sprite:'npc_girl',name:'Champion Austen',dialogue:[
+        {s:'Champion Austen',t:'It is a truth universally acknowledged that a trainer must want a battle!'}
+      ], battle:{creatures:[{id:'irony',lv:15},{id:'allegory',lv:16},{id:'foreshadowing',lv:15},{id:'hyperbole',lv:17}]}},
+    ],
+    signs:[{x:1,y:14,text:'← Prose Path'},{x:25,y:9,text:'Verse Valley - Beware Gothic types!'}],
+    connections:[{x:0,y:15,toMap:'route1',toX:37,toY:4}]
+  };
+})();
+
+// --- Transition Effect ---
+const Transition = {
+  active:false, alpha:0, phase:'out', cb:null, type:'fade',
+  start(cb, type='fade') { this.active=true; this.alpha=0; this.phase='out'; this.cb=cb; this.type=type; },
+  update() {
+    if (!this.active) return;
+    if (this.phase==='out') {
+      this.alpha += 0.06;
+      if (this.alpha >= 1) { this.alpha=1; if(this.cb){this.cb();this.cb=null;} this.phase='in'; }
+    } else {
+      this.alpha -= 0.06;
+      if (this.alpha <= 0) { this.alpha=0; this.active=false; }
     }
+  },
+  draw() {
+    if (!this.active) return;
+    X.fillStyle = `rgba(0,0,0,${this.alpha})`;
+    X.fillRect(0,0,W,H);
   }
-}
+};
 
-// --- Rendering ---
-function render() {
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, 800, 600);
-
-  if (state === GameState.OVERWORLD || state === GameState.TRANSITION || state === GameState.DIALOGUE || state === GameState.MENU || state === GameState.PARTY || state === GameState.BAG) {
-    renderOverworld();
-    renderMinimap();
+// --- Notification ---
+const Notification = {
+  text:'', timer:0,
+  show(t) { this.text=t; this.timer=120; },
+  update() { if(this.timer>0) this.timer--; },
+  draw() {
+    if (this.timer<=0) return;
+    const a = Math.min(1, this.timer/20);
+    X.save();
+    X.globalAlpha = a;
+    X.fillStyle = 'rgba(0,0,0,0.85)';
+    const tw = X.measureText(this.text).width;
+    const bx = W/2-tw/2-20, by = H/2-20;
+    roundRect(bx,by,tw+40,40,10);
+    X.fill();
+    X.strokeStyle = '#f0c040';
+    X.lineWidth = 2;
+    roundRect(bx,by,tw+40,40,10);
+    X.stroke();
+    X.fillStyle = '#f0c040';
+    X.font = '16px monospace';
+    X.textAlign = 'center';
+    X.fillText(this.text, W/2, H/2+6);
+    X.restore();
   }
-
-  if (state === GameState.TRANSITION) {
-    ctx.fillStyle = `rgba(0,0,0,${transitionAlpha})`;
-    ctx.fillRect(0, 0, 800, 600);
-  }
-}
-
-function renderOverworld() {
-  const map = MAPS[Player.mapId];
-  // Camera
-  camera.x = Player.x * TILE_SIZE - 400 + TILE_SIZE / 2;
-  camera.y = Player.y * TILE_SIZE - 300 + TILE_SIZE / 2;
-  camera.x = Math.max(0, Math.min(camera.x, map.width * TILE_SIZE - 800));
-  camera.y = Math.max(0, Math.min(camera.y, map.height * TILE_SIZE - 600));
-
-  const startTX = Math.floor(camera.x / TILE_SIZE);
-  const startTY = Math.floor(camera.y / TILE_SIZE);
-  const endTX = Math.min(map.width - 1, startTX + 26);
-  const endTY = Math.min(map.height - 1, startTY + 20);
-
-  for (let y = startTY; y <= endTY; y++) {
-    for (let x = startTX; x <= endTX; x++) {
-      const tile = map.data[y][x];
-      const sx = x * TILE_SIZE - camera.x;
-      const sy = y * TILE_SIZE - camera.y;
-
-      // Base color
-      ctx.fillStyle = TILE_COLORS[tile] || '#3a7d44';
-      ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-
-      // Details
-      if (tile === TILE.TREE) {
-        ctx.fillStyle = '#0d3318';
-        ctx.beginPath();
-        ctx.arc(sx + 16, sy + 10, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#5d3a1a';
-        ctx.fillRect(sx + 13, sy + 18, 6, 14);
-        ctx.fillStyle = '#1a5c2e';
-        ctx.beginPath();
-        ctx.arc(sx + 16, sy + 8, 10, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (tile === TILE.TALL_GRASS) {
-        ctx.fillStyle = '#1e5428';
-        for (let i = 0; i < 3; i++) {
-          const gx = sx + 5 + i * 10;
-          const sway = Math.sin(animFrame * 0.05 + x + y + i) * 2;
-          ctx.fillRect(gx + sway, sy + 8, 3, 20);
-          ctx.fillRect(gx + sway - 2, sy + 6, 7, 4);
-        }
-      } else if (tile === TILE.WATER) {
-        ctx.fillStyle = '#1d4f8a';
-        const waveOff = Math.sin(animFrame * 0.03 + x * 0.5 + y * 0.3) * 3;
-        ctx.fillRect(sx, sy + 12 + waveOff, TILE_SIZE, 4);
-        ctx.fillStyle = '#3a8fd4';
-        ctx.fillRect(sx + 5, sy + 6 + waveOff, 10, 2);
-        ctx.fillRect(sx + 18, sy + 18 + waveOff, 8, 2);
-      } else if (tile === TILE.FLOWER) {
-        ctx.fillStyle = '#3a7d44';
-        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-        const colors = ['#ff69b4','#ff6347','#ffd700','#da70d6'];
-        for (let i = 0; i < 3; i++) {
-          ctx.fillStyle = colors[(x + y + i) % colors.length];
-          const fx = sx + 5 + i * 10;
-          const fy = sy + 10 + Math.sin(animFrame * 0.04 + i) * 2;
-          ctx.beginPath();
-          ctx.arc(fx, fy, 4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#2d6b35';
-          ctx.fillRect(fx - 1, fy + 4, 2, 12);
-        }
-      } else if (tile === TILE.BUILDING) {
-        ctx.fillStyle = '#5a4a3e';
-        ctx.fillRect(sx + 1, sy + 1, 30, 30);
-        ctx.fillStyle = '#483828';
-        ctx.fillRect(sx, sy, TILE_SIZE, 4);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(sx + 10, sy + 10, 12, 10);
-        ctx.fillStyle = '#fff8dc';
-        ctx.fillRect(sx + 12, sy + 12, 8, 6);
-      } else if (tile === TILE.DOOR) {
-        ctx.fillStyle = '#5a4a3e';
-        ctx.fillRect(sx + 1, sy + 1, 30, 30);
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(sx + 8, sy + 4, 16, 28);
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(sx + 20, sy + 18, 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (tile === TILE.HEAL) {
-        ctx.fillStyle = '#ff6b6b';
-        ctx.fillRect(sx + 2, sy + 2, 28, 28);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(sx + 12, sy + 6, 8, 20);
-        ctx.fillRect(sx + 6, sy + 12, 20, 8);
-      } else if (tile === TILE.FENCE) {
-        ctx.fillStyle = '#6d5c4e';
-        ctx.fillRect(sx + 2, sy + 10, 28, 4);
-        ctx.fillRect(sx + 2, sy + 20, 28, 4);
-        ctx.fillStyle = '#8b7355';
-        ctx.fillRect(sx + 4, sy + 5, 4, 22);
-        ctx.fillRect(sx + 24, sy + 5, 4, 22);
-      } else if (tile === TILE.SIGN) {
-        ctx.fillStyle = '#c4a35a';
-        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-        ctx.fillStyle = '#8b7355';
-        ctx.fillRect(sx + 12, sy + 18, 8, 14);
-        ctx.fillStyle = '#deb887';
-        ctx.fillRect(sx + 4, sy + 4, 24, 16);
-        ctx.fillStyle = '#5a3e28';
-        ctx.fillRect(sx + 6, sy + 8, 20, 2);
-        ctx.fillRect(sx + 6, sy + 14, 16, 2);
-      } else if (tile === TILE.BRIDGE) {
-        ctx.fillStyle = '#a0845c';
-        ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-        ctx.fillStyle = '#8b7355';
-        ctx.fillRect(sx, sy, TILE_SIZE, 3);
-        ctx.fillRect(sx, sy + 29, TILE_SIZE, 3);
-      } else if (tile === TILE.PATH) {
-        ctx.fillStyle = '#b89a4a';
-        ctx.fillRect(sx + 4, sy + 4, 4, 4);
-        ctx.fillRect(sx + 20, sy + 20, 5, 5);
-      }
-    }
-  }
-
-  // Render NPCs
-  for (const npc of MAPS[Player.mapId].npcs || []) {
-    const sx = npc.x * TILE_SIZE - camera.x;
-    const sy = npc.y * TILE_SIZE - camera.y;
-    if (sx > -32 && sx < 832 && sy > -32 && sy < 632) {
-      ctx.font = '24px serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(npc.sprite, sx + 16, sy + 26);
-    }
-  }
-
-  // Render player
-  const px = Player.x * TILE_SIZE - camera.x;
-  const py = Player.y * TILE_SIZE - camera.y;
-  const bob = Math.sin(animFrame * 0.1) * 2;
-
-  // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath();
-  ctx.ellipse(px + 16, py + 30, 10, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Player body
-  ctx.fillStyle = '#e8c170';
-  ctx.fillRect(px + 10, py + 8 + bob, 12, 12); // head
-  ctx.fillStyle = '#2196f3';
-  ctx.fillRect(px + 8, py + 20 + bob, 16, 10); // body
-  // Eyes based on direction
-  ctx.fillStyle = '#333';
-  if (Player.dir === 'down') {
-    ctx.fillRect(px + 12, py + 12 + bob, 3, 3);
-    ctx.fillRect(px + 18, py + 12 + bob, 3, 3);
-  } else if (Player.dir === 'up') {
-    // back of head
-  } else if (Player.dir === 'left') {
-    ctx.fillRect(px + 11, py + 12 + bob, 3, 3);
-  } else {
-    ctx.fillRect(px + 19, py + 12 + bob, 3, 3);
-  }
-  // Hat
-  ctx.fillStyle = '#f44336';
-  ctx.fillRect(px + 8, py + 5 + bob, 16, 5);
-  ctx.fillRect(px + 6, py + 8 + bob, 20, 3);
-
-  // Update HUD
-  const hudArea = document.getElementById('hud-area');
-  hudArea.textContent = MAPS[Player.mapId].name;
-  const hudParty = document.getElementById('hud-party');
-  hudParty.innerHTML = Player.party.map(c =>
-    `${c.sprite} ${c.name} Lv.${c.level} ${c.hp}/${c.maxHp}`
-  ).join('<br>');
-}
-
-function renderMinimap() {
-  const map = MAPS[Player.mapId];
-  minimapCtx.fillStyle = '#000';
-  minimapCtx.fillRect(0, 0, 120, 120);
-  const scale = Math.min(120 / map.width, 120 / map.height);
-  const ox = (120 - map.width * scale) / 2;
-  const oy = (120 - map.height * scale) / 2;
-
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
-      const tile = map.data[y][x];
-      minimapCtx.fillStyle = TILE_COLORS[tile] || '#3a7d44';
-      minimapCtx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
-    }
-  }
-  // Player dot
-  minimapCtx.fillStyle = '#ff0';
-  minimapCtx.fillRect(ox + Player.x * scale - 1, oy + Player.y * scale - 1, 3, 3);
-}
-
-// --- Transitions ---
-function startTransition(cb) {
-  state = GameState.TRANSITION;
-  transitionAlpha = 0;
-  transitionCallback = cb;
-}
-
-function updateTransition() {
-  transitionAlpha += 0.05;
-  if (transitionAlpha >= 1 && transitionCallback) {
-    transitionCallback();
-    transitionCallback = null;
-  }
-  if (transitionAlpha >= 1 && !transitionCallback) {
-    transitionAlpha -= 0.05;
-    if (transitionAlpha <= 0) {
-      transitionAlpha = 0;
-      state = GameState.OVERWORLD;
-    }
-  }
-}
-
-function showNotification(text) {
-  const el = document.getElementById('notification');
-  el.textContent = text;
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 2000);
-}
+};
 
 // --- Dialogue System ---
 const Dialogue = {
-  queue: [],
-  callback: null,
-  start(messages, cb = null) {
-    this.queue = [...messages];
-    this.callback = cb;
-    state = GameState.DIALOGUE;
-    document.getElementById('dialogue-box').style.display = 'block';
-    this.showCurrent();
+  queue:[], cb:null, text:'', displayText:'', charIdx:0, speaker:'', typing:false,
+  start(msgs, cb=null) {
+    this.queue = msgs.map(m => ({speaker:m.s||'',text:m.t||m.text||''}));
+    this.cb = cb;
+    gameState = 'dialogue';
+    this.showNext();
   },
-  showCurrent() {
-    if (this.queue.length === 0) { this.close(); return; }
-    const msg = this.queue[0];
-    document.getElementById('dialogue-speaker').textContent = msg.speaker || '';
-    document.getElementById('dialogue-text').textContent = msg.text;
+  showNext() {
+    if (this.queue.length===0) { this.close(); return; }
+    const msg = this.queue.shift();
+    this.speaker = msg.speaker;
+    this.text = msg.text;
+    this.displayText = '';
+    this.charIdx = 0;
+    this.typing = true;
   },
-  advance() {
-    this.queue.shift();
-    if (this.queue.length > 0) {
-      this.showCurrent();
-      Audio.select();
-    } else {
-      this.close();
+  update() {
+    if (this.typing && this.charIdx < this.text.length) {
+      this.charIdx += 1;
+      this.displayText = this.text.substring(0, this.charIdx);
+      if (this.charIdx >= this.text.length) this.typing = false;
     }
   },
+  advance() {
+    Audio.jingle('select');
+    if (this.typing) {
+      this.displayText = this.text;
+      this.charIdx = this.text.length;
+      this.typing = false;
+      return;
+    }
+    this.showNext();
+  },
   close() {
-    document.getElementById('dialogue-box').style.display = 'none';
-    state = GameState.OVERWORLD;
-    if (this.callback) {
-      const cb = this.callback;
-      this.callback = null;
-      cb();
+    gameState = 'overworld';
+    if (this.cb) { const cb=this.cb; this.cb=null; cb(); }
+  },
+  draw() {
+    // Box
+    X.fillStyle = 'rgba(10,10,30,0.95)';
+    roundRect(20, H-140, W-40, 120, 12);
+    X.fill();
+    X.strokeStyle = '#e2b340';
+    X.lineWidth = 3;
+    roundRect(20, H-140, W-40, 120, 12);
+    X.stroke();
+    // Speaker
+    if (this.speaker) {
+      X.fillStyle = '#f0c040';
+      X.font = 'bold 16px monospace';
+      X.textAlign = 'left';
+      X.fillText(this.speaker, 45, H-110);
+    }
+    // Text with word wrap
+    X.fillStyle = '#eee';
+    X.font = '15px monospace';
+    wrapText(this.displayText, 45, H-85, W-90, 22);
+    // Continue indicator
+    if (!this.typing) {
+      X.fillStyle = `rgba(255,255,255,${0.5+Math.sin(frame*0.1)*0.5})`;
+      X.font = '14px monospace';
+      X.textAlign = 'right';
+      X.fillText('▼', W-40, H-30);
     }
   }
 };
 
-// --- Menu System ---
-const Menu = {
-  open() {
-    if (state !== GameState.OVERWORLD) return;
-    state = GameState.MENU;
-    document.getElementById('game-menu').style.display = 'block';
-    Audio.menuOpen();
-  },
-  close() {
-    document.getElementById('game-menu').style.display = 'none';
-    state = GameState.OVERWORLD;
-  },
-  showParty() {
-    document.getElementById('game-menu').style.display = 'none';
-    state = GameState.PARTY;
-    document.getElementById('party-screen').style.display = 'block';
-    this.renderParty();
-  },
-  closeParty() {
-    document.getElementById('party-screen').style.display = 'none';
-    if (Battle.active) {
-      state = GameState.BATTLE;
+function wrapText(text, x, y, maxW, lineH) {
+  X.textAlign = 'left';
+  const words = text.split(' ');
+  let line = '';
+  let cy = y;
+  for (const word of words) {
+    const test = line + word + ' ';
+    if (X.measureText(test).width > maxW && line !== '') {
+      X.fillText(line, x, cy);
+      line = word + ' ';
+      cy += lineH;
     } else {
-      state = GameState.OVERWORLD;
+      line = test;
     }
-  },
-  renderParty() {
-    const list = document.getElementById('party-list');
-    list.innerHTML = Player.party.map((c, i) => {
-      const hpPct = (c.hp / c.maxHp * 100);
-      const hpColor = hpPct > 50 ? '#4caf50' : hpPct > 25 ? '#ff9800' : '#f44336';
-      return `<div class="party-slot${i === 0 ? ' active' : ''}" onclick="Menu.partyAction(${i})">
-        <div class="slot-sprite">${c.sprite}</div>
-        <div class="slot-info">
-          <div class="slot-name">${c.name} <span style="color:${TYPES[c.type].color}">[${TYPES[c.type].name}]</span></div>
-          <div class="slot-level">Lv.${c.level} | ATK:${c.atk} DEF:${c.def} SPD:${c.spd}</div>
-          <div class="slot-level">${c.desc}</div>
-          <div class="slot-hp-bar"><div class="slot-hp-fill" style="width:${hpPct}%;background:${hpColor}"></div></div>
-          <div class="slot-level">HP: ${c.hp}/${c.maxHp} | XP: ${c.xp}/${c.xpToNext}</div>
-          <div class="slot-level">Moves: ${c.moves.map(m => m.name).join(', ')}</div>
-        </div>
-      </div>`;
-    }).join('');
-    if (Player.party.length === 0) {
-      list.innerHTML = '<p style="color:#888;padding:20px;">No creatures yet! Visit Prof. Narrator to get your first creature.</p>';
-    }
-  },
-  partyAction(index) {
-    if (Battle.active && Battle.switchingAllowed) {
-      if (Player.party[index].hp <= 0) {
-        showNotification('That creature has fainted!');
-        return;
-      }
-      if (index === 0) {
-        showNotification('Already in battle!');
-        return;
-      }
-      const temp = Player.party[0];
-      Player.party[0] = Player.party[index];
-      Player.party[index] = temp;
-      document.getElementById('party-screen').style.display = 'none';
-      state = GameState.BATTLE;
-      Battle.switchingAllowed = false;
-      Battle.showText(`Go, ${Player.party[0].name}!`, () => {
-        Battle.updateUI();
-        Battle.enemyTurn();
+  }
+  X.fillText(line, x, cy);
+}
+
+function roundRect(x,y,w,h,r) {
+  X.beginPath();
+  X.moveTo(x+r,y); X.lineTo(x+w-r,y); X.quadraticCurveTo(x+w,y,x+w,y+r);
+  X.lineTo(x+w,y+h-r); X.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  X.lineTo(x+r,y+h); X.quadraticCurveTo(x,y+h,x,y+h-r);
+  X.lineTo(x,y+r); X.quadraticCurveTo(x,y,x+r,y);
+  X.closePath();
+}
+
+// --- Particle System ---
+const Particles = {
+  list: [],
+  spawn(x, y, count, color, speed=3, life=30, size=4) {
+    for (let i=0;i<count;i++) {
+      const angle = Math.random()*Math.PI*2;
+      const spd = Math.random()*speed + 1;
+      this.list.push({
+        x, y, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
+        life, maxLife:life, color, size: Math.random()*size+2
       });
     }
   },
-  showBag() {
-    document.getElementById('game-menu').style.display = 'none';
-    state = GameState.BAG;
-    document.getElementById('bag-screen').style.display = 'block';
-    this.renderBag();
-  },
-  closeBag() {
-    document.getElementById('bag-screen').style.display = 'none';
-    if (Battle.active) {
-      state = GameState.BATTLE;
-    } else {
-      state = GameState.OVERWORLD;
+  update() {
+    for (let i=this.list.length-1;i>=0;i--) {
+      const p = this.list[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.1; // gravity
+      p.life--;
+      if (p.life<=0) this.list.splice(i,1);
     }
   },
-  renderBag() {
-    const list = document.getElementById('bag-list');
-    list.innerHTML = Player.bag.filter(i => i.count > 0).map((item, i) => {
-      return `<div class="item-slot" onclick="Menu.useItem(${i})">
-        <div class="item-icon">${item.icon}</div>
-        <div class="item-name">${item.name}<br><span style="color:#888;font-size:12px">${item.desc}</span></div>
-        <div class="item-count">x${item.count}</div>
-      </div>`;
-    }).join('');
-    if (Player.bag.filter(i => i.count > 0).length === 0) {
-      list.innerHTML = '<p style="color:#888;padding:20px;">Your bag is empty!</p>';
+  draw() {
+    for (const p of this.list) {
+      X.globalAlpha = p.life/p.maxLife;
+      X.fillStyle = p.color;
+      X.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
     }
-  },
-  useItem(index) {
-    const items = Player.bag.filter(i => i.count > 0);
-    const item = items[index];
-    if (!item) return;
-
-    if (Battle.active) {
-      if (item.effect === 'heal') {
-        const c = Player.party[0];
-        if (c.hp >= c.maxHp) { showNotification('Already at full HP!'); return; }
-        c.hp = Math.min(c.maxHp, c.hp + item.value);
-        item.count--;
-        Audio.heal();
-        document.getElementById('bag-screen').style.display = 'none';
-        state = GameState.BATTLE;
-        Battle.showText(`Used ${item.name}! ${c.name} recovered ${item.value} HP!`, () => {
-          Battle.updateUI();
-          Battle.enemyTurn();
-        });
-      } else if (item.effect === 'catch') {
-        if (!Battle.isWild) { showNotification("Can't catch trainer's creature!"); return; }
-        item.count--;
-        document.getElementById('bag-screen').style.display = 'none';
-        state = GameState.BATTLE;
-        Battle.tryCatch(item.value);
-      } else if (item.effect === 'revive') {
-        // Find a fainted creature
-        const fainted = Player.party.find(c => c.hp <= 0);
-        if (!fainted) { showNotification('No fainted creatures!'); return; }
-        fainted.hp = Math.floor(fainted.maxHp / 2);
-        item.count--;
-        Audio.heal();
-        document.getElementById('bag-screen').style.display = 'none';
-        state = GameState.BATTLE;
-        Battle.showText(`Used ${item.name}! ${fainted.name} was revived!`, () => {
-          Battle.updateUI();
-          Battle.enemyTurn();
-        });
-      }
-    } else {
-      if (item.effect === 'heal') {
-        const c = Player.party.find(p => p.hp < p.maxHp && p.hp > 0);
-        if (!c) { showNotification('No one needs healing!'); return; }
-        c.hp = Math.min(c.maxHp, c.hp + item.value);
-        item.count--;
-        Audio.heal();
-        showNotification(`${c.name} recovered ${item.value} HP!`);
-        this.renderBag();
-      } else if (item.effect === 'revive') {
-        const fainted = Player.party.find(c => c.hp <= 0);
-        if (!fainted) { showNotification('No fainted creatures!'); return; }
-        fainted.hp = Math.floor(fainted.maxHp / 2);
-        item.count--;
-        Audio.heal();
-        showNotification(`${fainted.name} was revived!`);
-        this.renderBag();
-      }
-    }
-  },
-  showSave() {
-    try {
-      const save = {
-        player: { x: Player.x, y: Player.y, mapId: Player.mapId, bag: Player.bag, badges: Player.badges, defeatedTrainers: Player.defeatedTrainers, money: Player.money },
-        party: Player.party.map(c => ({ id: c.id, level: c.level, hp: c.hp, xp: c.xp, moves: c.moves.map(m => ({ id: m.id, currentPP: m.currentPP })) }))
-      };
-      localStorage.setItem('lexicon_save', JSON.stringify(save));
-      showNotification('Game saved!');
-      Audio.select();
-    } catch(e) {
-      showNotification('Save failed!');
-    }
-    this.close();
+    X.globalAlpha = 1;
   }
 };
 
-// --- Wild Encounters ---
-function startWildEncounter(map) {
-  if (Player.party.length === 0 || Player.party.every(c => c.hp <= 0)) return;
+// --- Battle Encounter Transition ---
+const EncounterTransition = {
+  active:false, timer:0, cb:null, phase:0,
+  start(cb) {
+    this.active=true; this.timer=0; this.cb=cb; this.phase=0;
+    Audio.jingle('encounter');
+  },
+  update() {
+    if (!this.active) return;
+    this.timer++;
+    if (this.timer < 15) {
+      this.phase = 0; // flash
+    } else if (this.timer < 60) {
+      this.phase = 1; // sliding bars
+    } else {
+      this.active = false;
+      if(this.cb) this.cb();
+    }
+  },
+  draw() {
+    if (!this.active) return;
+    if (this.phase === 0) {
+      // White flash
+      const a = this.timer < 5 ? this.timer/5 : (this.timer < 10 ? 1 : (15-this.timer)/5);
+      X.fillStyle = `rgba(255,255,255,${a})`;
+      X.fillRect(0,0,W,H);
+    } else {
+      // Horizontal bars sliding in
+      const progress = (this.timer - 15) / 45;
+      const barH = 30;
+      const bars = Math.ceil(H / barH);
+      X.fillStyle = '#000';
+      for (let i = 0; i < bars; i++) {
+        const dir = i % 2 === 0 ? 1 : -1;
+        const offset = (1 - progress) * W * dir;
+        X.fillRect(offset, i * barH, W, barH);
+      }
+    }
+  }
+};
 
-  const possibleCreatures = map.encounters;
-  const creatureId = possibleCreatures[Math.floor(Math.random() * possibleCreatures.length)];
-  const playerMaxLvl = Math.max(...Player.party.map(c => c.level));
-  const wildLevel = Math.max(2, Math.floor(playerMaxLvl * (0.6 + Math.random() * 0.6)));
-  const wild = createCreature(creatureId, wildLevel);
+// --- Rendering: Overworld ---
+const TILE_PAL = {
+  [TILE.GRASS]:'#3a7d44', [TILE.PATH]:'#c4a35a', [TILE.TALL_GRASS]:'#2d6b35',
+  [TILE.TREE]:'#1a4d2e', [TILE.WATER]:'#2563a8', [TILE.BUILDING]:'#6d5c4e',
+  [TILE.DOOR]:'#8b4513', [TILE.SIGN]:'#c4a35a', [TILE.FLOWER]:'#3a7d44',
+  [TILE.FENCE]:'#8b7355', [TILE.HEAL]:'#ff6b6b', [TILE.BRIDGE]:'#a0845c'
+};
 
-  Battle.start(wild, true);
+function drawOverworld() {
+  const map = MAPS[P.mapId]; if(!map) return;
+  const camX = P.px - W/2 + TS/2;
+  const camY = P.py - H/2 + TS/2;
+  const cx = Math.max(0, Math.min(camX, map.width*TS - W));
+  const cy = Math.max(0, Math.min(camY, map.height*TS - H));
+
+  const stx = Math.floor(cx/TS), sty = Math.floor(cy/TS);
+  const etx = Math.min(map.width-1, stx+Math.ceil(W/TS)+1);
+  const ety = Math.min(map.height-1, sty+Math.ceil(H/TS)+1);
+
+  for (let y=sty;y<=ety;y++) {
+    for (let x=stx;x<=etx;x++) {
+      const tile = map.data[y][x];
+      const sx = x*TS-cx, sy = y*TS-cy;
+      drawTile(tile, sx, sy, x, y);
+    }
+  }
+
+  // NPCs
+  for (const npc of (map.npcs||[])) {
+    const sx = npc.x*TS-cx, sy = npc.y*TS-cy;
+    if (sx>-TS&&sx<W+TS&&sy>-TS&&sy<H+TS) {
+      Sprites.draw(npc.sprite, sx+2, sy+2, TS-4, TS-4);
+      // Shadow
+      X.fillStyle='rgba(0,0,0,0.2)';
+      X.beginPath();
+      X.ellipse(sx+TS/2, sy+TS-3, 10, 3, 0, 0, Math.PI*2);
+      X.fill();
+    }
+  }
+
+  // Player
+  const ppx = P.px - cx, ppy = P.py - cy;
+  // Shadow
+  X.fillStyle='rgba(0,0,0,0.25)';
+  X.beginPath();
+  X.ellipse(ppx+TS/2, ppy+TS-2, 10, 4, 0, 0, Math.PI*2);
+  X.fill();
+  // Sprite
+  let spriteName = 'player_' + P.dir;
+  if (P.moving && P.walkFrame) spriteName = 'player_walk_down'; // simplified
+  Sprites.draw(spriteName, ppx+2, ppy, TS-4, TS);
+
+  // Draw tall grass overlay (on top of player if in tall grass)
+  if (map.data[P.y] && map.data[P.y][P.x] === TILE.TALL_GRASS) {
+    const osx = P.x*TS-cx, osy = P.y*TS-cy;
+    drawTallGrassOverlay(osx, osy, P.x, P.y);
+  }
+
+  // HUD
+  drawHUD(map);
+  // Minimap
+  drawMinimap(map, cx, cy);
 }
 
-function startTrainerBattle(npc) {
-  const creatures = npc.battle.creatures.map(c => createCreature(c.id, c.level));
-  Battle.startTrainer(creatures, npc.name);
+function drawTile(tile, sx, sy, tx, ty) {
+  // Base
+  X.fillStyle = TILE_PAL[tile] || '#3a7d44';
+  X.fillRect(sx, sy, TS, TS);
+
+  switch(tile) {
+    case TILE.GRASS:
+      // Subtle grass texture
+      X.fillStyle = '#3e8348';
+      if((tx+ty)%3===0) X.fillRect(sx+8,sy+12,2,8);
+      if((tx+ty)%5===1) X.fillRect(sx+20,sy+6,2,10);
+      break;
+    case TILE.TALL_GRASS:
+      X.fillStyle = '#1e5428';
+      for(let i=0;i<4;i++) {
+        const gx=sx+3+i*7, sway=Math.sin(frame*0.04+tx+ty+i)*2;
+        X.fillRect(gx+sway,sy+4,2,24);
+        X.fillRect(gx+sway-3,sy+2,8,4);
+      }
+      X.fillStyle='#25632f';
+      X.fillRect(sx+2+Math.sin(frame*0.05+tx)*1,sy+10,3,16);
+      break;
+    case TILE.TREE:
+      // Trunk
+      X.fillStyle='#5d3a1a';
+      X.fillRect(sx+12,sy+18,8,14);
+      // Canopy layers
+      X.fillStyle='#1a5c2e';
+      X.beginPath(); X.arc(sx+16,sy+12,13,0,Math.PI*2); X.fill();
+      X.fillStyle='#1a6e32';
+      X.beginPath(); X.arc(sx+14,sy+9,9,0,Math.PI*2); X.fill();
+      X.fillStyle='#22803a';
+      X.beginPath(); X.arc(sx+18,sy+8,7,0,Math.PI*2); X.fill();
+      break;
+    case TILE.WATER:
+      X.fillStyle='#1d5faa';
+      const wo=Math.sin(frame*0.025+tx*0.5+ty*0.3)*3;
+      X.fillRect(sx,sy+12+wo,TS,4);
+      X.fillStyle='#3a9fd8';
+      X.fillRect(sx+4,sy+5+wo,12,2);
+      X.fillRect(sx+18,sy+20+wo,8,2);
+      X.fillStyle='#1a4e8a';
+      X.fillRect(sx+10,sy+25+wo,6,2);
+      break;
+    case TILE.BUILDING:
+      X.fillStyle='#5a4a3e';
+      X.fillRect(sx+1,sy+1,30,30);
+      X.fillStyle='#4a3828';
+      X.fillRect(sx,sy,TS,5);
+      X.fillStyle='#756050';
+      X.fillRect(sx,sy+28,TS,4);
+      // Window
+      X.fillStyle='#ffd700';
+      X.fillRect(sx+8,sy+10,14,10);
+      X.fillStyle='#fff8dc';
+      X.fillRect(sx+10,sy+12,10,6);
+      X.fillStyle='#4a3828';
+      X.fillRect(sx+14,sy+10,2,10);
+      X.fillRect(sx+8,sy+14,14,2);
+      break;
+    case TILE.DOOR:
+      X.fillStyle='#5a4a3e'; X.fillRect(sx+1,sy+1,30,30);
+      X.fillStyle='#8b4513'; X.fillRect(sx+8,sy+2,16,30);
+      X.fillStyle='#a0522d'; X.fillRect(sx+10,sy+4,12,26);
+      X.fillStyle='#ffd700'; X.beginPath(); X.arc(sx+19,sy+18,2,0,Math.PI*2); X.fill();
+      break;
+    case TILE.HEAL:
+      X.fillStyle='#cc4444'; X.fillRect(sx+2,sy+2,28,28);
+      X.fillStyle='#ff6b6b'; X.fillRect(sx+4,sy+4,24,24);
+      X.fillStyle='#fff';
+      X.fillRect(sx+12,sy+6,8,20); X.fillRect(sx+6,sy+12,20,8);
+      // Pulsing glow
+      X.fillStyle=`rgba(255,100,100,${0.2+Math.sin(frame*0.08)*0.15})`;
+      X.beginPath(); X.arc(sx+16,sy+16,18,0,Math.PI*2); X.fill();
+      break;
+    case TILE.FENCE:
+      X.fillStyle='#6d5c4e';
+      X.fillRect(sx+2,sy+10,28,4); X.fillRect(sx+2,sy+20,28,4);
+      X.fillStyle='#8b7355';
+      X.fillRect(sx+4,sy+5,4,24); X.fillRect(sx+24,sy+5,4,24);
+      break;
+    case TILE.SIGN:
+      X.fillStyle='#c4a35a'; X.fillRect(sx,sy,TS,TS);
+      X.fillStyle='#8b7355'; X.fillRect(sx+12,sy+18,8,14);
+      X.fillStyle='#deb887'; X.fillRect(sx+4,sy+4,24,16);
+      X.fillStyle='#5a3e28';
+      X.fillRect(sx+7,sy+8,18,2); X.fillRect(sx+7,sy+14,14,2);
+      // Exclamation on approach
+      if (Math.abs(P.x-tx)<=1 && Math.abs(P.y-ty)<=1) {
+        X.fillStyle='#f0c040';
+        X.font='bold 12px monospace'; X.textAlign='center';
+        X.fillText('!', sx+16, sy-2);
+      }
+      break;
+    case TILE.FLOWER:
+      X.fillStyle='#3a7d44'; X.fillRect(sx,sy,TS,TS);
+      const fcolors=['#ff69b4','#ff6347','#ffd700','#da70d6','#87ceeb'];
+      for(let i=0;i<4;i++) {
+        X.fillStyle=fcolors[(tx+ty+i)%fcolors.length];
+        const fx=sx+4+i*7, fy=sy+10+Math.sin(frame*0.03+i+tx)*2;
+        X.beginPath(); X.arc(fx,fy,3,0,Math.PI*2); X.fill();
+        X.fillStyle='#ffff00'; X.beginPath(); X.arc(fx,fy,1,0,Math.PI*2); X.fill();
+        X.fillStyle='#2d6b35'; X.fillRect(fx-0.5,fy+3,1,12);
+      }
+      break;
+    case TILE.PATH:
+      X.fillStyle='#b89a4a';
+      if((tx+ty)%4===0) X.fillRect(sx+4,sy+4,4,4);
+      if((tx+ty)%6===2) X.fillRect(sx+20,sy+20,5,5);
+      if((tx+ty)%5===3) X.fillRect(sx+14,sy+8,3,3);
+      break;
+    case TILE.BRIDGE:
+      X.fillStyle='#8b7355'; X.fillRect(sx,sy,TS,3); X.fillRect(sx,sy+29,TS,3);
+      X.fillStyle='#6d5c4e';
+      X.fillRect(sx+4,sy+3,3,26); X.fillRect(sx+25,sy+3,3,26);
+      break;
+  }
+}
+
+function drawTallGrassOverlay(sx, sy, tx, ty) {
+  X.fillStyle = 'rgba(30,84,40,0.6)';
+  for(let i=0;i<3;i++) {
+    const gx=sx+5+i*9, sway=Math.sin(frame*0.04+tx+ty+i)*2;
+    X.fillRect(gx+sway,sy+16,3,16);
+  }
+}
+
+function drawHUD(map) {
+  // Top left: area name + party preview
+  X.fillStyle='rgba(0,0,0,0.7)';
+  roundRect(8,8,220,20+P.party.length*18,8);
+  X.fill();
+  X.strokeStyle='rgba(255,255,255,0.2)'; X.lineWidth=1;
+  roundRect(8,8,220,20+P.party.length*18,8);
+  X.stroke();
+
+  X.fillStyle='#f0c040'; X.font='bold 13px monospace'; X.textAlign='left';
+  X.fillText(map.name, 18, 25);
+
+  P.party.forEach((c,i) => {
+    const cy = 40 + i*18;
+    X.fillStyle='#ddd'; X.font='12px monospace';
+    X.fillText(`${c.name} Lv${c.level}`, 18, cy);
+    // Mini HP bar
+    const barX=160, barW=55, barH=6;
+    X.fillStyle='#333'; X.fillRect(barX,cy-6,barW,barH);
+    const pct=Math.max(0,c.hp/c.maxHp);
+    X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
+    X.fillRect(barX,cy-6,barW*pct,barH);
+  });
+}
+
+function drawMinimap(map, cx, cy) {
+  const mw=100,mh=80;
+  const mx=W-mw-10, my=10;
+  X.fillStyle='rgba(0,0,0,0.7)';
+  roundRect(mx-4,my-4,mw+8,mh+8,6);
+  X.fill();
+
+  const sx=mw/map.width, sy=mh/map.height;
+  for(let y=0;y<map.height;y++) {
+    for(let x=0;x<map.width;x++) {
+      X.fillStyle=TILE_PAL[map.data[y][x]]||'#3a7d44';
+      X.fillRect(mx+x*sx, my+y*sy, Math.ceil(sx), Math.ceil(sy));
+    }
+  }
+  // Player
+  X.fillStyle='#ff0';
+  X.fillRect(mx+P.x*sx-1, my+P.y*sy-1, 3, 3);
+  // NPCs
+  X.fillStyle='#f0c040';
+  for(const npc of (map.npcs||[])) {
+    X.fillRect(mx+npc.x*sx, my+npc.y*sy, 2, 2);
+  }
 }
 
 // --- Battle System ---
 const Battle = {
-  active: false,
-  enemy: null,
-  enemyParty: [],
-  enemyIndex: 0,
-  isWild: true,
-  trainerName: '',
-  switchingAllowed: true,
-  playerTurn: true,
-  animating: false,
+  active:false, enemy:null, eparty:[], eidx:0, isWild:true, tname:'',
+  playerTurn:true, animating:false,
+  textQueue:[], currentText:'', textCharIdx:0, textTyping:false, textCb:null,
+  menuState:'main', // main, moves, bag, team
+  selectedMove:-1,
+  shakeTimer:0, shakeTarget:'', flashTimer:0, flashTarget:'',
+  hpAnimPlayer:1, hpAnimEnemy:1, // animated hp ratios
+  slideInPlayer:0, slideInEnemy:0, // for entrance animations
 
-  start(wildCreature, isWild = true) {
-    this.active = true;
-    this.enemy = wildCreature;
-    this.enemyParty = [wildCreature];
-    this.enemyIndex = 0;
-    this.isWild = isWild;
-    this.trainerName = '';
-    this.switchingAllowed = true;
-    this.playerTurn = true;
-    this.animating = false;
-
-    // Make sure we have a living creature in front
+  startWild(creature) {
+    this.active=true; this.enemy=creature;
+    this.eparty=[creature]; this.eidx=0; this.isWild=true;
+    this.tname=''; this.playerTurn=true; this.animating=false;
+    this.menuState='main'; this.textQueue=[];
+    this.hpAnimEnemy=1; this.hpAnimPlayer = P.party[0].hp/P.party[0].maxHp;
+    this.slideInPlayer=-200; this.slideInEnemy=200;
     this.sendOutFirst();
-
-    state = GameState.BATTLE;
-    document.getElementById('battle-ui').style.display = 'block';
-    document.getElementById('hud').classList.add('hidden');
-    document.getElementById('minimap').classList.add('hidden');
-    Audio.battleStart();
-
-    this.drawBattleScene();
-    this.updateUI();
-    this.showMainActions();
-    this.showText(`A wild ${wildCreature.name} appeared!`);
+    gameState='battle';
+    Audio.stopBgm(); Audio.bgm('battle');
+    this.queueText(`A wild ${creature.name} appeared!`);
   },
-
   startTrainer(creatures, name) {
-    this.active = true;
-    this.enemyParty = creatures;
-    this.enemyIndex = 0;
-    this.enemy = creatures[0];
-    this.isWild = false;
-    this.trainerName = name;
-    this.switchingAllowed = true;
-    this.playerTurn = true;
-    this.animating = false;
-
+    this.active=true; this.eparty=creatures; this.eidx=0;
+    this.enemy=creatures[0]; this.isWild=false; this.tname=name;
+    this.playerTurn=true; this.animating=false; this.menuState='main';
+    this.textQueue=[]; this.hpAnimEnemy=1;
+    this.hpAnimPlayer = P.party[0].hp/P.party[0].maxHp;
+    this.slideInPlayer=-200; this.slideInEnemy=200;
     this.sendOutFirst();
-
-    state = GameState.BATTLE;
-    document.getElementById('battle-ui').style.display = 'block';
-    document.getElementById('hud').classList.add('hidden');
-    document.getElementById('minimap').classList.add('hidden');
-    Audio.battleStart();
-
-    this.drawBattleScene();
-    this.updateUI();
-    this.showMainActions();
-    this.showText(`${name} wants to battle! ${name} sent out ${this.enemy.name}!`);
+    gameState='battle';
+    Audio.stopBgm(); Audio.bgm('battle');
+    this.queueText(`${name} wants to battle!`);
+    this.queueText(`${name} sent out ${this.enemy.name}!`);
+  },
+  sendOutFirst() {
+    const alive = P.party.findIndex(c=>c.hp>0);
+    if (alive>0) { [P.party[0],P.party[alive]]=[P.party[alive],P.party[0]]; }
   },
 
-  sendOutFirst() {
-    const alive = Player.party.findIndex(c => c.hp > 0);
-    if (alive > 0) {
-      const temp = Player.party[0];
-      Player.party[0] = Player.party[alive];
-      Player.party[alive] = temp;
+  queueText(t, cb=null) {
+    this.textQueue.push({text:t, cb});
+  },
+  showNextText() {
+    if (this.textQueue.length===0) {
+      this.textTyping=false; this.currentText='';
+      gameState='battle'; this.menuState='main';
+      return;
+    }
+    const item = this.textQueue.shift();
+    this.currentText=''; this.textCharIdx=0; this.textTyping=true;
+    this._fullText = item.text; this.textCb = item.cb;
+    gameState='battleText';
+  },
+
+  advanceText() {
+    if (this.textTyping && this.textCharIdx < this._fullText.length) {
+      this.currentText = this._fullText;
+      this.textCharIdx = this._fullText.length;
+      this.textTyping = false;
+      return;
+    }
+    const cb = this.textCb; this.textCb = null;
+    if (cb) cb();
+    this.showNextText();
+  },
+
+  update() {
+    // Animate HP bars
+    const p = P.party[0];
+    if (p) {
+      const targetP = Math.max(0, p.hp/p.maxHp);
+      this.hpAnimPlayer += (targetP - this.hpAnimPlayer) * 0.1;
+    }
+    if (this.enemy) {
+      const targetE = Math.max(0, this.enemy.hp/this.enemy.maxHp);
+      this.hpAnimEnemy += (targetE - this.hpAnimEnemy) * 0.1;
+    }
+    // Slide in animations
+    if (this.slideInPlayer < 0) this.slideInPlayer += 8;
+    if (this.slideInEnemy > 0) this.slideInEnemy -= 8;
+    if (this.slideInPlayer > 0) this.slideInPlayer = 0;
+    if (this.slideInEnemy < 0) this.slideInEnemy = 0;
+    // Shake
+    if (this.shakeTimer > 0) this.shakeTimer--;
+    if (this.flashTimer > 0) this.flashTimer--;
+    // Text typing
+    if (this.textTyping && this.textCharIdx < this._fullText.length) {
+      this.textCharIdx += 1;
+      this.currentText = this._fullText.substring(0, this.textCharIdx);
+      if (this.textCharIdx >= this._fullText.length) this.textTyping = false;
+    }
+    Particles.update();
+  },
+
+  draw() {
+    // Battle background
+    drawBattleBG();
+    // Enemy platform
+    X.fillStyle='#6b8f45';
+    X.beginPath(); X.ellipse(580+this.slideInEnemy,200,120,30,0,0,Math.PI*2); X.fill();
+    X.fillStyle='#7a9f55';
+    X.beginPath(); X.ellipse(580+this.slideInEnemy,198,100,22,0,0,Math.PI*2); X.fill();
+    // Player platform
+    X.fillStyle='#7a9f55';
+    X.beginPath(); X.ellipse(200+this.slideInPlayer,380,130,35,0,0,Math.PI*2); X.fill();
+    X.fillStyle='#8aaf65';
+    X.beginPath(); X.ellipse(200+this.slideInPlayer,378,110,28,0,0,Math.PI*2); X.fill();
+
+    // Enemy sprite
+    if (this.enemy) {
+      let ex = 530+this.slideInEnemy, ey = 105;
+      if (this.shakeTimer>0 && this.shakeTarget==='enemy') {
+        ex += Math.sin(this.shakeTimer*2)*8;
+      }
+      if (this.flashTimer>0 && this.flashTarget==='enemy' && Math.floor(this.flashTimer/3)%2===0) {
+        X.globalAlpha=0.3;
+      }
+      Sprites.draw(this.enemy.sprite, ex, ey, 96, 96);
+      X.globalAlpha=1;
+    }
+    // Player sprite (back view = just larger)
+    const p = P.party[0];
+    if (p) {
+      let px = 150+this.slideInPlayer, py = 240;
+      if (this.shakeTimer>0 && this.shakeTarget==='player') {
+        px += Math.sin(this.shakeTimer*2)*8;
+      }
+      if (this.flashTimer>0 && this.flashTarget==='player' && Math.floor(this.flashTimer/3)%2===0) {
+        X.globalAlpha=0.3;
+      }
+      Sprites.draw(p.sprite, px, py, 112, 112);
+      X.globalAlpha=1;
+    }
+
+    Particles.draw();
+
+    // Enemy info panel
+    if (this.enemy) {
+      this.drawInfoPanel(this.enemy, 30, 30, this.hpAnimEnemy, false);
+    }
+    // Player info panel
+    if (p) {
+      this.drawInfoPanel(p, W-290, 320, this.hpAnimPlayer, true);
+    }
+
+    // Battle menu / text
+    this.drawBattleMenu();
+  },
+
+  drawInfoPanel(c, x, y, hpRatio, showXP) {
+    X.fillStyle='rgba(10,10,30,0.9)';
+    roundRect(x,y,250,showXP?90:75,10);
+    X.fill();
+    X.strokeStyle='#e2b340'; X.lineWidth=2;
+    roundRect(x,y,250,showXP?90:75,10);
+    X.stroke();
+
+    // Name and level
+    X.fillStyle='#f0c040'; X.font='bold 16px monospace'; X.textAlign='left';
+    X.fillText(c.name, x+12, y+22);
+    X.fillStyle='#aaa'; X.font='13px monospace';
+    X.fillText(`Lv.${c.level}`, x+180, y+22);
+    // Type badge
+    X.fillStyle=TYPES[c.type].color;
+    roundRect(x+12,y+28,70,16,4); X.fill();
+    X.fillStyle='#fff'; X.font='11px monospace'; X.textAlign='center';
+    X.fillText(TYPES[c.type].name, x+47, y+40);
+    X.textAlign='left';
+    // HP bar
+    const barX=x+12, barY=y+50, barW=226, barH=14;
+    X.fillStyle='#333';
+    roundRect(barX,barY,barW,barH,4); X.fill();
+    const pct = Math.max(0, Math.min(1, hpRatio));
+    const hpColor = pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
+    if (pct > 0) {
+      X.fillStyle=hpColor;
+      roundRect(barX,barY,barW*pct,barH,4); X.fill();
+      // Shine
+      X.fillStyle='rgba(255,255,255,0.15)';
+      X.fillRect(barX+2,barY+2,barW*pct-4,barH/2-2);
+    }
+    X.fillStyle='#ddd'; X.font='11px monospace'; X.textAlign='right';
+    X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, x+238, y+62);
+    X.textAlign='left';
+    // XP bar
+    if (showXP) {
+      X.fillStyle='#222';
+      X.fillRect(barX,barY+20,barW,6);
+      X.fillStyle='#2196f3';
+      X.fillRect(barX,barY+20,barW*(c.xp/c.xpNext),6);
     }
   },
 
-  drawBattleScene() {
-    battleCtx.fillStyle = '#87CEEB';
-    battleCtx.fillRect(0, 0, 800, 300);
-    // Ground
-    battleCtx.fillStyle = '#5a8f3c';
-    battleCtx.fillRect(0, 250, 800, 200);
-    // Hills
-    battleCtx.fillStyle = '#4a7f2c';
-    battleCtx.beginPath();
-    battleCtx.arc(200, 280, 80, Math.PI, 0);
-    battleCtx.fill();
-    battleCtx.beginPath();
-    battleCtx.arc(600, 270, 100, Math.PI, 0);
-    battleCtx.fill();
-    // Clouds
-    battleCtx.fillStyle = 'rgba(255,255,255,0.7)';
-    [100,350,600].forEach(cx => {
-      battleCtx.beginPath();
-      battleCtx.arc(cx, 60, 30, 0, Math.PI * 2);
-      battleCtx.arc(cx + 30, 50, 25, 0, Math.PI * 2);
-      battleCtx.arc(cx - 20, 55, 20, 0, Math.PI * 2);
-      battleCtx.fill();
-    });
-    // Platforms
-    battleCtx.fillStyle = '#6b8f45';
-    battleCtx.beginPath();
-    battleCtx.ellipse(600, 320, 120, 30, 0, 0, Math.PI * 2);
-    battleCtx.fill();
-    battleCtx.fillStyle = '#7a9f55';
-    battleCtx.beginPath();
-    battleCtx.ellipse(180, 400, 130, 35, 0, 0, Math.PI * 2);
-    battleCtx.fill();
-  },
+  drawBattleMenu() {
+    // Bottom panel
+    X.fillStyle='rgba(10,10,30,0.95)';
+    X.fillRect(0, H-150, W, 150);
+    X.strokeStyle='#e2b340'; X.lineWidth=3;
+    X.beginPath(); X.moveTo(0,H-150); X.lineTo(W,H-150); X.stroke();
 
-  updateUI() {
-    const p = Player.party[0];
-    const e = this.enemy;
-    if (!p || !e) return;
-
-    document.getElementById('player-name').textContent = p.name;
-    document.getElementById('player-level').textContent = `Lv.${p.level}`;
-    document.getElementById('player-type-badge').textContent = TYPES[p.type].name;
-    document.getElementById('player-type-badge').className = `creature-type-badge badge-${p.type}`;
-    const pHP = Math.max(0, p.hp / p.maxHp * 100);
-    const pBar = document.getElementById('player-hp-bar');
-    pBar.style.width = pHP + '%';
-    pBar.className = 'hp-bar' + (pHP <= 25 ? ' low' : pHP <= 50 ? ' medium' : '');
-    document.getElementById('player-hp-text').textContent = `${Math.max(0, p.hp)}/${p.maxHp}`;
-    document.getElementById('player-xp-bar').style.width = (p.xp / p.xpToNext * 100) + '%';
-    document.getElementById('player-sprite').textContent = p.sprite;
-
-    document.getElementById('enemy-name').textContent = e.name;
-    document.getElementById('enemy-level').textContent = `Lv.${e.level}`;
-    document.getElementById('enemy-type-badge').textContent = TYPES[e.type].name;
-    document.getElementById('enemy-type-badge').className = `creature-type-badge badge-${e.type}`;
-    const eHP = Math.max(0, e.hp / e.maxHp * 100);
-    const eBar = document.getElementById('enemy-hp-bar');
-    eBar.style.width = eHP + '%';
-    eBar.className = 'hp-bar' + (eHP <= 25 ? ' low' : eHP <= 50 ? ' medium' : '');
-    document.getElementById('enemy-hp-text').textContent = `${Math.max(0, e.hp)}/${e.maxHp}`;
-    document.getElementById('enemy-sprite').textContent = e.sprite;
-  },
-
-  showText(text, cb = null) {
-    document.getElementById('battle-text').textContent = text;
-    if (cb) setTimeout(cb, 1500);
-  },
-
-  showMainActions() {
-    document.getElementById('battle-actions').innerHTML = `
-      <button class="battle-btn fight" onclick="Battle.showMoves()">FIGHT</button>
-      <button class="battle-btn bag" onclick="Battle.openBag()">BAG</button>
-      <button class="battle-btn team" onclick="Battle.openTeam()">TEAM</button>
-      <button class="battle-btn run" onclick="Battle.tryRun()">RUN</button>
-    `;
-  },
-
-  showMoves() {
-    const p = Player.party[0];
-    if (!p) return;
-    Audio.select();
-    document.getElementById('battle-actions').innerHTML = p.moves.map((m, i) => {
-      const typeColor = TYPES[m.type] ? TYPES[m.type].color : '#888';
-      return `<button class="battle-btn move-btn" onclick="Battle.useMove(${i})" style="border-color:${typeColor}">
-        ${m.name}<span class="move-type" style="color:${typeColor}">${TYPES[m.type]?.name || '???'} | Pow:${m.power || '-'}</span>
-        <span class="move-pp">PP:${m.currentPP}/${m.pp}</span>
-      </button>`;
-    }).join('') + `<button class="battle-btn" onclick="Battle.showMainActions()" style="background:#333">← BACK</button>`;
-  },
-
-  openBag() {
-    Audio.select();
-    this.switchingAllowed = true;
-    Menu.showBag();
-  },
-
-  openTeam() {
-    Audio.select();
-    this.switchingAllowed = true;
-    Menu.showParty();
-  },
-
-  useMove(index) {
-    const p = Player.party[0];
-    const move = p.moves[index];
-    if (!move || move.currentPP <= 0) {
-      this.showText('No PP left for this move!');
+    if (gameState==='battleText') {
+      // Show text
+      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='left';
+      wrapText(this.currentText, 30, H-115, W-60, 24);
+      if (!this.textTyping) {
+        X.fillStyle=`rgba(255,255,255,${0.5+Math.sin(frame*0.1)*0.5})`;
+        X.font='14px monospace'; X.textAlign='right';
+        X.fillText('▼ click', W-30, H-15);
+      }
       return;
     }
 
-    this.playerTurn = false;
-    move.currentPP--;
+    if (this.menuState==='main') {
+      const btns = [
+        {label:'FIGHT',color:'#c62828',x:W/2+10,y:H-130},
+        {label:'BAG',color:'#2e7d32',x:W/2+170,y:H-130},
+        {label:'TEAM',color:'#1565c0',x:W/2+10,y:H-70},
+        {label:'RUN',color:'#6a1b9a',x:W/2+170,y:H-70},
+      ];
+      // Prompt text
+      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='left';
+      X.fillText('What will', 30, H-110);
+      X.fillText(`${P.party[0]?.name || '???'} do?`, 30, H-85);
 
-    // Check who goes first based on speed
-    const pSpd = p.spd * (1 + p.statMods.spd * 0.25);
-    const eSpd = this.enemy.spd * (1 + (this.enemy.statMods?.spd || 0) * 0.25);
+      btns.forEach((b,i) => {
+        X.fillStyle=b.color;
+        roundRect(b.x,b.y,140,48,8); X.fill();
+        // Hover-like highlight border
+        X.strokeStyle='rgba(255,255,255,0.3)'; X.lineWidth=2;
+        roundRect(b.x,b.y,140,48,8); X.stroke();
+        // Shine
+        X.fillStyle='rgba(255,255,255,0.1)';
+        X.fillRect(b.x+4,b.y+4,132,20);
+        X.fillStyle='#fff'; X.font='bold 16px monospace'; X.textAlign='center';
+        X.fillText(b.label, b.x+70, b.y+30);
+      });
+    } else if (this.menuState==='moves') {
+      const p = P.party[0]; if(!p) return;
+      p.moves.forEach((m,i) => {
+        const mx = (i%2)*220 + 30, my = H-135 + Math.floor(i/2)*55;
+        X.fillStyle=TYPES[m.type]?TYPES[m.type].color+'33':'#333';
+        roundRect(mx,my,200,45,8); X.fill();
+        X.strokeStyle=TYPES[m.type]?TYPES[m.type].color:'#555'; X.lineWidth=2;
+        roundRect(mx,my,200,45,8); X.stroke();
+        X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='left';
+        X.fillText(m.name, mx+10, my+18);
+        X.fillStyle=TYPES[m.type]?TYPES[m.type].color:'#888'; X.font='11px monospace';
+        X.fillText(`${TYPES[m.type]?.name||'???'} Pow:${m.pow||'-'}`, mx+10, my+34);
+        X.fillStyle='#888'; X.textAlign='right';
+        X.fillText(`PP:${m.curPP}/${m.pp}`, mx+190, my+34);
+      });
+      // Back button
+      X.fillStyle='#444';
+      roundRect(500,H-80,120,40,8); X.fill();
+      X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='center';
+      X.fillText('← BACK', 560, H-55);
+    } else if (this.menuState==='bag') {
+      const items = P.bag.filter(i=>i.count>0);
+      items.forEach((item,i) => {
+        const iy = H-140 + i*28;
+        X.fillStyle=i%2===0?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.1)';
+        X.fillRect(30,iy,W-60,26);
+        X.fillStyle='#eee'; X.font='14px monospace'; X.textAlign='left';
+        X.fillText(`${item.name}`, 50, iy+18);
+        X.fillStyle='#888'; X.textAlign='right';
+        X.fillText(`x${item.count}`, W-50, iy+18);
+      });
+      X.fillStyle='#444'; roundRect(W-160,H-30,120,25,6); X.fill();
+      X.fillStyle='#eee'; X.font='12px monospace'; X.textAlign='center';
+      X.fillText('← BACK', W-100, H-13);
+    } else if (this.menuState==='team') {
+      P.party.forEach((c,i) => {
+        const cy = H-140+i*24;
+        const pct=Math.max(0,c.hp/c.maxHp);
+        X.fillStyle=i===0?'rgba(255,255,100,0.1)':'rgba(255,255,255,0.03)';
+        X.fillRect(30,cy,W-60,22);
+        X.fillStyle=c.hp>0?'#eee':'#666'; X.font='13px monospace'; X.textAlign='left';
+        X.fillText(`${c.name} Lv${c.level}`, 50, cy+16);
+        X.fillStyle='#333'; X.fillRect(300,cy+5,150,10);
+        X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';
+        X.fillRect(300,cy+5,150*pct,10);
+        X.fillStyle='#aaa'; X.font='11px monospace'; X.textAlign='right';
+        X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, W-50, cy+16);
+      });
+      X.fillStyle='#444'; roundRect(W-160,H-30,120,25,6); X.fill();
+      X.fillStyle='#eee'; X.font='12px monospace'; X.textAlign='center';
+      X.fillText('← BACK', W-100, H-13);
+    }
+  },
 
-    if (pSpd >= eSpd) {
-      this.executeMove(p, this.enemy, move, 'player', () => {
-        if (this.enemy.hp <= 0) { this.enemyFainted(); return; }
+  // Handle clicks
+  handleClick(mx, my) {
+    if (gameState==='battleText') { this.advanceText(); return; }
+    if (!this.playerTurn || this.animating) return;
+
+    if (this.menuState==='main') {
+      if (mx>W/2+10&&mx<W/2+150&&my>H-130&&my<H-82) this.showMoves();
+      else if (mx>W/2+170&&mx<W/2+310&&my>H-130&&my<H-82) this.showBag();
+      else if (mx>W/2+10&&mx<W/2+150&&my>H-70&&my<H-22) this.showTeam();
+      else if (mx>W/2+170&&mx<W/2+310&&my>H-70&&my<H-22) this.tryRun();
+    } else if (this.menuState==='moves') {
+      const p = P.party[0]; if(!p) return;
+      for (let i=0;i<p.moves.length;i++) {
+        const bx=(i%2)*220+30, by=H-135+Math.floor(i/2)*55;
+        if (mx>bx&&mx<bx+200&&my>by&&my<by+45) { this.useMove(i); return; }
+      }
+      if (mx>500&&mx<620&&my>H-80&&my<H-40) this.menuState='main';
+    } else if (this.menuState==='bag') {
+      const items=P.bag.filter(i=>i.count>0);
+      for (let i=0;i<items.length;i++) {
+        const iy=H-140+i*28;
+        if (mx>30&&mx<W-30&&my>iy&&my<iy+26) { this.useItem(items[i]); return; }
+      }
+      if (mx>W-160&&mx<W-40&&my>H-30&&my<H-5) this.menuState='main';
+    } else if (this.menuState==='team') {
+      for (let i=0;i<P.party.length;i++) {
+        const cy=H-140+i*24;
+        if (mx>30&&mx<W-30&&my>cy&&my<cy+22) { this.switchTo(i); return; }
+      }
+      if (mx>W-160&&mx<W-40&&my>H-30&&my<H-5) this.menuState='main';
+    }
+  },
+
+  showMoves() { Audio.jingle('select'); this.menuState='moves'; },
+  showBag() { Audio.jingle('select'); this.menuState='bag'; },
+  showTeam() { Audio.jingle('select'); this.menuState='team'; },
+
+  switchTo(i) {
+    if (P.party[i].hp<=0||i===0) return;
+    this.playerTurn=false;
+    [P.party[0],P.party[i]]=[P.party[i],P.party[0]];
+    this.menuState='main';
+    this.queueText(`Go, ${P.party[0].name}!`, () => { this.enemyTurn(); });
+    this.showNextText();
+  },
+
+  useItem(item) {
+    if (item.fx==='heal') {
+      const c=P.party[0];
+      if (c.hp>=c.maxHp) return;
+      c.hp=Math.min(c.maxHp, c.hp+item.val);
+      item.count--;
+      this.playerTurn=false; this.menuState='main';
+      Audio.jingle('heal');
+      this.queueText(`Used ${item.name}! Recovered HP!`, () => { this.enemyTurn(); });
+      this.showNextText();
+    } else if (item.fx==='catch') {
+      if (!this.isWild) return;
+      item.count--;
+      this.playerTurn=false; this.menuState='main';
+      this.tryCatch(item.val);
+    } else if (item.fx==='revive') {
+      const f=P.party.find(c=>c.hp<=0);
+      if (!f) return;
+      f.hp=Math.floor(f.maxHp/2);
+      item.count--;
+      this.playerTurn=false; this.menuState='main';
+      Audio.jingle('heal');
+      this.queueText(`${f.name} was revived!`, () => { this.enemyTurn(); });
+      this.showNextText();
+    }
+  },
+
+  useMove(idx) {
+    const p=P.party[0], move=p.moves[idx];
+    if (!move||move.curPP<=0) return;
+    this.playerTurn=false; this.menuState='main';
+    move.curPP--;
+
+    const pSpd=p.spd*(1+p.mods.spd*0.25);
+    const eSpd=this.enemy.spd*(1+(this.enemy.mods?.spd||0)*0.25);
+
+    if (pSpd>=eSpd) {
+      this.execMove(p,this.enemy,move,'player',() => {
+        if (this.enemy.hp<=0) { this.enemyFainted(); return; }
         this.enemyTurn();
       });
     } else {
-      this.enemyTurn(() => {
-        if (p.hp <= 0) { this.playerFainted(); return; }
-        this.executeMove(p, this.enemy, move, 'player', () => {
-          if (this.enemy.hp <= 0) { this.enemyFainted(); return; }
-          this.showMainActions();
-          this.playerTurn = true;
+      this.enemyTurnFirst(() => {
+        if (P.party[0].hp<=0) { this.playerFainted(); return; }
+        this.execMove(p,this.enemy,move,'player',() => {
+          if (this.enemy.hp<=0) { this.enemyFainted(); return; }
+          this.playerTurn=true;
         });
       });
     }
+    this.showNextText();
   },
 
-  executeMove(attacker, defender, move, who, cb) {
-    // Accuracy check
-    if (Math.random() * 100 > move.accuracy) {
-      Audio.miss();
-      this.showText(`${attacker.name} used ${move.name}... but it missed!`, cb);
+  execMove(atk,def,move,who,cb) {
+    // Accuracy
+    if (Math.random()*100 > move.acc) {
+      Audio.jingle('miss');
+      this.queueText(`${atk.name} used ${move.name}... but missed!`, cb);
       return;
     }
-
     // Status moves
-    if (move.power === 0 && move.effect) {
-      this.applyEffect(attacker, defender, move, who, cb);
+    if (move.pow===0 && move.fx) {
+      this.applyFx(atk,def,move,who,cb);
       return;
     }
+    // Damage calc
+    const aStat=atk.atk*(1+(atk.mods?.atk||0)*0.25);
+    const dStat=def.def*(1+(def.mods?.def||0)*0.25);
+    const eff=typeEffect(move.type, def.type);
+    const stab=move.type===atk.type?1.5:1;
+    const rand=0.85+Math.random()*0.15;
+    let dmg=Math.floor(((2*atk.level/5+2)*move.pow*aStat/dStat/50+2)*stab*eff*rand);
+    if (move.fx==='double') dmg=Math.floor(dmg*1.5);
+    let crit=false;
+    if (Math.random()<0.0625) { dmg=Math.floor(dmg*1.5); crit=true; }
+    if (dmg<1) dmg=1;
+    def.hp=Math.max(0,def.hp-dmg);
 
-    // Damage calculation
-    const atkStat = attacker.atk * (1 + (attacker.statMods?.atk || 0) * 0.25);
-    const defStat = defender.def * (1 + (defender.statMods?.def || 0) * 0.25);
-    const effectiveness = getTypeEffectiveness(move.type, defender.type);
-    const stab = move.type === attacker.type ? 1.5 : 1;
-    const random = 0.85 + Math.random() * 0.15;
-    let damage = Math.floor(((2 * attacker.level / 5 + 2) * move.power * atkStat / defStat / 50 + 2) * stab * effectiveness * random);
-    if (damage < 1) damage = 1;
+    // VFX
+    const target=who==='player'?'enemy':'player';
+    this.shakeTimer=15; this.shakeTarget=target;
+    this.flashTimer=20; this.flashTarget=target;
+    const pColor=TYPES[move.type]?TYPES[move.type].color:'#fff';
+    const pTarget=target==='enemy'?{x:580,y:150}:{x:200,y:300};
+    Particles.spawn(pTarget.x,pTarget.y,15,pColor,4,25,5);
+    if (eff>1) { Audio.jingle('superHit'); Particles.spawn(pTarget.x,pTarget.y,20,'#ff0',5,30,6); }
+    else Audio.jingle('hit');
 
-    // Double hit moves
-    if (move.effect === 'double') {
-      damage = Math.floor(damage * 1.5);
-    }
+    let msg=`${atk.name} used ${move.name}! `;
+    if (eff>1) msg+="Super effective! ";
+    else if (eff<1) msg+="Not very effective... ";
+    if (crit) msg+="Critical hit! ";
+    msg+=`(-${dmg} HP)`;
 
-    // Critical hit
-    let critical = false;
-    if (Math.random() < 0.0625) {
-      damage = Math.floor(damage * 1.5);
-      critical = true;
-    }
-
-    defender.hp = Math.max(0, defender.hp - damage);
-
-    // Animation
-    const spriteId = who === 'player' ? 'enemy-sprite' : 'player-sprite';
-    document.getElementById(spriteId).classList.add('shake');
-    Audio.hit();
-    setTimeout(() => document.getElementById(spriteId).classList.remove('shake'), 300);
-
-    let msg = `${attacker.name} used ${move.name}! `;
-    if (effectiveness > 1) msg += "It's super effective! ";
-    else if (effectiveness < 1) msg += "It's not very effective... ";
-    if (critical) msg += "Critical hit! ";
-    msg += `(-${damage} HP)`;
-
-    this.showText(msg, () => {
-      this.updateUI();
-      if (cb) cb();
-    });
+    this.queueText(msg, cb);
   },
 
-  applyEffect(attacker, defender, move, who, cb) {
-    let msg = `${attacker.name} used ${move.name}! `;
-    const effect = move.effect;
-
-    if (effect === 'heal') {
-      const healAmt = Math.floor(attacker.maxHp * 0.35);
-      attacker.hp = Math.min(attacker.maxHp, attacker.hp + healAmt);
-      msg += `Restored ${healAmt} HP!`;
-      Audio.heal();
-    } else if (effect === 'atkUp') {
-      attacker.statMods = attacker.statMods || { atk: 0, def: 0, spd: 0 };
-      attacker.statMods.atk = Math.min(3, attacker.statMods.atk + 1);
-      msg += `${attacker.name}'s attack rose!`;
-    } else if (effect === 'atkUpBig') {
-      attacker.statMods = attacker.statMods || { atk: 0, def: 0, spd: 0 };
-      attacker.statMods.atk = Math.min(3, attacker.statMods.atk + 2);
-      msg += `${attacker.name}'s attack rose sharply!`;
-    } else if (effect === 'defUp') {
-      attacker.statMods = attacker.statMods || { atk: 0, def: 0, spd: 0 };
-      attacker.statMods.def = Math.min(3, attacker.statMods.def + 1);
-      msg += `${attacker.name}'s defense rose!`;
-    } else if (effect === 'allUp') {
-      attacker.statMods = attacker.statMods || { atk: 0, def: 0, spd: 0 };
-      attacker.statMods.atk = Math.min(3, attacker.statMods.atk + 1);
-      attacker.statMods.def = Math.min(3, attacker.statMods.def + 1);
-      attacker.statMods.spd = Math.min(3, attacker.statMods.spd + 1);
-      msg += `All stats rose!`;
-    } else if (effect === 'enemyAtkDown') {
-      defender.statMods = defender.statMods || { atk: 0, def: 0, spd: 0 };
-      defender.statMods.atk = Math.max(-3, defender.statMods.atk - 1);
-      msg += `${defender.name}'s attack fell!`;
-    } else if (effect === 'enemySpdDown') {
-      defender.statMods = defender.statMods || { atk: 0, def: 0, spd: 0 };
-      defender.statMods.spd = Math.max(-3, defender.statMods.spd - 1);
-      msg += `${defender.name}'s speed fell!`;
+  applyFx(atk,def,move,who,cb) {
+    let msg=`${atk.name} used ${move.name}! `;
+    const fx=move.fx;
+    if (fx==='heal') {
+      const amt=Math.floor(atk.maxHp*0.35);
+      atk.hp=Math.min(atk.maxHp,atk.hp+amt);
+      msg+=`Restored ${amt} HP!`;
+      Audio.jingle('heal');
+    } else if (fx==='atkUp') {
+      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+1);
+      msg+='Attack rose!';
+      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 8, '#f44', 3, 20);
+    } else if (fx==='atkUpBig') {
+      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+2);
+      msg+='Attack rose sharply!';
+      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 15, '#f44', 4, 25);
+    } else if (fx==='defUp') {
+      atk.mods.def=Math.min(3,(atk.mods?.def||0)+1);
+      msg+='Defense rose!';
+    } else if (fx==='allUp') {
+      atk.mods.atk=Math.min(3,(atk.mods?.atk||0)+1);
+      atk.mods.def=Math.min(3,(atk.mods?.def||0)+1);
+      atk.mods.spd=Math.min(3,(atk.mods?.spd||0)+1);
+      msg+='All stats rose!';
+      Particles.spawn(who==='player'?200:580, who==='player'?300:150, 20, '#0ff', 4, 25);
+    } else if (fx==='eAtkDown') {
+      def.mods=def.mods||{atk:0,def:0,spd:0};
+      def.mods.atk=Math.max(-3,def.mods.atk-1);
+      msg+=`${def.name}'s attack fell!`;
+    } else if (fx==='eSpdDown') {
+      def.mods=def.mods||{atk:0,def:0,spd:0};
+      def.mods.spd=Math.max(-3,def.mods.spd-1);
+      msg+=`${def.name}'s speed fell!`;
     }
-
-    this.updateUI();
-    this.showText(msg, cb);
+    this.queueText(msg, cb);
   },
 
   enemyTurn(cb) {
-    const e = this.enemy;
-    if (!e || e.hp <= 0) { if (cb) cb(); return; }
-    const p = Player.party[0];
-    if (!p || p.hp <= 0) { if (cb) cb(); return; }
-
-    // AI: pick a move (weighted towards effective moves)
-    const validMoves = e.moves.filter(m => m.currentPP > 0);
-    if (validMoves.length === 0) {
-      this.showText(`${e.name} has no moves left! It struggles!`, () => {
-        e.hp = Math.max(0, e.hp - Math.floor(e.maxHp * 0.1));
-        this.updateUI();
-        if (e.hp <= 0) { this.enemyFainted(); return; }
-        if (cb) cb();
-        else { this.showMainActions(); this.playerTurn = true; }
+    const e=this.enemy, p=P.party[0];
+    if (!e||e.hp<=0||!p||p.hp<=0) { if(cb)cb(); else{this.playerTurn=true;} return; }
+    const valid=e.moves.filter(m=>m.curPP>0);
+    if (valid.length===0) {
+      this.queueText(`${e.name} struggles!`, () => {
+        e.hp=Math.max(0,e.hp-Math.floor(e.maxHp*0.1));
+        if (e.hp<=0) { this.enemyFainted(); return; }
+        if(cb)cb();else{this.playerTurn=true;}
       });
+      this.showNextText();
       return;
     }
-
-    // Smart AI: prefer super effective moves and high power moves
-    let bestMove = validMoves[0];
-    let bestScore = -1;
-    for (const m of validMoves) {
-      let score = m.power || 30;
-      score *= getTypeEffectiveness(m.type, p.type);
-      if (m.type === e.type) score *= 1.3;
-      if (m.effect === 'heal' && e.hp < e.maxHp * 0.4) score = 80;
-      if (m.effect && m.power === 0 && e.hp > e.maxHp * 0.5) score *= 0.7;
-      score += Math.random() * 15;
-      if (score > bestScore) { bestScore = score; bestMove = m; }
+    // AI
+    let best=valid[0], bestS=-1;
+    for (const m of valid) {
+      let s=m.pow||30;
+      s*=typeEffect(m.type,p.type);
+      if (m.type===e.type) s*=1.3;
+      if (m.fx==='heal'&&e.hp<e.maxHp*0.4) s=80;
+      s+=Math.random()*15;
+      if (s>bestS){bestS=s;best=m;}
     }
-
-    bestMove.currentPP--;
-    this.executeMove(e, p, bestMove, 'enemy', () => {
-      this.updateUI();
-      if (p.hp <= 0) { this.playerFainted(); return; }
-      if (cb) cb();
-      else { this.showMainActions(); this.playerTurn = true; }
+    best.curPP--;
+    this.execMove(e,p,best,'enemy',() => {
+      if (p.hp<=0){this.playerFainted();return;}
+      if(cb)cb();else{this.playerTurn=true;}
     });
+    this.showNextText();
+  },
+  enemyTurnFirst(cb) {
+    // Enemy goes first, then callback
+    this.enemyTurn(cb);
   },
 
   enemyFainted() {
-    // XP gain
-    const p = Player.party[0];
-    const xpGain = Math.floor(this.enemy.level * 8 + 10);
-    p.xp += xpGain;
-
-    let msg = `${this.enemy.name} fainted! Gained ${xpGain} XP!`;
-
-    // Check level up
-    let evolved = false;
-    while (p.xp >= p.xpToNext) {
-      p.xp -= p.xpToNext;
-      p.level++;
-      recalcStats(p);
-      p.hp = Math.min(p.hp + 10, p.maxHp);
-      msg += ` ${p.name} grew to Lv.${p.level}!`;
-      Audio.levelUp();
-
-      // Learn new moves
-      const def = CREATURE_DEFS[p.id];
+    const p=P.party[0];
+    const xpGain=Math.floor(this.enemy.level*8+10);
+    p.xp+=xpGain;
+    let msg=`${this.enemy.name} fainted! +${xpGain} XP!`;
+    // Level up chain
+    while (p.xp>=p.xpNext) {
+      p.xp-=p.xpNext; p.level++;
+      calcStats(p); p.hp=Math.min(p.hp+15,p.maxHp);
+      msg+=` Level ${p.level}!`;
+      Audio.jingle('levelUp');
+      // New move?
+      const def=CREATURES[p.id];
       if (def) {
-        const moveIdx = Math.min(3, Math.floor(p.level / 5));
-        if (def.moves[moveIdx] && !p.moves.find(m => m.id === def.moves[moveIdx])) {
-          const newMove = MOVES[def.moves[moveIdx]];
-          if (newMove) {
-            if (p.moves.length < 4) {
-              p.moves.push({ ...newMove, id: def.moves[moveIdx], currentPP: newMove.pp });
-              msg += ` Learned ${newMove.name}!`;
-            } else {
-              // Replace weakest move
-              let weakest = 0;
-              for (let i = 1; i < p.moves.length; i++) {
-                if ((p.moves[i].power || 0) < (p.moves[weakest].power || 0)) weakest = i;
-              }
-              if ((newMove.power || 0) > (p.moves[weakest].power || 0)) {
-                msg += ` Forgot ${p.moves[weakest].name} and learned ${newMove.name}!`;
-                p.moves[weakest] = { ...newMove, id: def.moves[moveIdx], currentPP: newMove.pp };
-              }
+        const mi=Math.min(3,Math.floor(p.level/5)+1);
+        if (def.moves[mi]&&!p.moves.find(m=>m.id===def.moves[mi])) {
+          const nm=MOVES[def.moves[mi]];
+          if (nm) {
+            if (p.moves.length<4) {
+              p.moves.push({...nm,id:def.moves[mi],curPP:nm.pp});
+              msg+=` Learned ${nm.name}!`;
             }
           }
         }
       }
-
-      // Check evolution
-      if (p.evolutionDef && p.level >= p.evolutionDef.level && !evolved) {
-        evolved = true;
-        const evoDef = CREATURE_DEFS[p.evolutionDef.into];
-        if (evoDef) {
-          const oldName = p.name;
-          p.id = p.evolutionDef.into;
-          p.name = evoDef.name;
-          p.sprite = evoDef.sprite;
-          p.type = evoDef.type;
-          p.baseStats = { ...evoDef.baseStats };
-          p.desc = evoDef.desc;
-          p.evolutionDef = evoDef.evolution;
-          recalcStats(p);
-          p.hp = p.maxHp;
-          // Add new moves from evolution
-          for (const mid of evoDef.moves) {
-            if (!p.moves.find(m => m.id === mid) && p.moves.length < 4) {
-              const mv = MOVES[mid];
-              if (mv) p.moves.push({ ...mv, id: mid, currentPP: mv.pp });
+      // Evolution?
+      if (p.evoDef&&p.level>=p.evoDef.level) {
+        const ed=CREATURES[p.evoDef.into];
+        if (ed) {
+          const old=p.name;
+          p.id=p.evoDef.into; p.name=ed.name; p.sprite=ed.sprite;
+          p.type=ed.type; p.base={...ed.base}; p.desc=ed.desc;
+          p.evoDef=ed.evo; calcStats(p); p.hp=p.maxHp;
+          for (const mid of ed.moves) {
+            if (!p.moves.find(m=>m.id===mid)&&p.moves.length<4) {
+              const mv=MOVES[mid]; if(mv) p.moves.push({...mv,id:mid,curPP:mv.pp});
             }
           }
-          msg += ` ${oldName} evolved into ${p.name}!!`;
-          Audio.evolve();
+          msg+=` ${old} evolved into ${p.name}!!`;
+          Audio.jingle('evolve');
+          Particles.spawn(200,300,40,'#ff0',6,40,8);
         }
       }
     }
-
-    this.updateUI();
-    this.showText(msg, () => {
-      // Check for more enemy creatures (trainer battle)
+    this.queueText(msg, () => {
       if (!this.isWild) {
-        this.enemyIndex++;
-        if (this.enemyIndex < this.enemyParty.length) {
-          this.enemy = this.enemyParty[this.enemyIndex];
-          this.showText(`${this.trainerName} sent out ${this.enemy.name}!`, () => {
-            this.updateUI();
-            this.showMainActions();
-            this.playerTurn = true;
-          });
+        this.eidx++;
+        if (this.eidx<this.eparty.length) {
+          this.enemy=this.eparty[this.eidx];
+          this.hpAnimEnemy=1; this.slideInEnemy=200;
+          this.queueText(`${this.tname} sent out ${this.enemy.name}!`, () => {this.playerTurn=true;});
+          this.showNextText();
           return;
         } else {
-          // Trainer defeated
-          Player.defeatedTrainers.push(this.trainerName);
-          const prize = this.enemyParty.length * 100;
-          Player.money += prize;
-          Audio.victory();
-          this.showText(`Defeated ${this.trainerName}! Won $${prize}!`, () => {
-            this.end();
-          });
+          P.defeated.push(this.tname);
+          const prize=this.eparty.length*100;
+          P.money+=prize;
+          Audio.jingle('victory');
+          this.queueText(`Defeated ${this.tname}! Won $${prize}!`, () => {this.end();});
+          this.showNextText();
           return;
         }
       }
-      Audio.victory();
+      Audio.jingle('victory');
       this.end();
     });
+    this.showNextText();
   },
 
   playerFainted() {
-    // Check for more living creatures
-    const nextAlive = Player.party.findIndex(c => c.hp > 0);
-    if (nextAlive >= 0) {
-      this.showText(`${Player.party[0].name} fainted!`, () => {
-        this.switchingAllowed = true;
-        // Auto switch
-        const temp = Player.party[0];
-        Player.party[0] = Player.party[nextAlive];
-        Player.party[nextAlive] = temp;
-        this.showText(`Go, ${Player.party[0].name}!`, () => {
-          this.updateUI();
-          this.showMainActions();
-          this.playerTurn = true;
-        });
+    const next=P.party.findIndex(c=>c.hp>0);
+    if (next>=0) {
+      this.queueText(`${P.party[0].name} fainted!`, () => {
+        [P.party[0],P.party[next]]=[P.party[next],P.party[0]];
+        this.slideInPlayer=-200;
+        this.queueText(`Go, ${P.party[0].name}!`, () => {this.playerTurn=true;});
+        this.showNextText();
       });
+      this.showNextText();
     } else {
-      this.showText('All your creatures fainted! You blacked out...', () => {
-        // Heal and return to hometown
-        Player.party.forEach(c => {
-          c.hp = c.maxHp;
-          c.moves.forEach(m => m.currentPP = m.pp);
-          c.statMods = { atk: 0, def: 0, spd: 0 };
-        });
-        Player.x = 15;
-        Player.y = 13;
-        Player.mapId = 'hometown';
+      this.queueText('All creatures fainted! You blacked out...', () => {
+        P.party.forEach(c=>{c.hp=c.maxHp;c.moves.forEach(m=>m.curPP=m.pp);c.mods={atk:0,def:0,spd:0};});
+        P.x=15;P.y=13;P.px=P.x*TS;P.py=P.y*TS;P.mapId='hometown';
         this.end();
       });
+      this.showNextText();
     }
   },
 
   tryRun() {
     if (!this.isWild) {
-      this.showText("Can't run from a trainer battle!");
-      return;
+      this.queueText("Can't run from a trainer!"); this.showNextText(); return;
     }
-    Audio.run();
-    const p = Player.party[0];
-    const e = this.enemy;
-    const escapeChance = (p.spd * 128 / (e.spd || 1) + 30) % 256;
-    if (Math.random() * 256 < escapeChance) {
-      this.showText('Got away safely!', () => { this.end(); });
+    Audio.jingle('run');
+    const p=P.party[0], e=this.enemy;
+    if (Math.random()<0.6 + p.spd/(p.spd+e.spd)*0.3) {
+      this.queueText('Got away safely!', () => {this.end();}); this.showNextText();
     } else {
-      this.showText("Couldn't escape!", () => { this.enemyTurn(); });
+      this.playerTurn=false;
+      this.queueText("Couldn't escape!", () => {this.enemyTurn();}); this.showNextText();
     }
   },
 
-  tryCatch(catchBonus) {
-    const e = this.enemy;
-    const hpFactor = (1 - e.hp / e.maxHp) * 100;
-    const levelFactor = Math.max(1, 50 - e.level);
-    const catchRate = (hpFactor + levelFactor + catchBonus * 30) / 150;
-
-    document.getElementById('catch-screen').style.display = 'flex';
-    state = GameState.CATCH;
-
-    let shakes = 0;
-    const maxShakes = 3;
-    const shakeInterval = setInterval(() => {
+  tryCatch(bonus) {
+    const e=this.enemy;
+    const hpFactor=(1-e.hp/e.maxHp)*100;
+    const rate=(hpFactor+Math.max(1,50-e.level)+bonus*30)/150;
+    let shakes=0;
+    const doShake = () => {
       shakes++;
-      document.getElementById('catch-text').textContent = '...'.repeat(shakes);
-      Audio.select();
-
-      if (shakes >= maxShakes) {
-        clearInterval(shakeInterval);
-        setTimeout(() => {
-          if (Math.random() < catchRate) {
-            // Caught!
-            Audio.catch();
-            document.getElementById('catch-anim-icon').textContent = '✨';
-            document.getElementById('catch-text').textContent = `Caught ${e.name}!`;
-            if (Player.party.length < 6) {
-              Player.party.push(e);
-            }
-            setTimeout(() => {
-              document.getElementById('catch-screen').style.display = 'none';
-              state = GameState.BATTLE;
-              this.showText(`${e.name} was added to your team!`, () => { this.end(); });
-            }, 2000);
-          } else {
-            document.getElementById('catch-anim-icon').textContent = '💨';
-            document.getElementById('catch-text').textContent = `${e.name} broke free!`;
-            setTimeout(() => {
-              document.getElementById('catch-screen').style.display = 'none';
-              state = GameState.BATTLE;
-              this.enemyTurn();
-            }, 1500);
-          }
-        }, 500);
+      Audio.jingle('select');
+      if (shakes<3) { setTimeout(doShake, 600); return; }
+      if (Math.random()<rate) {
+        Audio.jingle('catch');
+        Particles.spawn(580,150,25,'#ff0',5,30);
+        this.queueText(`Caught ${e.name}!`, () => {
+          if (P.party.length<6) P.party.push(e);
+          this.queueText(`${e.name} joined your team!`, () => {this.end();});
+          this.showNextText();
+        });
+        this.showNextText();
+      } else {
+        Audio.jingle('catchFail');
+        this.queueText(`${e.name} broke free!`, () => {this.enemyTurn();});
+        this.showNextText();
       }
-    }, 600);
+    };
+    this.queueText('Threw a Manuscript...'); this.showNextText();
+    setTimeout(doShake, 600);
   },
 
   end() {
-    this.active = false;
-    // Reset stat mods
-    Player.party.forEach(c => { c.statMods = { atk: 0, def: 0, spd: 0 }; });
-    document.getElementById('battle-ui').style.display = 'none';
-    document.getElementById('hud').classList.remove('hidden');
-    document.getElementById('minimap').classList.remove('hidden');
-    state = GameState.OVERWORLD;
+    this.active=false;
+    P.party.forEach(c=>{c.mods={atk:0,def:0,spd:0};});
+    gameState='overworld';
+    const map=MAPS[P.mapId];
+    if (map.music) Audio.bgm(map.music);
   }
 };
 
-// --- Starter Selection ---
-const StarterSelect = {
-  show() {
-    const starters = [
-      { id: 'metaphor', desc: 'Rhetoric type - A shapeshifter of meaning. High attack!' },
-      { id: 'simile', desc: 'Poetic type - Gentle but versatile. Balanced stats!' },
-      { id: 'hyperbole', desc: 'Dramatic type - THE STRONGEST. (Glass cannon!)' }
-    ];
+function drawBattleBG() {
+  // Sky gradient
+  const grad=X.createLinearGradient(0,0,0,H-150);
+  grad.addColorStop(0,'#87CEEB');
+  grad.addColorStop(0.6,'#b4e0fa');
+  grad.addColorStop(1,'#5a8f3c');
+  X.fillStyle=grad;
+  X.fillRect(0,0,W,H-150);
 
-    const messages = [
-      { speaker: 'Prof. Narrator', text: 'Ah, you must be the new aspiring Lexicographer!' },
-      { speaker: 'Prof. Narrator', text: 'The world is full of creatures called Lexicons - living literary devices!' },
-      { speaker: 'Prof. Narrator', text: 'I have three starter Lexicons for you. Choose wisely!' }
-    ];
+  // Clouds
+  X.fillStyle='rgba(255,255,255,0.6)';
+  [[80+Math.sin(frame*0.005)*20,50],[350+Math.sin(frame*0.007+1)*15,40],[600+Math.sin(frame*0.004+2)*25,60]].forEach(([cx,cy])=>{
+    X.beginPath();
+    X.arc(cx,cy,25,0,Math.PI*2); X.arc(cx+25,cy-8,20,0,Math.PI*2);
+    X.arc(cx-15,cy-5,18,0,Math.PI*2); X.arc(cx+10,cy+5,15,0,Math.PI*2);
+    X.fill();
+  });
 
-    Dialogue.start(messages, () => {
-      // Show starter selection
-      const actionsDiv = document.createElement('div');
-      actionsDiv.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;display:flex;gap:20px;pointer-events:all;';
-      actionsDiv.id = 'starter-select';
-
-      starters.forEach(s => {
-        const def = CREATURE_DEFS[s.id];
-        const btn = document.createElement('div');
-        btn.style.cssText = `background:linear-gradient(135deg,#1a1a2e,#16213e);border:3px solid ${TYPES[def.type].color};border-radius:15px;padding:20px;width:200px;cursor:pointer;text-align:center;transition:all 0.2s;pointer-events:all;`;
-        btn.innerHTML = `
-          <div style="font-size:50px">${def.sprite}</div>
-          <div style="color:#f0c040;font-size:18px;margin:10px 0">${def.name}</div>
-          <div style="color:${TYPES[def.type].color};font-size:13px">${TYPES[def.type].name} Type</div>
-          <div style="color:#aaa;font-size:12px;margin-top:8px">${s.desc}</div>
-          <div style="color:#888;font-size:11px;margin-top:5px">HP:${def.baseStats.hp} ATK:${def.baseStats.atk} DEF:${def.baseStats.def} SPD:${def.baseStats.spd}</div>
-        `;
-        btn.onmouseenter = () => { btn.style.transform = 'scale(1.05)'; btn.style.borderColor = '#f0c040'; };
-        btn.onmouseleave = () => { btn.style.transform = 'scale(1)'; btn.style.borderColor = TYPES[def.type].color; };
-        btn.onclick = () => {
-          Audio.select();
-          const creature = createCreature(s.id, 5);
-          Player.party.push(creature);
-          actionsDiv.remove();
-          Dialogue.start([
-            { speaker: 'Prof. Narrator', text: `Excellent choice! ${def.name} will serve you well!` },
-            { speaker: 'Prof. Narrator', text: 'Now go explore! Catch new Lexicons in the tall grass, battle trainers, and become the ultimate Lexicographer!' },
-            { speaker: 'Prof. Narrator', text: 'Head east to Route 1 when you\'re ready. Watch out for wild creatures!' },
-            { speaker: 'Prof. Narrator', text: 'Step on the red cross tile at the Lexicon Center to heal your team anytime.' }
-          ]);
-        };
-        actionsDiv.appendChild(btn);
-      });
-
-      document.getElementById('ui-overlay').appendChild(actionsDiv);
-    });
+  // Ground
+  X.fillStyle='#5a8f3c';
+  X.fillRect(0,280,W,H-280-150);
+  X.fillStyle='#4a7f2c';
+  X.beginPath(); X.arc(180,300,80,Math.PI,0); X.fill();
+  X.beginPath(); X.arc(620,290,100,Math.PI,0); X.fill();
+  // Grass tufts
+  X.fillStyle='#3a6f1c';
+  for(let i=0;i<12;i++) {
+    const gx=i*70+10+Math.sin(i)*10;
+    X.fillRect(gx,350+Math.sin(i*2)*5,4,15);
+    X.fillRect(gx+6,355+Math.sin(i*2+1)*3,3,12);
   }
-};
-
-// --- Game Start ---
-const Game = {
-  start() {
-    try { Audio.init(); } catch(e) {}
-    document.getElementById('title-screen').classList.add('hidden');
-    document.getElementById('hud').classList.remove('hidden');
-    document.getElementById('minimap').classList.remove('hidden');
-    state = GameState.OVERWORLD;
-
-    // Check for save
-    try {
-      const save = JSON.parse(localStorage.getItem('lexicon_save'));
-      if (save && save.party && save.party.length > 0) {
-        Player.x = save.player.x;
-        Player.y = save.player.y;
-        Player.mapId = save.player.mapId;
-        Player.bag = save.player.bag;
-        Player.badges = save.player.badges || [];
-        Player.defeatedTrainers = save.player.defeatedTrainers || [];
-        Player.money = save.player.money || 500;
-        Player.party = save.party.map(s => {
-          const c = createCreature(s.id, s.level);
-          c.hp = s.hp;
-          c.xp = s.xp;
-          c.moves = s.moves.map(m => {
-            const def = MOVES[m.id];
-            return { ...def, id: m.id, currentPP: m.currentPP };
-          });
-          return c;
-        });
-        showNotification('Save loaded!');
-        return;
-      }
-    } catch(e) {}
-
-    // New game - starter selection
-    Player.x = 15;
-    Player.y = 13;
-    Player.mapId = 'hometown';
-    StarterSelect.show();
-  }
-};
-
-// --- Load Save System ---
-function loadSave() {
-  try {
-    const save = JSON.parse(localStorage.getItem('lexicon_save'));
-    if (save) return save;
-  } catch(e) {}
-  return null;
 }
 
-// --- Initialize on load ---
-window.addEventListener('load', init);
+function startWildEncounter() {
+  if (P.party.length===0||P.party.every(c=>c.hp<=0)) return;
+  const map=MAPS[P.mapId];
+  const possible=map.encounters||[];
+  const cid=possible[Math.floor(Math.random()*possible.length)];
+  const maxLv=Math.max(...P.party.map(c=>c.level));
+  const lv=Math.max(2,Math.floor(maxLv*(0.6+Math.random()*0.6)));
+  const wild=makeCreature(cid,lv);
+  EncounterTransition.start(() => { Battle.startWild(wild); });
+}
+
+function startTrainerBattle(npc) {
+  const creatures=npc.battle.creatures.map(c=>makeCreature(c.id,c.lv||c.level||5));
+  EncounterTransition.start(() => { Battle.startTrainer(creatures, npc.name); });
+}
+
+// --- Title Screen ---
+function drawTitle() {
+  // Background
+  const grad=X.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1a0a2e'); grad.addColorStop(0.5,'#16213e'); grad.addColorStop(1,'#0f3460');
+  X.fillStyle=grad; X.fillRect(0,0,W,H);
+
+  // Stars
+  for (let i=0;i<50;i++) {
+    const sx=(i*137+frame*0.2)%W, sy=(i*73)%300;
+    X.fillStyle=`rgba(255,255,255,${0.3+Math.sin(frame*0.02+i)*0.3})`;
+    X.fillRect(sx,sy,2,2);
+  }
+
+  // Title
+  X.save();
+  X.font='bold 56px monospace'; X.textAlign='center';
+  X.fillStyle='#a06000';
+  X.fillText('LEXICON LEGENDS', W/2+3, 183);
+  X.fillStyle='#f0c040';
+  X.fillText('LEXICON LEGENDS', W/2, 180);
+  // Glow
+  X.shadowColor='#f0c040'; X.shadowBlur=20;
+  X.fillText('LEXICON LEGENDS', W/2, 180);
+  X.restore();
+
+  X.fillStyle='#88aacc'; X.font='18px monospace'; X.textAlign='center';
+  X.fillText('A Literary Creature RPG', W/2, 220);
+
+  // Floating creature previews
+  const previews=['metaphor_front','simile_front','hyperbole_front'];
+  previews.forEach((s,i) => {
+    const ox=200+i*200, oy=300+Math.sin(frame*0.03+i*2)*15;
+    Sprites.draw(s, ox-32, oy, 64, 64);
+  });
+
+  // Start prompt
+  const blink = Math.sin(frame*0.06)>0;
+  if (blink) {
+    X.fillStyle='#f0c040'; X.font='20px monospace'; X.textAlign='center';
+    X.fillText('CLICK TO START', W/2, 500);
+  }
+
+  X.fillStyle='#556'; X.font='12px monospace';
+  X.fillText('Arrow Keys / WASD to move | SPACE to interact | M for menu', W/2, 560);
+  X.fillText('Click buttons in battle', W/2, 578);
+}
+
+// --- Starter Selection ---
+function drawStarterSelect() {
+  const grad=X.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1a0a2e'); grad.addColorStop(1,'#0f3460');
+  X.fillStyle=grad; X.fillRect(0,0,W,H);
+
+  X.fillStyle='#f0c040'; X.font='bold 28px monospace'; X.textAlign='center';
+  X.fillText('Choose Your Starter!', W/2, 60);
+
+  const starters = [
+    {id:'metaphor',x:100,desc:'Rhetoric Type\nHigh Attack\nShapeshifter of meaning'},
+    {id:'simile',x:310,desc:'Poetic Type\nBalanced Stats\nGentle but versatile'},
+    {id:'hyperbole',x:520,desc:'Dramatic Type\nGlass Cannon\nTHE STRONGEST (maybe)'},
+  ];
+
+  starters.forEach((s,i) => {
+    const def=CREATURES[s.id];
+    const hover = starterHover===i;
+    const y = 100;
+
+    // Card
+    X.fillStyle=hover?'rgba(240,192,64,0.15)':'rgba(255,255,255,0.05)';
+    roundRect(s.x, y, 180, 380, 12); X.fill();
+    X.strokeStyle=hover?'#f0c040':TYPES[def.type].color; X.lineWidth=hover?3:2;
+    roundRect(s.x, y, 180, 380, 12); X.stroke();
+
+    // Sprite
+    Sprites.draw(def.sprite, s.x+42, y+30, 96, 96);
+
+    // Name
+    X.fillStyle='#f0c040'; X.font='bold 18px monospace'; X.textAlign='center';
+    X.fillText(def.name, s.x+90, y+150);
+
+    // Type
+    X.fillStyle=TYPES[def.type].color; X.font='14px monospace';
+    X.fillText(TYPES[def.type].name, s.x+90, y+175);
+
+    // Stats
+    X.fillStyle='#aaa'; X.font='12px monospace';
+    X.fillText(`HP:${def.base.hp} ATK:${def.base.atk}`, s.x+90, y+205);
+    X.fillText(`DEF:${def.base.def} SPD:${def.base.spd}`, s.x+90, y+225);
+
+    // Description
+    X.fillStyle='#888'; X.font='11px monospace';
+    const lines = s.desc.split('\n');
+    lines.forEach((line,li) => {
+      X.fillText(line, s.x+90, y+260+li*16);
+    });
+
+    // Desc from creature
+    X.fillStyle='#666'; X.font='italic 10px monospace';
+    wrapText(def.desc, s.x+15, y+330, 150, 14);
+  });
+}
+
+let starterHover = -1;
+
+function handleStarterClick(mx, my) {
+  const starters = [{id:'metaphor',x:100},{id:'simile',x:310},{id:'hyperbole',x:520}];
+  for (let i=0;i<starters.length;i++) {
+    if (mx>starters[i].x&&mx<starters[i].x+180&&my>100&&my<480) {
+      Audio.jingle('select');
+      const c=makeCreature(starters[i].id, 5);
+      P.party.push(c);
+      gameState='dialogue';
+      Dialogue.start([
+        {s:'Prof. Narrator',t:`Excellent choice! ${c.name} will serve you well!`},
+        {s:'Prof. Narrator',t:'Explore the tall grass to find creatures, battle trainers, and grow stronger!'},
+        {s:'Prof. Narrator',t:'Head east to Route 1 when ready. Step on red crosses to heal!'},
+        {s:'Prof. Narrator',t:'Press M to open the menu. Good luck, Lexicographer!'},
+      ]);
+      Audio.bgm('town');
+      return;
+    }
+  }
+}
+
+function handleStarterHover(mx, my) {
+  starterHover=-1;
+  const xs=[100,310,520];
+  for(let i=0;i<3;i++) {
+    if (mx>xs[i]&&mx<xs[i]+180&&my>100&&my<480) { starterHover=i; return; }
+  }
+}
+
+// --- Menu System (Overworld) ---
+const GameMenu = {
+  open:false,
+  screen:null, // null, 'party', 'bag'
+  toggle() {
+    if (gameState!=='overworld') return;
+    this.open=!this.open;
+    this.screen=null;
+    if (this.open) { gameState='menu'; Audio.jingle('select'); }
+    else gameState='overworld';
+  },
+  close() { this.open=false; this.screen=null; gameState='overworld'; },
+  draw() {
+    if (this.screen==='party') { this.drawParty(); return; }
+    if (this.screen==='bag') { this.drawBag(); return; }
+
+    X.fillStyle='rgba(10,10,30,0.92)';
+    roundRect(W/2-120,H/2-140,240,280,12); X.fill();
+    X.strokeStyle='#e2b340'; X.lineWidth=3;
+    roundRect(W/2-120,H/2-140,240,280,12); X.stroke();
+
+    X.fillStyle='#f0c040'; X.font='bold 22px monospace'; X.textAlign='center';
+    X.fillText('MENU', W/2, H/2-105);
+
+    const btns=[
+      {label:'Team',y:H/2-80,action:()=>{this.screen='party';}},
+      {label:'Bag',y:H/2-30,action:()=>{this.screen='bag';}},
+      {label:'Save',y:H/2+20,action:()=>{this.save();}},
+      {label:'Close',y:H/2+70,action:()=>{this.close();}},
+    ];
+    btns.forEach(b => {
+      X.fillStyle='rgba(255,255,255,0.05)';
+      roundRect(W/2-100,b.y,200,40,8); X.fill();
+      X.strokeStyle='#555'; X.lineWidth=1;
+      roundRect(W/2-100,b.y,200,40,8); X.stroke();
+      X.fillStyle='#eee'; X.font='16px monospace'; X.textAlign='center';
+      X.fillText(b.label, W/2, b.y+26);
+    });
+  },
+  drawParty() {
+    X.fillStyle='rgba(10,10,30,0.95)';
+    roundRect(40,30,W-80,H-60,12); X.fill();
+    X.strokeStyle='#e2b340'; X.lineWidth=3;
+    roundRect(40,30,W-80,H-60,12); X.stroke();
+
+    X.fillStyle='#f0c040'; X.font='bold 20px monospace'; X.textAlign='left';
+    X.fillText('YOUR TEAM', 70, 65);
+
+    P.party.forEach((c,i) => {
+      const cy=90+i*75;
+      X.fillStyle=i%2===0?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.1)';
+      roundRect(60,cy,W-120,65,8); X.fill();
+
+      Sprites.draw(c.sprite, 70, cy+5, 48, 48);
+
+      X.fillStyle='#f0c040'; X.font='bold 15px monospace'; X.textAlign='left';
+      X.fillText(c.name, 130, cy+20);
+      X.fillStyle='#aaa'; X.font='13px monospace';
+      X.fillText(`Lv.${c.level}  ${TYPES[c.type].name}`, 130, cy+38);
+      X.fillText(`ATK:${c.atk} DEF:${c.def} SPD:${c.spd}`, 130, cy+55);
+
+      // HP bar
+      const barX=420,barW=200,barH=12;
+      X.fillStyle='#333'; roundRect(barX,cy+12,barW,barH,4); X.fill();
+      const pct=Math.max(0,c.hp/c.maxHp);
+      if(pct>0){X.fillStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#f44336';roundRect(barX,cy+12,barW*pct,barH,4);X.fill();}
+      X.fillStyle='#ddd'; X.font='11px monospace'; X.textAlign='right';
+      X.fillText(`${Math.max(0,c.hp)}/${c.maxHp}`, barX+barW, cy+44);
+
+      // XP
+      X.fillStyle='#222'; X.fillRect(barX,cy+30,barW,5);
+      X.fillStyle='#2196f3'; X.fillRect(barX,cy+30,barW*(c.xp/c.xpNext),5);
+      X.textAlign='right'; X.fillStyle='#888'; X.font='10px monospace';
+      X.fillText(`XP:${c.xp}/${c.xpNext}`, barX+barW, cy+56);
+
+      // Moves
+      X.textAlign='left'; X.fillStyle='#666'; X.font='10px monospace';
+      X.fillText(c.moves.map(m=>m.name).join(', '), 340, cy+55);
+    });
+
+    // Back
+    X.fillStyle='#444'; roundRect(60,H-65,100,30,6); X.fill();
+    X.fillStyle='#eee'; X.font='13px monospace'; X.textAlign='center';
+    X.fillText('← Back', 110, H-45);
+  },
+  drawBag() {
+    X.fillStyle='rgba(10,10,30,0.95)';
+    roundRect(40,30,W-80,H-60,12); X.fill();
+    X.strokeStyle='#e2b340'; X.lineWidth=3;
+    roundRect(40,30,W-80,H-60,12); X.stroke();
+
+    X.fillStyle='#f0c040'; X.font='bold 20px monospace'; X.textAlign='left';
+    X.fillText('YOUR BAG', 70, 65);
+    X.fillStyle='#888'; X.font='13px monospace';
+    X.fillText(`$${P.money}`, 250, 65);
+
+    const items=P.bag.filter(i=>i.count>0);
+    items.forEach((item,i) => {
+      const iy=90+i*50;
+      X.fillStyle=i%2===0?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.1)';
+      roundRect(60,iy,W-120,42,6); X.fill();
+      X.fillStyle='#eee'; X.font='15px monospace'; X.textAlign='left';
+      X.fillText(item.name, 80, iy+18);
+      X.fillStyle='#888'; X.font='12px monospace';
+      X.fillText(item.desc, 80, iy+34);
+      X.fillStyle='#f0c040'; X.textAlign='right'; X.font='14px monospace';
+      X.fillText(`x${item.count}`, W-80, iy+25);
+    });
+    // Use items in overworld
+    items.forEach((item,i) => {
+      const iy=90+i*50;
+      X.fillStyle='#2e7d32'; roundRect(W-180,iy+8,60,26,4); X.fill();
+      X.fillStyle='#fff'; X.font='11px monospace'; X.textAlign='center';
+      X.fillText('USE', W-150, iy+26);
+    });
+
+    X.fillStyle='#444'; roundRect(60,H-65,100,30,6); X.fill();
+    X.fillStyle='#eee'; X.font='13px monospace'; X.textAlign='center';
+    X.fillText('← Back', 110, H-45);
+  },
+  save() {
+    try {
+      localStorage.setItem('lexicon_save', JSON.stringify({
+        p:{x:P.x,y:P.y,mapId:P.mapId,bag:P.bag,defeated:P.defeated,money:P.money},
+        party:P.party.map(c=>({id:c.id,level:c.level,hp:c.hp,xp:c.xp,moves:c.moves.map(m=>({id:m.id,curPP:m.curPP}))}))
+      }));
+      Notification.show('Game saved!');
+    } catch(e) { Notification.show('Save failed!'); }
+    this.close();
+  },
+  handleClick(mx, my) {
+    if (this.screen==='party') {
+      if (mx>60&&mx<160&&my>H-65&&my<H-35) { this.screen=null; return; }
+      return;
+    }
+    if (this.screen==='bag') {
+      if (mx>60&&mx<160&&my>H-65&&my<H-35) { this.screen=null; return; }
+      // Use items
+      const items=P.bag.filter(i=>i.count>0);
+      for(let i=0;i<items.length;i++) {
+        const iy=90+i*50;
+        if (mx>W-180&&mx<W-120&&my>iy+8&&my<iy+34) {
+          const item=items[i];
+          if (item.fx==='heal') {
+            const c=P.party.find(p=>p.hp<p.maxHp&&p.hp>0);
+            if(c){c.hp=Math.min(c.maxHp,c.hp+item.val);item.count--;Audio.jingle('heal');Notification.show(`${c.name} healed!`);}
+          } else if (item.fx==='revive') {
+            const f=P.party.find(c=>c.hp<=0);
+            if(f){f.hp=Math.floor(f.maxHp/2);item.count--;Audio.jingle('heal');Notification.show(`${f.name} revived!`);}
+          }
+          return;
+        }
+      }
+      return;
+    }
+    // Main menu buttons
+    const btns=[{y:H/2-80},{y:H/2-30},{y:H/2+20},{y:H/2+70}];
+    for(let i=0;i<btns.length;i++) {
+      if (mx>W/2-100&&mx<W/2+100&&my>btns[i].y&&my<btns[i].y+40) {
+        Audio.jingle('select');
+        if(i===0) this.screen='party';
+        else if(i===1) this.screen='bag';
+        else if(i===2) this.save();
+        else this.close();
+        return;
+      }
+    }
+  }
+};
+
+// --- Click Handler ---
+C.addEventListener('click', (e) => {
+  const rect = C.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  if (gameState==='title') {
+    Audio.init();
+    gameState='starterSelect';
+    Audio.jingle('start');
+  } else if (gameState==='starterSelect') {
+    handleStarterClick(mx, my);
+  } else if (gameState==='dialogue') {
+    Dialogue.advance();
+  } else if (gameState==='battleText') {
+    Battle.advanceText();
+  } else if (gameState==='battle') {
+    Battle.handleClick(mx, my);
+  } else if (gameState==='menu') {
+    GameMenu.handleClick(mx, my);
+  }
+});
+
+C.addEventListener('mousemove', (e) => {
+  const rect = C.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  if (gameState==='starterSelect') handleStarterHover(mx, my);
+});
+
+// --- Main Game Loop ---
+function gameLoop(time) {
+  requestAnimationFrame(gameLoop);
+  frame++;
+  keysJust = {};
+
+  // Overworld movement (continuous key reading)
+  if (gameState==='overworld') {
+    updatePlayer();
+  }
+
+  // Updates
+  Transition.update();
+  EncounterTransition.update();
+  Notification.update();
+  if (gameState==='dialogue') Dialogue.update();
+  if (gameState==='battle'||gameState==='battleText') Battle.update();
+
+  // Render
+  X.fillStyle='#000'; X.fillRect(0,0,W,H);
+
+  if (gameState==='title') {
+    drawTitle();
+  } else if (gameState==='starterSelect') {
+    drawStarterSelect();
+  } else if (gameState==='overworld'||gameState==='dialogue'||gameState==='menu') {
+    drawOverworld();
+    if (gameState==='dialogue') Dialogue.draw();
+    if (gameState==='menu') GameMenu.draw();
+  } else if (gameState==='battle'||gameState==='battleText') {
+    Battle.draw();
+  }
+
+  // Overlays
+  Particles.draw();
+  Transition.draw();
+  EncounterTransition.draw();
+  Notification.draw();
+}
+
+// --- Load Save ---
+function tryLoadSave() {
+  try {
+    const s=JSON.parse(localStorage.getItem('lexicon_save'));
+    if (s&&s.party&&s.party.length>0) {
+      P.x=s.p.x; P.y=s.p.y; P.px=P.x*TS; P.py=P.y*TS;
+      P.mapId=s.p.mapId; P.bag=s.p.bag; P.defeated=s.p.defeated||[];
+      P.money=s.p.money||500;
+      P.party=s.party.map(c=>{
+        const cr=makeCreature(c.id,c.level);
+        cr.hp=c.hp; cr.xp=c.xp;
+        cr.moves=c.moves.map(m=>{const d=MOVES[m.id];return{...d,id:m.id,curPP:m.curPP};});
+        return cr;
+      });
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+// --- Init ---
+requestAnimationFrame(gameLoop);
+
 </script>
 </body>
 </html>
