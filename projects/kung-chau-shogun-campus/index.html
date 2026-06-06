@@ -92,18 +92,12 @@
 
   <div id="splash"><div><div class="seal">功</div><p>RAISING THE SHOGUN CAMPUS…</p></div></div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
+  <!-- Classic (non-module) builds so the file runs when opened directly,
+       with no local web server needed — ideal on a phone. -->
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  <script>
 
     // ────────────────────────────────────────────────────────────────────
     //  CORE: renderer, scene, camera, controls
@@ -114,7 +108,7 @@
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     app.appendChild(renderer.domElement);
@@ -125,7 +119,7 @@
     const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 2000);
     camera.position.set(110, 78, 130);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.maxPolarAngle = Math.PI * 0.495; // don't go under the ground

@@ -4,24 +4,14 @@ An interactive Three.js rendering of the **Kung Chau Shogun Campus** of
 **Kung Chau International School**, set in Shindian (新店), New Taipei City.
 
 A single self-contained `index.html` — no build step, no dependencies to
-install. Three.js is loaded from a CDN via an import map.
+install. Three.js is loaded from a CDN with plain `<script>` tags.
 
 ## Run it
 
-Because it loads ES modules from a CDN, open it through a local web server
-(opening the file directly with `file://` will be blocked by the browser):
-
-```bash
-cd projects/kung-chau-shogun-campus
-python3 -m http.server 8000
-# then visit http://localhost:8000/
-```
-
-Or with Node:
-
-```bash
-npx serve .
-```
+Just open `index.html` in any modern browser (double-tap / double-click it).
+It works directly from the file system — no local web server needed — as
+long as the device has an internet connection (to fetch Three.js from the
+CDN the first time).
 
 ## What's in the scene
 
