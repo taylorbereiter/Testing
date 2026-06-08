@@ -1,0 +1,14 @@
+{
+  "name": "baseball-game",
+  "version": "1.0.0",
+  "description": "A one-tap mobile baseball game, balanced by a self-simulation loop with generational evals.",
+  "type": "module",
+  "scripts": {
+    "loop": "node loop/run.js",
+    "evals": "node evals/run.js",
+    "build": "node build.js",
+    "tune-and-build": "node loop/run.js && node build.js",
+    "test": "node test.js"
+  },
+  "license": "MIT"
+}

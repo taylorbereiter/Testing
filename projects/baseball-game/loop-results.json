@@ -1,0 +1,553 @@
+{
+  "generatedAt": "2026-06-08T05:12:11.394Z",
+  "loops": [
+    {
+      "gen": 1,
+      "newEvals": [
+        "determinism",
+        "completes",
+        "competitiveness",
+        "contact-feel"
+      ],
+      "totalEvals": 4,
+      "before": {
+        "passed": 2,
+        "score": 0.516392167583452
+      },
+      "after": {
+        "passed": 3,
+        "score": 0.6160493278952055
+      },
+      "results": [
+        {
+          "id": "determinism",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "stable"
+        },
+        {
+          "id": "completes",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "120 games"
+        },
+        {
+          "id": "competitiveness",
+          "gen": 1,
+          "pass": false,
+          "score": 0.001,
+          "detail": "win rate 75%"
+        },
+        {
+          "id": "contact-feel",
+          "gen": 1,
+          "pass": true,
+          "score": 0.463,
+          "detail": "casual contact 83%"
+        }
+      ],
+      "keyMoves": [
+        {
+          "step": 196,
+          "path": "outcomes.weak.out",
+          "from": 0.82,
+          "to": 0.8376170897054672,
+          "score": 0.6535180086137187
+        },
+        {
+          "step": 217,
+          "path": "outcomes.perfect.hr",
+          "from": 0.38880088660891593,
+          "to": 0.38574859337043443,
+          "score": 0.6535252401311138
+        },
+        {
+          "step": 226,
+          "path": "goodWindowMs",
+          "from": 104.05061928043142,
+          "to": 98.22948229098692,
+          "score": 0.6554904078869199
+        },
+        {
+          "step": 242,
+          "path": "outcomes.perfect.out",
+          "from": 0.1309326252860295,
+          "to": 0.13594638449002974,
+          "score": 0.655620842465559
+        },
+        {
+          "step": 250,
+          "path": "outcomes.perfect.out",
+          "from": 0.13526818239553573,
+          "to": 0.1216142636859298,
+          "score": 0.6561124407049628
+        },
+        {
+          "step": 251,
+          "path": "cpuRunsPerInningMean",
+          "from": 1.9941344958804548,
+          "to": 2.089271873867139,
+          "score": 0.6562345295266439
+        }
+      ]
+    },
+    {
+      "gen": 2,
+      "newEvals": [
+        "session-length",
+        "drama-lead-changes",
+        "no-blowouts"
+      ],
+      "totalEvals": 7,
+      "before": {
+        "passed": 5,
+        "score": 0.6778765172791201
+      },
+      "after": {
+        "passed": 7,
+        "score": 0.845192810092309
+      },
+      "results": [
+        {
+          "id": "determinism",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "stable"
+        },
+        {
+          "id": "completes",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "120 games"
+        },
+        {
+          "id": "competitiveness",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "win rate 50%"
+        },
+        {
+          "id": "contact-feel",
+          "gen": 1,
+          "pass": true,
+          "score": 0.41,
+          "detail": "casual contact 83%"
+        },
+        {
+          "id": "session-length",
+          "gen": 2,
+          "pass": true,
+          "score": 0.766,
+          "detail": "36 pitches/game"
+        },
+        {
+          "id": "drama-lead-changes",
+          "gen": 2,
+          "pass": true,
+          "score": 1,
+          "detail": "2.04 lead changes"
+        },
+        {
+          "id": "no-blowouts",
+          "gen": 2,
+          "pass": true,
+          "score": 0.741,
+          "detail": "10% blowouts"
+        }
+      ],
+      "keyMoves": [
+        {
+          "step": 131,
+          "path": "outcomes.good.single",
+          "from": 0.3296857505582472,
+          "to": 0.35360217701978647,
+          "score": 0.8866971389465705
+        },
+        {
+          "step": 153,
+          "path": "outcomes.good.out",
+          "from": 0.3753834908136887,
+          "to": 0.38769576848533693,
+          "score": 0.887474046224171
+        },
+        {
+          "step": 155,
+          "path": "strikeZoneRate",
+          "from": 0.60484124896653,
+          "to": 0.6097663397124596,
+          "score": 0.8879784327319749
+        },
+        {
+          "step": 161,
+          "path": "goodWindowMs",
+          "from": 98.74809401268139,
+          "to": 94.53918027575128,
+          "score": 0.8887637286749117
+        },
+        {
+          "step": 162,
+          "path": "perfectWindowMs",
+          "from": 55.95296948667849,
+          "to": 53.453216139530305,
+          "score": 0.8903471041854343
+        },
+        {
+          "step": 178,
+          "path": "strikeZoneRate",
+          "from": 0.6097663397124596,
+          "to": 0.6184237417103164,
+          "score": 0.8916349670646162
+        }
+      ]
+    },
+    {
+      "gen": 3,
+      "newEvals": [
+        "outcome-variety",
+        "skill-rewarded",
+        "no-degenerate-masher",
+        "homerun-not-spammy"
+      ],
+      "totalEvals": 11,
+      "before": {
+        "passed": 10,
+        "score": 0.8446195507804665
+      },
+      "after": {
+        "passed": 11,
+        "score": 0.9037524646888438
+      },
+      "results": [
+        {
+          "id": "determinism",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "stable"
+        },
+        {
+          "id": "completes",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "120 games"
+        },
+        {
+          "id": "competitiveness",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "win rate 50%"
+        },
+        {
+          "id": "contact-feel",
+          "gen": 1,
+          "pass": true,
+          "score": 0.445,
+          "detail": "casual contact 83%"
+        },
+        {
+          "id": "session-length",
+          "gen": 2,
+          "pass": true,
+          "score": 0.854,
+          "detail": "39 pitches/game"
+        },
+        {
+          "id": "drama-lead-changes",
+          "gen": 2,
+          "pass": true,
+          "score": 1,
+          "detail": "2.00 lead changes"
+        },
+        {
+          "id": "no-blowouts",
+          "gen": 2,
+          "pass": true,
+          "score": 0.687,
+          "detail": "13% blowouts"
+        },
+        {
+          "id": "outcome-variety",
+          "gen": 3,
+          "pass": true,
+          "score": 0.982,
+          "detail": "entropy 0.88 ({\"single\":647,\"double\":387,\"triple\":104,\"hr\":284})"
+        },
+        {
+          "id": "skill-rewarded",
+          "gen": 3,
+          "pass": true,
+          "score": 1,
+          "detail": "skilled 87% vs beginner 47%"
+        },
+        {
+          "id": "no-degenerate-masher",
+          "gen": 3,
+          "pass": true,
+          "score": 1,
+          "detail": "masher 57% vs skilled 87%"
+        },
+        {
+          "id": "homerun-not-spammy",
+          "gen": 3,
+          "pass": true,
+          "score": 0.973,
+          "detail": "HR share 20%"
+        }
+      ],
+      "keyMoves": [
+        {
+          "step": 136,
+          "path": "strikeZoneRate",
+          "from": 0.6184237417103164,
+          "to": 0.5748652552756481,
+          "score": 0.9287286137728392
+        },
+        {
+          "step": 147,
+          "path": "outcomes.weak.out",
+          "from": 0.8403986243914006,
+          "to": 0.7944097579519388,
+          "score": 0.9299530201163315
+        },
+        {
+          "step": 197,
+          "path": "outcomes.good.out",
+          "from": 0.27214385991716,
+          "to": 0.28661188287236905,
+          "score": 0.9308206048730192
+        },
+        {
+          "step": 209,
+          "path": "outcomes.perfect.out",
+          "from": 0.20712362328883885,
+          "to": 0.21287416165326414,
+          "score": 0.9324416515512917
+        },
+        {
+          "step": 236,
+          "path": "goodWindowMs",
+          "from": 96.33514607711695,
+          "to": 97.08925259276293,
+          "score": 0.9325351084568516
+        },
+        {
+          "step": 255,
+          "path": "outcomes.good.single",
+          "from": 0.4313842163685277,
+          "to": 0.4325600675687693,
+          "score": 0.9326267252821907
+        }
+      ]
+    },
+    {
+      "gen": 4,
+      "newEvals": [
+        "beginner-not-punished",
+        "timing-window-readable",
+        "enjoyment-index"
+      ],
+      "totalEvals": 14,
+      "before": {
+        "passed": 13,
+        "score": 0.8866768738813529
+      },
+      "after": {
+        "passed": 14,
+        "score": 0.9039056653611481
+      },
+      "results": [
+        {
+          "id": "determinism",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "stable"
+        },
+        {
+          "id": "completes",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "120 games"
+        },
+        {
+          "id": "competitiveness",
+          "gen": 1,
+          "pass": true,
+          "score": 1,
+          "detail": "win rate 50%"
+        },
+        {
+          "id": "contact-feel",
+          "gen": 1,
+          "pass": true,
+          "score": 0.426,
+          "detail": "casual contact 83%"
+        },
+        {
+          "id": "session-length",
+          "gen": 2,
+          "pass": true,
+          "score": 0.813,
+          "detail": "38 pitches/game"
+        },
+        {
+          "id": "drama-lead-changes",
+          "gen": 2,
+          "pass": true,
+          "score": 1,
+          "detail": "1.99 lead changes"
+        },
+        {
+          "id": "no-blowouts",
+          "gen": 2,
+          "pass": true,
+          "score": 0.76,
+          "detail": "9% blowouts"
+        },
+        {
+          "id": "outcome-variety",
+          "gen": 3,
+          "pass": true,
+          "score": 0.992,
+          "detail": "entropy 0.89 ({\"single\":590,\"double\":370,\"triple\":103,\"hr\":270})"
+        },
+        {
+          "id": "skill-rewarded",
+          "gen": 3,
+          "pass": true,
+          "score": 1,
+          "detail": "skilled 82% vs beginner 48%"
+        },
+        {
+          "id": "no-degenerate-masher",
+          "gen": 3,
+          "pass": true,
+          "score": 1,
+          "detail": "masher 60% vs skilled 82%"
+        },
+        {
+          "id": "homerun-not-spammy",
+          "gen": 3,
+          "pass": true,
+          "score": 0.965,
+          "detail": "HR share 20%"
+        },
+        {
+          "id": "beginner-not-punished",
+          "gen": 4,
+          "pass": true,
+          "score": 1,
+          "detail": "beginner win rate 48%"
+        },
+        {
+          "id": "timing-window-readable",
+          "gen": 4,
+          "pass": true,
+          "score": 0.991,
+          "detail": "tightest perfect window 45ms"
+        },
+        {
+          "id": "enjoyment-index",
+          "gen": 4,
+          "pass": true,
+          "score": 0.707,
+          "detail": "EI 0.71 [close 0.67, score 0.75, agency 0.43, drama 1.00]"
+        }
+      ],
+      "keyMoves": [
+        {
+          "step": 196,
+          "path": "perfectWindowMs",
+          "from": 55.686852353699976,
+          "to": 55.77130510702404,
+          "score": 0.9313972445311831
+        },
+        {
+          "step": 209,
+          "path": "cpuRunsPerInningSpread",
+          "from": 1.0263559935502709,
+          "to": 0.8945149237230421,
+          "score": 0.9317283703004702
+        },
+        {
+          "step": 218,
+          "path": "outcomes.weak.out",
+          "from": 0.8225896605304919,
+          "to": 0.8255126968802057,
+          "score": 0.9317637470580735
+        },
+        {
+          "step": 236,
+          "path": "outcomes.weak.out",
+          "from": 0.8231067260004125,
+          "to": 0.8177178541494451,
+          "score": 0.9317978651500205
+        },
+        {
+          "step": 243,
+          "path": "outcomes.perfect.hr",
+          "from": 0.22716717666939668,
+          "to": 0.22370111228290315,
+          "score": 0.9324941059969034
+        },
+        {
+          "step": 256,
+          "path": "cpuRunsPerInningSpread",
+          "from": 0.8945149237230421,
+          "to": 0.9148324684366584,
+          "score": 0.9327339657528035
+        }
+      ]
+    }
+  ],
+  "tuning": {
+    "innings": 3,
+    "pitchTravelMs": {
+      "fastball": 600,
+      "changeup": 820,
+      "curve": 700
+    },
+    "perfectWindowMs": 55.77130510702404,
+    "goodWindowMs": 97.08925259276293,
+    "contactWindowMs": 150,
+    "pitchDifficulty": {
+      "fastball": 1,
+      "changeup": 1.15,
+      "curve": 1.25
+    },
+    "outcomes": {
+      "perfect": {
+        "hr": 0.22447917154490446,
+        "triple": 0.056767079695517815,
+        "double": 0.24599067868057722,
+        "single": 0.20814595888356524,
+        "out": 0.2646171111954353
+      },
+      "good": {
+        "hr": 0.07729950353590115,
+        "triple": 0.038649751767950574,
+        "double": 0.17392388295577746,
+        "single": 0.4208273271716406,
+        "out": 0.28929953456873025
+      },
+      "weak": {
+        "hr": 0,
+        "triple": 0,
+        "double": 0.02964194899782678,
+        "single": 0.1482097449891339,
+        "out": 0.8221483060130393
+      }
+    },
+    "strikeZoneRate": 0.5748652552756481,
+    "cpuRunsPerInningMean": 2.1879044548897073,
+    "cpuRunsPerInningSpread": 0.9148324684366584
+  }
+}

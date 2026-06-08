@@ -1,0 +1,42 @@
+{
+  "innings": 3,
+  "pitchTravelMs": {
+    "fastball": 600,
+    "changeup": 820,
+    "curve": 700
+  },
+  "perfectWindowMs": 55.77130510702404,
+  "goodWindowMs": 97.08925259276293,
+  "contactWindowMs": 150,
+  "pitchDifficulty": {
+    "fastball": 1,
+    "changeup": 1.15,
+    "curve": 1.25
+  },
+  "outcomes": {
+    "perfect": {
+      "hr": 0.22447917154490446,
+      "triple": 0.056767079695517815,
+      "double": 0.24599067868057722,
+      "single": 0.20814595888356524,
+      "out": 0.2646171111954353
+    },
+    "good": {
+      "hr": 0.07729950353590115,
+      "triple": 0.038649751767950574,
+      "double": 0.17392388295577746,
+      "single": 0.4208273271716406,
+      "out": 0.28929953456873025
+    },
+    "weak": {
+      "hr": 0,
+      "triple": 0,
+      "double": 0.02964194899782678,
+      "single": 0.1482097449891339,
+      "out": 0.8221483060130393
+    }
+  },
+  "strikeZoneRate": 0.5748652552756481,
+  "cpuRunsPerInningMean": 2.1879044548897073,
+  "cpuRunsPerInningSpread": 0.9148324684366584
+}

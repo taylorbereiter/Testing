@@ -1,0 +1,313 @@
+:root {
+  --grass: #2f7d32;
+  --grass2: #276a2a;
+  --dirt: #b9763f;
+  --ink: #0d1b13;
+  --line: rgba(255, 255, 255, 0.85);
+  --accent: #ffd23f;
+  --good: #6fe06f;
+  --great: #ffd23f;
+  --cpu: #ff7a6b;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0b140d;
+  color: #fff;
+  overscroll-behavior: none;
+}
+
+#app {
+  max-width: 520px;
+  margin: 0 auto;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Scoreboard ------------------------------------------------------------- */
+#scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-top));
+  background: #111c14;
+  border-bottom: 2px solid #0a120c;
+}
+.team {
+  text-align: center;
+}
+.team .name {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+.team .runs {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+}
+#cs-wrap .runs {
+  color: var(--cpu);
+}
+#ps-wrap .runs {
+  color: var(--accent);
+}
+.center {
+  text-align: center;
+  min-width: 92px;
+}
+#inning {
+  font-size: 18px;
+  font-weight: 700;
+}
+#count {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+#outs {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #fff6;
+}
+.dot.on {
+  background: var(--cpu);
+  border-color: var(--cpu);
+}
+
+/* Field ------------------------------------------------------------------ */
+#field {
+  position: relative;
+  flex: 1;
+  background:
+    radial-gradient(120% 80% at 50% 110%, var(--dirt) 0 18%, transparent 18%),
+    repeating-linear-gradient(
+      var(--grass) 0 26px,
+      var(--grass2) 26px 52px
+    );
+  overflow: hidden;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* Bases diamond (top-left mini map) */
+#bases {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 58px;
+  height: 58px;
+  transform: rotate(45deg);
+}
+.base {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: #ffffff55;
+  border: 1.5px solid #fff;
+}
+.base.on {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+#base0 {
+  right: 0;
+  top: 21px;
+} /* 1st */
+#base1 {
+  left: 21px;
+  top: 0;
+} /* 2nd */
+#base2 {
+  left: 0;
+  top: 21px;
+} /* 3rd */
+
+/* Pitch track + plate */
+#track {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  bottom: 4%;
+  width: 4px;
+  margin-left: -2px;
+  background: linear-gradient(#ffffff22, #ffffff05);
+}
+#plate {
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  width: 110px;
+  height: 14px;
+  margin-left: -55px;
+  background: #fff;
+  clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%);
+  opacity: 0.92;
+}
+#zone {
+  position: absolute;
+  left: 50%;
+  top: calc(84% - 34px);
+  width: 70px;
+  height: 60px;
+  margin-left: -35px;
+  border: 2px dashed #ffffff55;
+  border-radius: 4px;
+}
+.ball {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #e8e3d6);
+  box-shadow: 0 2px 8px #0007;
+  opacity: 0;
+}
+.ball::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border-top: 2px solid #d33;
+  border-bottom: 2px solid #d33;
+}
+.ball.curve {
+  background: radial-gradient(circle at 35% 30%, #fff, #d9e6ff);
+}
+.ball.changeup {
+  background: radial-gradient(circle at 35% 30%, #fff, #ffe9d9);
+}
+
+#bat {
+  position: absolute;
+  left: 50%;
+  top: 80%;
+  width: 90px;
+  height: 10px;
+  margin-left: -10px;
+  background: linear-gradient(90deg, #c08a4a, #e8b877);
+  border-radius: 6px;
+  transform-origin: left center;
+  transform: rotate(35deg);
+  opacity: 0;
+}
+#bat.swing {
+  animation: swing 0.22s ease-out;
+}
+@keyframes swing {
+  0% {
+    opacity: 1;
+    transform: rotate(35deg);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-55deg);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-70deg);
+  }
+}
+
+/* Messaging -------------------------------------------------------------- */
+#message {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 38%;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  text-shadow: 0 2px 10px #000a;
+  pointer-events: none;
+  min-height: 36px;
+}
+.message.good {
+  color: var(--good);
+}
+.message.great {
+  color: var(--great);
+  animation: pop 0.4s ease;
+}
+.message.cpu {
+  color: var(--cpu);
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+#prompt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 15px;
+  opacity: 0.85;
+  pointer-events: none;
+  padding: 0 24px;
+}
+
+/* Final overlay ---------------------------------------------------------- */
+#overlay {
+  position: absolute;
+  inset: 0;
+  background: #0b140dee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 5;
+}
+#overlay.hidden {
+  display: none;
+}
+#final-title {
+  font-size: 30px;
+  font-weight: 800;
+}
+#final-score {
+  font-size: 50px;
+  font-weight: 800;
+  color: var(--accent);
+}
+#play-again {
+  margin-top: 8px;
+  padding: 14px 30px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0b140d;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+}
