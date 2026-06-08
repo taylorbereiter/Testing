@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0a0a18" />
+<title>臺北夢 · Taipei Dreams</title>
+<style>
+  :root {
+    --ink: #eaf2ff;
+    --glow: #67e8f9;
+    --rose: #f9a8d4;
+    --gold: #fcd34d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #05060f; }
+  body {
+    font-family: "Avenir Next", "Helvetica Neue", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    touch-action: none;
+  }
+  #scene { position: fixed; inset: 0; display: block; }
+
+  /* ---------- Intro / loading overlay ---------- */
+  #intro {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(120% 90% at 50% 30%, #131434 0%, #07081a 55%, #04040d 100%);
+    text-align: center; padding: 2rem;
+    transition: opacity 1.4s ease 0.2s, visibility 1.4s;
+  }
+  #intro.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  .mark {
+    font-size: clamp(3.2rem, 16vw, 8rem);
+    font-weight: 300; letter-spacing: 0.12em; line-height: 1;
+    background: linear-gradient(100deg, var(--glow), var(--rose) 55%, var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 28px rgba(103,232,249,0.35));
+    opacity: 0; transform: translateY(14px);
+    animation: rise 1.6s cubic-bezier(.2,.7,.2,1) 0.25s forwards;
+  }
+  .sub {
+    margin-top: 1.1rem; font-size: clamp(0.85rem, 3.6vw, 1.05rem);
+    letter-spacing: 0.42em; text-transform: uppercase; color: #9fb4d8; font-weight: 400;
+    opacity: 0; animation: rise 1.6s ease 0.7s forwards;
+  }
+  .tag {
+    margin-top: 2.4rem; font-size: 0.82rem; letter-spacing: 0.05em; color: #6f80a8; max-width: 30ch;
+    opacity: 0; animation: rise 1.6s ease 1.1s forwards;
+  }
+  #enter {
+    margin-top: 2.6rem; padding: 0.85rem 2.1rem; border-radius: 999px;
+    border: 1px solid rgba(159,180,216,0.35); background: rgba(255,255,255,0.03);
+    color: var(--ink); font: inherit; font-size: 0.9rem; letter-spacing: 0.18em; text-transform: uppercase;
+    cursor: pointer; backdrop-filter: blur(6px);
+    opacity: 0; animation: rise 1.6s ease 1.45s forwards;
+    transition: border-color .3s, background .3s, transform .3s, box-shadow .3s;
+  }
+  #enter:hover, #enter:focus-visible {
+    border-color: var(--glow); background: rgba(103,232,249,0.08);
+    box-shadow: 0 0 30px rgba(103,232,249,0.25); transform: translateY(-2px); outline: none;
+  }
+  .loadnote { margin-top: 1.4rem; font-size: 0.72rem; letter-spacing: 0.25em; color: #5a6a90; opacity: 0; animation: fade 1s ease 0.4s forwards; }
+  #enter[disabled] { opacity: 0.4; pointer-events: none; }
+
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @keyframes fade { to { opacity: 1; } }
+
+  /* ---------- In-scene HUD ---------- */
+  #hud {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: clamp(1rem, 4vw, 2.2rem); pointer-events: none;
+    opacity: 0; transition: opacity 1.4s ease 0.6s;
+  }
+  #hud.show { opacity: 1; }
+  .hud-title { font-size: clamp(1rem, 4vw, 1.35rem); font-weight: 300; letter-spacing: 0.18em; }
+  .hud-title b { font-weight: 500; color: var(--glow); }
+  .hud-sub { font-size: 0.72rem; letter-spacing: 0.28em; text-transform: uppercase; color: #8294ba; margin-top: 0.35rem; }
+  .hint { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: #7185ad; text-align: right; }
+  .hint span { color: var(--rose); }
+
+  /* color-mood switch */
+  #moods { position: fixed; top: clamp(1rem,4vw,1.8rem); right: clamp(1rem,4vw,1.8rem); z-index: 10;
+    display: flex; gap: 0.6rem; opacity: 0; transition: opacity 1.4s ease 0.8s; pointer-events: none; }
+  #moods.show { opacity: 1; pointer-events: auto; }
+  .swatch { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
+    cursor: pointer; padding: 0; transition: transform .2s, box-shadow .2s; }
+  .swatch:hover, .swatch[aria-pressed="true"] { transform: scale(1.25); box-shadow: 0 0 14px currentColor; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mark, .sub, .tag, #enter, .loadnote { animation-duration: 0.01ms !important; opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="hud">
+    <div>
+      <div class="hud-title">臺北夢 · <b>Taipei</b> Dreams</div>
+      <div class="hud-sub">a city that only exists at night</div>
+    </div>
+    <div class="hint">drag to look · <span>scroll</span> to fly</div>
+  </div>
+
+  <div id="moods">
+    <button class="swatch" style="color:#67e8f9;background:#67e8f9" data-mood="cyan"  aria-pressed="true"  title="Neon"></button>
+    <button class="swatch" style="color:#f9a8d4;background:#f9a8d4" data-mood="rose"  aria-pressed="false" title="Blossom"></button>
+    <button class="swatch" style="color:#a78bfa;background:#a78bfa" data-mood="violet" aria-pressed="false" title="Dusk"></button>
+    <button class="swatch" style="color:#fcd34d;background:#fcd34d" data-mood="gold"   aria-pressed="false" title="Lantern"></button>
+  </div>
+
+  <div id="intro">
+    <div class="mark">臺北夢</div>
+    <div class="sub">Taipei&nbsp;&nbsp;Dreams</div>
+    <p class="tag">A little low-poly world, built for someone who loves building worlds. Made for you, Taylor.</p>
+    <button id="enter" disabled>Loading…</button>
+    <div class="loadnote">rendering the skyline</div>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- Mood palettes ---------------- */
+const MOODS = {
+  cyan:   { top:[0.04,0.05,0.13], horizon:[0.10,0.45,0.55], aur1:[0.30,0.95,0.98], aur2:[0.55,0.45,0.95], neon:0x67e8f9, accent:0xf9a8d4, fog:0x0a1226 },
+  rose:   { top:[0.10,0.04,0.10], horizon:[0.45,0.16,0.34], aur1:[0.98,0.62,0.82], aur2:[0.75,0.40,0.95], neon:0xf9a8d4, accent:0xfcd34d, fog:0x1a0a18 },
+  violet: { top:[0.05,0.04,0.14], horizon:[0.24,0.16,0.50], aur1:[0.66,0.55,0.98], aur2:[0.40,0.85,0.95], neon:0xa78bfa, accent:0x67e8f9, fog:0x0d0a22 },
+  gold:   { top:[0.09,0.06,0.10], horizon:[0.42,0.28,0.12], aur1:[0.99,0.82,0.42], aur2:[0.98,0.50,0.55], neon:0xfcd34d, accent:0xf9a8d4, fog:0x140f08 },
+};
+let mood = MOODS.cyan;
+
+/* ---------------- Renderer / scene / camera ---------------- */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(mood.fog, 0.012);
+
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 600);
+camera.position.set(34, 24, 44);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 14;
+controls.maxDistance = 120;
+controls.maxPolarAngle = Math.PI * 0.495;   // never go under the ground
+controls.autoRotate = !reduceMotion;
+controls.autoRotateSpeed = 0.45;
+controls.target.set(0, 8, 0);
+
+/* ---------------- Lighting ---------------- */
+const hemi = new THREE.HemisphereLight(0x88aaff, 0x080814, 0.5);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xbfcaff, 0.5);
+key.position.set(20, 40, 10);
+scene.add(key);
+const fill = new THREE.PointLight(mood.neon, 60, 90, 2);
+fill.position.set(0, 26, 0);
+scene.add(fill);
+
+/* ---------------- Aurora sky (custom shader dome) ---------------- */
+const skyUniforms = {
+  uTime:    { value: 0 },
+  uTop:     { value: new THREE.Color().fromArray(mood.top) },
+  uHorizon: { value: new THREE.Color().fromArray(mood.horizon) },
+  uAur1:    { value: new THREE.Color().fromArray(mood.aur1) },
+  uAur2:    { value: new THREE.Color().fromArray(mood.aur2) },
+};
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(300, 48, 32),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, uniforms: skyUniforms,
+    vertexShader: /* glsl */`
+      varying vec3 vDir;
+      void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: /* glsl */`
+      precision highp float;
+      varying vec3 vDir;
+      uniform float uTime; uniform vec3 uTop, uHorizon, uAur1, uAur2;
+      // cheap hash-based value noise
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+      float noise(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
+        return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+      float fbm(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.0; a*=0.5; } return v; }
+      void main(){
+        float h = clamp(vDir.y*0.5+0.5, 0.0, 1.0);
+        vec3 col = mix(uHorizon, uTop, pow(h, 0.7));
+        // stars
+        float st = step(0.992, hash(floor(vDir.xz*420.0)));
+        col += st * smoothstep(0.15,0.6,h) * 0.8;
+        // flowing aurora bands above the horizon
+        float band = vDir.y*2.2 - 0.15;
+        float n = fbm(vec2(vDir.x*1.6 + uTime*0.05, vDir.z*1.6));
+        float a = smoothstep(0.55,0.0,abs(band - n*0.9));
+        a *= smoothstep(-0.1,0.5,vDir.y);
+        vec3 aur = mix(uAur1, uAur2, fbm(vec2(vDir.x+uTime*0.03, vDir.z)));
+        col += aur * a * 0.9;
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  })
+);
+scene.add(sky);
+
+/* ---------------- Reflective-ish ground ---------------- */
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x05060f, roughness: 0.35, metalness: 0.9 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.01;
+scene.add(ground);
+
+// glowing street grid
+const grid = new THREE.GridHelper(220, 44, mood.neon, 0x1b2440);
+grid.material.transparent = true; grid.material.opacity = 0.35;
+scene.add(grid);
+
+/* ---------------- Lit-window texture (shared) ---------------- */
+function makeWindowTexture() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, 64, 128);
+  const lit = ['#fff7d6', '#bfe9ff', '#ffd2ec', '#cdbcff'];
+  for (let y = 6; y < 128; y += 10) {
+    for (let x = 6; x < 64; x += 12) {
+      if (Math.random() < 0.55) {
+        ctx.fillStyle = lit[(Math.random() * lit.length) | 0];
+        ctx.fillRect(x, y, 7, 6);
+      }
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+const winTex = makeWindowTexture();
+
+/* ---------------- City ---------------- */
+const city = new THREE.Group();
+scene.add(city);
+const cityPalette = [0x121a33, 0x161b3a, 0x14123a, 0x0e1530, 0x1a1340];
+
+function addBuilding(x, z, w, d, h, emColor) {
+  const tex = winTex.clone(); tex.needsUpdate = true;
+  tex.repeat.set(Math.max(1, Math.round(w)), Math.max(2, Math.round(h / 2)));
+  const mat = new THREE.MeshStandardMaterial({
+    color: cityPalette[(Math.random() * cityPalette.length) | 0],
+    roughness: 0.6, metalness: 0.4,
+    emissive: new THREE.Color(emColor), emissiveMap: tex, emissiveIntensity: 1.1,
+  });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, h / 2, z);
+  city.add(m);
+  // neon roof accent
+  if (Math.random() < 0.4) {
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(w * 0.9, 0.25, d * 0.9),
+      new THREE.MeshBasicMaterial({ color: emColor })
+    );
+    cap.position.set(x, h + 0.15, z);
+    city.add(cap);
+  }
+}
+
+// scatter a block grid, leaving the center plaza open for the tower
+const N = 13, step = 7;
+for (let ix = -N; ix <= N; ix++) {
+  for (let iz = -N; iz <= N; iz++) {
+    const x = ix * step + (Math.random() - 0.5) * 2;
+    const z = iz * step + (Math.random() - 0.5) * 2;
+    const r = Math.hypot(x, z);
+    if (r < 12 || r > 92) continue;                 // plaza + outer fade
+    if (Math.random() < 0.18) continue;             // streets / gaps
+    const falloff = THREE.MathUtils.clamp(1 - r / 110, 0.25, 1);
+    const h = (4 + Math.random() * 26) * falloff + 2;
+    const w = 3 + Math.random() * 2.5;
+    const d = 3 + Math.random() * 2.5;
+    const em = Math.random() < 0.25 ? mood.accent : 0xffffff;
+    addBuilding(x, z, w, d, h, em);
+  }
+}
+
+/* ---------------- Centerpiece tower (Taipei 101 silhouette) ---------------- */
+const tower = new THREE.Group();
+scene.add(tower);
+const towerMat = new THREE.MeshStandardMaterial({
+  color: 0x14203a, roughness: 0.4, metalness: 0.6,
+  emissive: new THREE.Color(mood.neon), emissiveIntensity: 0.6,
+});
+const baseH = 7;
+const base = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.2, baseH, 6), towerMat);
+base.position.y = baseH / 2; tower.add(base);
+// the eight stacked "ingot" sections that flare outward at the top
+let y = baseH;
+for (let i = 0; i < 8; i++) {
+  const segH = 4.4;
+  const bottom = 2.6, top = 3.3;             // each trapezoid widens slightly toward its top
+  const geo = new THREE.CylinderGeometry(top, bottom, segH, 4);
+  const seg = new THREE.Mesh(geo, towerMat.clone());
+  seg.material.emissive = new THREE.Color(i % 2 ? mood.accent : mood.neon);
+  seg.material.emissiveIntensity = 0.5;
+  seg.rotation.y = Math.PI / 4;
+  seg.position.y = y + segH / 2;
+  tower.add(seg);
+  y += segH;
+}
+// spire
+const spire = new THREE.Mesh(
+  new THREE.ConeGeometry(0.5, 9, 12),
+  new THREE.MeshBasicMaterial({ color: mood.neon })
+);
+spire.position.y = y + 4.5; tower.add(spire);
+const beaconLight = new THREE.PointLight(mood.neon, 40, 60, 2);
+beaconLight.position.y = y + 1; tower.add(beaconLight);
+
+/* ---------------- Sky lanterns (Pingxi vibes) ---------------- */
+const lanternCount = reduceMotion ? 50 : 160;
+const lpos = new Float32Array(lanternCount * 3);
+const lseed = new Float32Array(lanternCount);
+for (let i = 0; i < lanternCount; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const rad = 8 + Math.random() * 80;
+  lpos[i*3]   = Math.cos(a) * rad;
+  lpos[i*3+1] = Math.random() * 70;
+  lpos[i*3+2] = Math.sin(a) * rad;
+  lseed[i] = Math.random() * 100;
+}
+const lgeo = new THREE.BufferGeometry();
+lgeo.setAttribute('position', new THREE.BufferAttribute(lpos, 3));
+lgeo.setAttribute('seed', new THREE.BufferAttribute(lseed, 1));
+const lanternUniforms = { uTime: { value: 0 }, uColor: { value: new THREE.Color(mood.accent) } };
+const lanterns = new THREE.Points(lgeo, new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: lanternUniforms,
+  vertexShader: /* glsl */`
+    attribute float seed; uniform float uTime; varying float vTw;
+    void main(){
+      vec3 p = position;
+      p.y = mod(p.y + uTime * (0.6 + fract(seed)*0.6), 72.0);   // rise & loop
+      p.x += sin(uTime*0.3 + seed)*1.5;
+      p.z += cos(uTime*0.25 + seed)*1.5;
+      vTw = 0.6 + 0.4*sin(uTime*2.0 + seed*6.2831);
+      vec4 mv = modelViewMatrix * vec4(p,1.0);
+      gl_PointSize = (90.0 / -mv.z) * (0.8 + fract(seed));
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    precision highp float; uniform vec3 uColor; varying float vTw;
+    void main(){
+      vec2 d = gl_PointCoord - 0.5;
+      float r = length(d);
+      float core = smoothstep(0.5, 0.0, r);
+      gl_FragColor = vec4(uColor * (1.2 + vTw), core * vTw);
+    }
+  `,
+}));
+scene.add(lanterns);
+
+/* ---------------- Post-processing: bloom ---------------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.7, 0.12);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ---------------- Mood switching ---------------- */
+function applyMood(key) {
+  mood = MOODS[key];
+  skyUniforms.uTop.value.fromArray(mood.top);
+  skyUniforms.uHorizon.value.fromArray(mood.horizon);
+  skyUniforms.uAur1.value.fromArray(mood.aur1);
+  skyUniforms.uAur2.value.fromArray(mood.aur2);
+  scene.fog.color.setHex(mood.fog);
+  fill.color.setHex(mood.neon);
+  beaconLight.color.setHex(mood.neon);
+  spire.material.color.setHex(mood.neon);
+  grid.material.color.setHex(mood.neon);
+  lanternUniforms.uColor.value.setHex(mood.accent);
+}
+document.querySelectorAll('.swatch').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.swatch').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    applyMood(btn.dataset.mood);
+  });
+});
+
+/* ---------------- Mouse parallax ---------------- */
+const parallax = { x: 0, y: 0, tx: 0, ty: 0 };
+addEventListener('pointermove', e => {
+  parallax.tx = (e.clientX / innerWidth - 0.5);
+  parallax.ty = (e.clientY / innerHeight - 0.5);
+});
+
+/* ---------------- Render loop ---------------- */
+const clock = new THREE.Clock();
+function tick() {
+  const t = clock.getElapsedTime();
+  skyUniforms.uTime.value = t;
+  lanternUniforms.uTime.value = t;
+  beaconLight.intensity = 30 + Math.sin(t * 3) * 14;   // blinking aircraft beacon
+  parallax.x += (parallax.tx - parallax.x) * 0.05;
+  parallax.y += (parallax.ty - parallax.y) * 0.05;
+  camera.position.x += parallax.x * 1.2;
+  camera.position.y += -parallax.y * 0.8;
+  controls.update();
+  composer.render();
+  requestAnimationFrame(tick);
+}
+tick();
+
+/* ---------------- Resize ---------------- */
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------------- Intro handoff ---------------- */
+const intro = document.getElementById('intro');
+const enter = document.getElementById('enter');
+const enterScene = () => {
+  intro.classList.add('gone');
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('moods').classList.add('show');
+};
+// the world is ready almost immediately; let the intro animation breathe a beat
+setTimeout(() => {
+  enter.disabled = false;
+  enter.textContent = 'Enter the city';
+  document.querySelector('.loadnote').textContent = 'ready';
+}, 1400);
+enter.addEventListener('click', enterScene);
+
+window.__cityReady = true;   // signal to the offline watchdog that 3D booted
+</script>
+
+<!-- Offline watchdog: if the 3D libraries (CDN) never load, don't hang on "Loading…" -->
+<script>
+  setTimeout(function () {
+    if (!window.__cityReady) {
+      var note = document.querySelector('.loadnote');
+      var btn = document.getElementById('enter');
+      if (note) note.textContent = 'needs an internet connection to load the 3D engine';
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry'; btn.onclick = function () { location.reload(); }; }
+    }
+  }, 6000);
+</script>
+</body>
+</html>
