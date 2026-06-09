@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>H Mart — a voxel tribute to Crying in H Mart</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe3ef; }
+  #app { position: fixed; inset: 0; }
+  #hud {
+    position: fixed; top: 14px; left: 16px; z-index: 10;
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #2a2a2a; user-select: none; pointer-events: none;
+    max-width: min(420px, 80vw);
+  }
+  #hud h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: 0.5px; }
+  #hud p  { font-size: 13px; margin: 0; opacity: 0.75; font-style: italic; line-height: 1.4; }
+  #roofBtn {
+    position: fixed; bottom: 18px; left: 16px; z-index: 10;
+    font-family: Georgia, serif; font-size: 14px;
+    padding: 8px 14px; border-radius: 999px; border: 1px solid #2a2a2a33;
+    background: #ffffffd9; color: #2a2a2a; cursor: pointer;
+  }
+  #roofBtn:hover { background: #fff; }
+  #hint {
+    position: fixed; bottom: 22px; right: 18px; z-index: 10;
+    font-family: Georgia, serif; font-size: 12px; color: #2a2a2a99;
+    user-select: none; pointer-events: none; text-align: right;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <h1>H MART</h1>
+  <p>"Ever since my mom died, I cry in H Mart." — a voxel tribute to
+     <em>Crying in H Mart</em> by Michelle Zauner</p>
+</div>
+<button id="roofBtn">Lift the roof (R)</button>
+<div id="hint">drag to orbit &middot; scroll to zoom<br/>the food court is in the back-right corner</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------------------------------------------------------------- scene ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe3ef);
+scene.fog = new THREE.Fog(0xcfe3ef, 140, 320);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 600);
+camera.position.set(52, 38, 72);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 7, -8);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI / 2.05;
+controls.minDistance = 15;
+controls.maxDistance = 220;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const hemi = new THREE.HemisphereLight(0xeaf4ff, 0x8a7a66, 0.45);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3df, 1.6);
+sun.position.set(60, 90, 55);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
+sun.shadow.camera.top = 80;   sun.shadow.camera.bottom = -80;
+sun.shadow.camera.far = 300;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// ----------------------------------------------------- voxel bookkeeping ---
+// Voxels are gathered per (group, color) and rendered as InstancedMeshes.
+// Groups: 'world' is always visible, 'roof' can be lifted away,
+// 'glass' uses a transparent material.
+const groups = { world: new Map(), roof: new Map(), glass: new Map() };
+
+function addVoxel(group, x, y, z, color) {
+  const bucket = groups[group];
+  if (!bucket.has(color)) bucket.set(color, []);
+  bucket.get(color).push(x, y, z);
+}
+
+function fillBox(group, x0, x1, y0, y1, z0, z1, color) {
+  for (let x = x0; x <= x1; x++)
+    for (let y = y0; y <= y1; y++)
+      for (let z = z0; z <= z1; z++)
+        addVoxel(group, x, y, z, color);
+}
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ----------------------------------------------------------------- font ----
+const FONT = {
+  'H': ['X.X', 'X.X', 'XXX', 'X.X', 'X.X'],
+  'M': ['X...X', 'XX.XX', 'X.X.X', 'X...X', 'X...X'],
+  'A': ['.XX.', 'X..X', 'XXXX', 'X..X', 'X..X'],
+  'R': ['XXX.', 'X..X', 'XXX.', 'X.X.', 'X..X'],
+  'T': ['XXXXX', '..X..', '..X..', '..X..', '..X..'],
+  ' ': ['..', '..', '..', '..', '..'],
+};
+
+function textWidth(text) {
+  let w = 0;
+  for (const ch of text) w += FONT[ch][0].length + 1;
+  return w - 1;
+}
+
+function drawText(group, text, x0, y0, z, color) {
+  let cx = x0;
+  for (const ch of text) {
+    const glyph = FONT[ch];
+    for (let r = 0; r < glyph.length; r++)
+      for (let c = 0; c < glyph[r].length; c++)
+        if (glyph[r][c] === 'X')
+          addVoxel(group, cx + c, y0 + (glyph.length - 1 - r), z, color);
+    cx += glyph[0].length + 1;
+  }
+}
+
+// -------------------------------------------------------------- palette ----
+const C = {
+  asphalt:   0x4f5358,
+  asphalt2:  0x53575c,
+  stripe:    0xe8e8e2,
+  sidewalk:  0xb9b4a8,
+  wall:      0xded8cc,
+  wallTrim:  0xb4ada0,
+  parapet:   0xcac4b7,
+  roof:      0x9a958b,
+  hvac:      0x7d7872,
+  signPanel: 0xf5f1e8,
+  hmartRed:  0xd6213b,
+  sprout:    0x3fa14a,
+  glass:     0x9fd4d8,
+  doorFrame: 0x3c3f44,
+  floorA:    0xefece4,
+  floorB:    0xe2ded3,
+  shelf:     0x8c9298,
+  counter:   0x9aa0a6,
+  screen:    0x2b3035,
+  fridge:    0x5b6068,
+  fridgeLite:0xf3f0e8,
+  tableTop:  0xa9744a,
+  tableLeg:  0x6e4a30,
+  stool:     0xc23b4e,
+  cartGray:  0xaab0b6,
+  pole:      0x3c3f44,
+  lamp:      0xffe9a8,
+  banner:    0xd6213b,
+};
+const PRODUCE = [0x4fae54, 0x7cc257, 0xe8903a, 0xd84f3f, 0xc9405a, 0x8c5e3c, 0xefe3b0];
+const SNACKS  = [0xe2b13c, 0xd6213b, 0x3f7fb5, 0x4fae54, 0xe8903a, 0xb05ad0, 0xf0eee6];
+const KIMCHI  = [0xc9352c, 0xd84f3f, 0xb52a36, 0xefe3b0, 0x4fae54];
+
+// =================================================================== build ==
+// Coordinates: x left/right, z toward the viewer (+z is the parking lot),
+// y up. Building footprint: x in [-28, 27], z in [-24, -1].
+const BX0 = -28, BX1 = 27, BZ0 = -24, BZ1 = -1, WALL_TOP = 12;
+
+// --- ground: parking lot + sidewalk apron -----------------------------------
+for (let x = -44; x <= 43; x++) {
+  for (let z = -30; z <= 29; z++) {
+    // the building shell provides its own floor and wall base
+    if (x >= BX0 && x <= BX1 && z >= BZ0 && z <= BZ1) continue;
+    const inSidewalk = x >= BX0 - 2 && x <= BX1 + 2 && z >= BZ0 - 2 && z <= 3;
+    const color = inSidewalk ? C.sidewalk : ((x + z) % 2 === 0 ? C.asphalt : C.asphalt2);
+    addVoxel('world', x, 0, z, color);
+  }
+}
+
+// parking stall stripes
+for (let sx = -39; sx <= 39; sx += 6)
+  for (let z = 8; z <= 15; z++)
+    addVoxel('world', sx, 0.06, z, C.stripe); // slight lift to avoid z-fight
+
+// --- building shell ----------------------------------------------------------
+for (let x = BX0; x <= BX1; x++) {
+  for (let z = BZ0; z <= BZ1; z++) {
+    const isWall = x === BX0 || x === BX1 || z === BZ0 || z === BZ1;
+    if (!isWall) {
+      // interior floor, checkered tiles
+      addVoxel('world', x, 0, z, (x + z) % 2 === 0 ? C.floorA : C.floorB);
+      continue;
+    }
+    for (let y = 0; y <= WALL_TOP; y++) {
+      // front wall gets glazing + the entrance
+      if (z === BZ1) {
+        const door = x >= -6 && x <= 5 && x !== 0 && y >= 1 && y <= 6;
+        const win = ((x >= -24 && x <= -9) || (x >= 8 && x <= 24)) && y >= 2 && y <= 6;
+        if (door || win) { addVoxel('glass', x, y, z, C.glass); continue; }
+        const mullion = x === 0 && y >= 1 && y <= 6;
+        if (mullion || ((x === -7 || x === 6) && y <= 7)) {
+          addVoxel('world', x, y, z, C.doorFrame); continue;
+        }
+      }
+      const color = y === 0 ? C.wallTrim : C.wall;
+      addVoxel('world', x, y, z, color);
+    }
+  }
+}
+
+// awning over the entrance (protrudes in front of the sign panel)
+fillBox('world', -9, 8, 7, 7, BZ1 + 2, BZ1 + 3, C.banner);
+
+// --- roof (liftable) ---------------------------------------------------------
+fillBox('roof', BX0, BX1, WALL_TOP + 1, WALL_TOP + 1, BZ0, BZ1, C.roof);
+for (let x = BX0; x <= BX1; x++) {
+  addVoxel('roof', x, WALL_TOP + 2, BZ0, C.parapet);
+  addVoxel('roof', x, WALL_TOP + 2, BZ1, C.parapet);
+}
+for (let z = BZ0 + 1; z <= BZ1 - 1; z++) {
+  addVoxel('roof', BX0, WALL_TOP + 2, z, C.parapet);
+  addVoxel('roof', BX1, WALL_TOP + 2, z, C.parapet);
+}
+fillBox('roof', -20, -16, WALL_TOP + 2, WALL_TOP + 3, -18, -14, C.hvac);
+fillBox('roof', 10, 14, WALL_TOP + 2, WALL_TOP + 3, -20, -16, C.hvac);
+
+// --- the sign ----------------------------------------------------------------
+const SIGN = 'H MART';
+const tw = textWidth(SIGN);
+const signX0 = Math.round(-tw / 2);
+fillBox('world', signX0 - 5, signX0 + tw + 2, 7, 13, BZ1 + 1, BZ1 + 1, C.signPanel);
+drawText('world', SIGN, signX0, 8, BZ1 + 2, C.hmartRed);
+// the little green sprout next to the wordmark
+addVoxel('world', signX0 - 3, 11, BZ1 + 2, C.sprout);
+addVoxel('world', signX0 - 4, 12, BZ1 + 2, C.sprout);
+addVoxel('world', signX0 - 2, 12, BZ1 + 2, C.sprout);
+addVoxel('world', signX0 - 3, 10, BZ1 + 2, C.sprout);
+addVoxel('world', signX0 - 3, 9,  BZ1 + 2, C.sprout);
+
+// ============================================================== interior ====
+// --- grocery aisles (left & middle) ------------------------------------------
+const aisleX = [-23, -16, -9, -2];
+for (const ax of aisleX) {
+  for (let z = -19; z <= -8; z++) {
+    for (const dx of [0, 1]) {
+      addVoxel('world', ax + dx, 1, z, C.shelf);
+      addVoxel('world', ax + dx, 2, z, pick(SNACKS));
+      addVoxel('world', ax + dx, 3, z, pick(SNACKS));
+    }
+  }
+  // aisle end-cap banner
+  addVoxel('world', ax, 4, -8, C.banner);
+  addVoxel('world', ax + 1, 4, -8, C.banner);
+}
+
+// --- banchan / kimchi fridge wall along the back ------------------------------
+for (let x = -26; x <= 8; x++) {
+  for (let y = 1; y <= 5; y++) {
+    const frame = y === 5 || x % 6 === 0;
+    addVoxel('world', x, y, BZ0 + 1, frame ? C.fridge : pick(KIMCHI));
+  }
+}
+
+// --- produce tables near the front-left --------------------------------------
+for (const [px, pz] of [[-26, -6], [-26, -3], [-21, -6], [-21, -3]]) {
+  fillBox('world', px, px + 3, 1, 1, pz, pz + 1, C.tableTop);
+  for (let x = px; x <= px + 3; x++)
+    for (let z = pz; z <= pz + 1; z++)
+      addVoxel('world', x, 2, z, pick(PRODUCE));
+}
+
+// --- checkout lanes near the front --------------------------------------------
+for (const cx of [-14, -7, 0]) {
+  fillBox('world', cx, cx + 4, 1, 1, -4, -4, C.counter);
+  addVoxel('world', cx + 4, 2, -4, C.screen);
+  addVoxel('world', cx + 4, 3, -4, C.screen);
+}
+
+// --- the food court, back-right corner ----------------------------------------
+// service counter
+fillBox('world', 14, 25, 1, 2, -21, -20, C.counter);
+// menu boards glowing on the back wall
+for (let x = 15; x <= 24; x++)
+  for (let y = 6; y <= 8; y++)
+    addVoxel('world', x, y, BZ0 + 1, (x % 4 === 2) ? C.fridge : pick(SNACKS));
+// steam table colors on the counter
+for (let x = 15; x <= 24; x += 2) addVoxel('world', x, 3, -21, pick(KIMCHI));
+// tables + stools
+for (const [tx, tz] of [[15, -15], [21, -15], [15, -10], [21, -10]]) {
+  addVoxel('world', tx, 1, tz, C.tableLeg);
+  fillBox('world', tx - 1, tx + 1, 2, 2, tz - 1, tz + 1, C.tableTop);
+  addVoxel('world', tx - 2, 1, tz, C.stool);
+  addVoxel('world', tx + 2, 1, tz, C.stool);
+  addVoxel('world', tx, 1, tz - 2, C.stool);
+  addVoxel('world', tx, 1, tz + 2, C.stool);
+}
+
+// ============================================================== exterior ====
+// --- shopping carts by the entrance --------------------------------------------
+function cart(x, z) {
+  fillBox('world', x, x + 1, 1, 1, z, z + 2, C.cartGray);
+  addVoxel('world', x, 2, z + 2, C.cartGray);
+  addVoxel('world', x + 1, 2, z + 2, C.cartGray);
+}
+cart(10, 1); cart(10, 4); cart(13, 1);
+
+// cart corral out in the lot
+fillBox('world', 30, 30, 1, 1, 8, 14, C.pole);
+fillBox('world', 35, 35, 1, 1, 8, 14, C.pole);
+cart(32, 9); cart(32, 12);
+
+// --- cars in the lot -------------------------------------------------------------
+function car(x, z, body) {
+  for (let bx = x; bx <= x + 3; bx++)
+    for (let bz = z; bz <= z + 6; bz++) {
+      const wheel = (bx === x || bx === x + 3) && (bz === z + 1 || bz === z + 5);
+      addVoxel('world', bx, 1, bz, wheel ? 0x202326 : body);
+    }
+  fillBox('world', x, x + 3, 2, 2, z, z + 6, body);          // body
+  fillBox('world', x, x + 3, 3, 3, z + 2, z + 4, body);      // cabin
+  fillBox('world', x + 1, x + 2, 3, 3, z + 1, z + 1, C.glass);
+  fillBox('world', x + 1, x + 2, 3, 3, z + 5, z + 5, C.glass);
+}
+car(-38, 8, 0xc23b4e);
+car(-26, 8, 0x3f7fb5);
+car(-14, 8, 0xe8e8e2);
+car(16, 8, 0x55585e);
+
+// --- parking lot lamps ------------------------------------------------------------
+function lamp(x, z) {
+  fillBox('world', x, x, 1, 9, z, z, C.pole);
+  addVoxel('world', x, 9, z + 1, C.pole);
+  addVoxel('world', x, 9, z + 2, C.lamp);
+}
+lamp(-40, 20); lamp(39, 20);
+
+// ====================================================== instanced meshes ====
+const voxelGeo = new THREE.BoxGeometry(1, 1, 1);
+const dummy = new THREE.Object3D();
+const roofMeshes = [];
+let voxelCount = 0;
+
+for (const [groupName, bucket] of Object.entries(groups)) {
+  for (const [color, positions] of bucket) {
+    const n = positions.length / 3;
+    voxelCount += n;
+    const mat = groupName === 'glass'
+      ? new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.2 })
+      : new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
+    const mesh = new THREE.InstancedMesh(voxelGeo, mat, n);
+    for (let i = 0; i < n; i++) {
+      dummy.position.set(positions[i * 3] + 0.5, positions[i * 3 + 1] + 0.5, positions[i * 3 + 2] + 0.5);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.castShadow = groupName !== 'glass';
+    mesh.receiveShadow = true;
+    if (groupName === 'roof') roofMeshes.push(mesh);
+    scene.add(mesh);
+  }
+}
+console.log(`H Mart assembled from ${voxelCount.toLocaleString()} voxels`);
+
+// ------------------------------------------------------------ roof toggle ----
+let roofUp = false, roofAnim = 0; // 0 = down, 1 = lifted
+function toggleRoof() {
+  roofUp = !roofUp;
+  document.getElementById('roofBtn').textContent =
+    roofUp ? 'Lower the roof (R)' : 'Lift the roof (R)';
+}
+document.getElementById('roofBtn').addEventListener('click', toggleRoof);
+addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') toggleRoof();
+});
+
+// ------------------------------------------------------------------ loop ----
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const target = roofUp ? 1 : 0;
+  roofAnim += (target - roofAnim) * Math.min(1, dt * 5);
+  const lift = roofAnim * 22;
+  const fade = 1 - roofAnim * 0.9;
+  for (const m of roofMeshes) {
+    m.position.y = lift;
+    m.material.transparent = roofAnim > 0.01;
+    m.material.opacity = Math.max(0.1, fade);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
