@@ -57,7 +57,7 @@ The Ghost only walks between midnight and cock-crow.
 - Full day/night cycle: sun, moon, stars, dawn, lantern light
 - Procedural soundscape (no audio files): coastal wind and waves, gulls,
   footsteps, the castle bell (twelve tolls at midnight), the Ghost's drone,
-  and evening lute music in the Great Hall — toggle with the \U0001F50A button
+  and evening lute music in the Great Hall — toggle with the 🔊 button
 
 One deliberate liberty (noted on its in-world plaque): the Great Hall is placed at
 courtyard level so everyone can walk in; in reality it occupies the upper floor of
