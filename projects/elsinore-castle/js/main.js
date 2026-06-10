@@ -255,6 +255,7 @@ EC.boot = function (THREE) {
           ? '<p><b>Move:</b> left joystick.<br><b>Look:</b> drag anywhere else on the screen.<br><b>Interact:</b> tap a person or a gold ⓘ marker.</p>'
           : '<p><b>Move:</b> W A S D (or ↑ ↓). <b>Turn:</b> Q / E or ← →. <b>Run:</b> hold Shift.<br><b>Look:</b> press and drag on the view (touchpad: click-drag — no mouse needed).<br><b>Interact:</b> click a person or a gold ⓘ marker.</p>'}
         <p><b>Time:</b> ⏸ pauses, 1× ≈ a 12-minute day, 3× for a 4-minute day. The Ghost walks only after midnight.</p>
+        <p><b>Sound:</b> 🔊 toggles the soundscape — coastal wind and waves, gulls, footsteps, the castle bell (twelve tolls at midnight), evening lute music in the Great Hall, and something colder when the Ghost is near.</p>
         <p><b>Scenes:</b> open the <b>Playbill</b> and press “Go” to jump straight into any scene. <b>ⓘ markers</b> teach the real castle’s history.</p>
         <p>You cannot fall from the ramparts, and the Sound is too cold to swim — walk the ramps and the bridge.</p>
         <p class="hint">An educational walking replica of Kronborg Castle (“Elsinore”), full scale: courtyard 50×40 m, Great Hall 62 m, ramparts and moat included. All dialogue is from Shakespeare’s Hamlet.</p>`;
@@ -310,6 +311,7 @@ EC.boot = function (THREE) {
   let subTimer = 0;
   mgr.listeners.onLine = (def, speaker, text) => {
     if (controls.pos.distanceTo(speaker.pos) > 30) return;
+    if (audio) audio.cue();
     ui.sub.innerHTML = `<b>${speaker.info.name.toUpperCase()}</b> — ${text}`;
     ui.sub.style.display = 'block';
     clearTimeout(subTimer);
@@ -323,9 +325,28 @@ EC.boot = function (THREE) {
   $('intro-controls').innerHTML = isTouch
     ? 'Left joystick to walk · drag to look around · tap people and ⓘ markers'
     : 'WASD / arrows to walk · click-drag to look (touchpad friendly) · Q/E turn · Shift run · click people and ⓘ markers';
+  // ── sound (created on the Start click — browsers need a user gesture) ─────
+  let audio = null, soundOn = true;
+  function ensureAudio() {
+    if (!audio && EC.createAudio) {
+      audio = EC.createAudio();
+      if (audio) audio.setEnabled(soundOn);
+    }
+    if (audio) audio.resume();
+  }
+  $('btn-sound').onclick = () => {
+    soundOn = !soundOn;
+    ensureAudio();
+    if (audio) audio.setEnabled(soundOn);
+    $('btn-sound').textContent = soundOn ? '🔊' : '🔇';
+    $('btn-sound').classList.toggle('dim', !soundOn);
+  };
+  renderer.domElement.addEventListener('pointerdown', () => { if (audio) audio.resume(); });
+
   $('start').onclick = () => {
     $('intro').style.display = 'none';
     controls.enabled = true;
+    ensureAudio();
     toast('<b>Welcome to Elsinore.</b><br>Cross the bridge and enter through the Dark Gate. The court is about its day — open ☰ for the Playbill.', 11000);
   };
 
@@ -388,7 +409,20 @@ EC.boot = function (THREE) {
 
     controls.update(dt);
     mgr.update(dt, gameH, controls.pos, world.groundHeightAt);
-    updateSky();
+    const day = updateSky();
+
+    if (audio) {
+      const ghost = mgr.byId.ghost;
+      const stoneZones = ['The Courtyard', 'The Great Hall (Ballroom)', 'The Chapel', 'The Dark Gate', 'The Casemates', 'The Bridge over the Moat'];
+      audio.update(dt, {
+        x: controls.pos.x, z: controls.pos.z, y: controls.groundY,
+        gameH, day,
+        moving: controls.moving, bobT: controls.bobT || 0,
+        hardGround: stoneZones.includes(zoneShown),
+        indoor: zoneShown === 'The Great Hall (Ballroom)' || zoneShown === 'The Chapel' || zoneShown === 'The Casemates' || zoneShown === 'The Dark Gate',
+        ghostD: ghost.group.visible ? controls.pos.distanceTo(ghost.pos) : 999,
+      });
+    }
 
     // flags wave
     const t = performance.now() * 0.001;

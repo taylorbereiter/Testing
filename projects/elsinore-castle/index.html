@@ -22,7 +22,8 @@
   .spd { cursor: pointer; opacity: 0.55; border: 1px solid rgba(216,184,74,0.35); }
   .spd.on { opacity: 1; border-color: var(--gold); }
   #btn-info { cursor: pointer; color: var(--gold); }
-  #btn-info.dim { opacity: 0.35; }
+  #btn-sound { cursor: pointer; }
+  .chip.dim { opacity: 0.35; }
   #btn-menu { margin-left: auto; cursor: pointer; font-size: 19px; padding: 6px 14px; }
   #compass { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; padding: 0; overflow: hidden; }
@@ -116,6 +117,7 @@
   <button class="chip spd" id="spd2">3×</button>
   <div class="chip" id="compass"><span id="compass-n">N</span></div>
   <button class="chip" id="btn-info" title="show/hide info markers">ⓘ</button>
+  <button class="chip" id="btn-sound" title="sound on/off">🔊</button>
   <button class="chip" id="btn-menu">☰ Guide</button>
 </div>
 <div id="zone"></div>
@@ -153,6 +155,7 @@
 <div id="err"></div>
 
 <script src="js/data.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/castle.js"></script>
 <script src="js/characters.js"></script>

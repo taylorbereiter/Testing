@@ -153,6 +153,7 @@ EC.Controls = class {
 
     const run = (k.ShiftLeft || k.ShiftRight) ? 2.1 : 1;
     const mag = Math.min(1, Math.hypot(f, s));
+    this.moving = mag > 0.01;
     if (mag > 0.01) {
       const speed = 4.2 * run * mag * dt;
       const ang = Math.atan2(s, f);

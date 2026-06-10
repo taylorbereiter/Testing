@@ -55,6 +55,9 @@ The Ghost only walks between midnight and cock-crow.
 - The Queen's garden, Ophelia's willow "aslant the brook", and the churchyard with
   the open grave and Yorick's skull — and Sweden visible across the Sound
 - Full day/night cycle: sun, moon, stars, dawn, lantern light
+- Procedural soundscape (no audio files): coastal wind and waves, gulls,
+  footsteps, the castle bell (twelve tolls at midnight), the Ghost's drone,
+  and evening lute music in the Great Hall — toggle with the \U0001F50A button
 
 One deliberate liberty (noted on its in-world plaque): the Great Hall is placed at
 courtyard level so everyone can walk in; in reality it occupies the upper floor of
@@ -66,6 +69,7 @@ the south wing.
 |---|---|
 | `index.html` | UI shell, styles, CDN loader |
 | `js/data.js` | all educational text, character bios, scene scripts, schedules |
+| `js/audio.js` | procedural Web Audio soundscape |
 | `js/nav.js` | waypoint graph + A* used by the characters |
 | `js/castle.js` | the whole castle/terrain build, colliders, ground heights |
 | `js/characters.js` | character bodies, daily-schedule AI, scene engine, speech |
