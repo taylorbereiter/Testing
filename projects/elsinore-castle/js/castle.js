@@ -53,18 +53,22 @@ EC.buildWorld = function (THREE, scene, quality) {
   }, 6, 3);
   const wallMat = new THREE.MeshLambertMaterial({ map: sandTex, color: 0xd8caa8 });
 
-  // cobblestone ground texture
+  // cobblestone ground texture: dense packed stones over dark mortar
+  // (one 256px tile ≈ 3 m of ground; planes clone it with size-matched repeats)
   const cobbleTex = canvasTex(256, (g, s) => {
-    g.fillStyle = '#6e6a60'; g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 320; i++) {
-      const v = 95 + Math.random() * 55 | 0;
-      g.fillStyle = `rgb(${v},${v - 4},${v - 10})`;
-      g.beginPath();
-      g.ellipse(Math.random() * s, Math.random() * s, 5 + Math.random() * 7, 4 + Math.random() * 6, Math.random() * 3, 0, 7);
-      g.fill();
+    g.fillStyle = '#55514a'; g.fillRect(0, 0, s, s);
+    for (let row = 0; row < 18; row++) {
+      for (let col = 0; col < 18; col++) {
+        const x = col * 14.5 + (row % 2) * 7 + Math.random() * 3;
+        const y = row * 14.5 + Math.random() * 3;
+        const v = 105 + Math.random() * 45 | 0;
+        g.fillStyle = `rgb(${v},${v - 3},${v - 9})`;
+        g.beginPath();
+        g.ellipse(x % s, y % s, 5.6 + Math.random() * 1.6, 5.0 + Math.random() * 1.4, Math.random() * 3, 0, 7);
+        g.fill();
+      }
     }
-  }, 14, 11);
-  const cobbleMat = new THREE.MeshLambertMaterial({ map: cobbleTex });
+  }, 1, 1);
 
   // mottled grass texture (island UVs are in metres → tiles every ~4 m)
   const grassTex = canvasTex(256, (g, s) => {
@@ -81,7 +85,7 @@ EC.buildWorld = function (THREE, scene, quality) {
   grassFarTex.needsUpdate = true;
   const grassFarMat = new THREE.MeshLambertMaterial({ map: grassFarTex, color: 0xb2bda0 });
   const earthMat = lam(0x6c7a55);
-  const graniteMat = lam(0x6d6d6d);
+  const graniteMat = lam(0x7c7c78);
   const roofMat = new THREE.MeshLambertMaterial({ color: 0x3e8a72, side: THREE.DoubleSide }); // copper green
   const woodMat = lam(0x6a4a2e);
   const darkWoodMat = lam(0x4a3220);
@@ -173,13 +177,17 @@ EC.buildWorld = function (THREE, scene, quality) {
   slab(-500, -98, -2.5, 0, -500, 500, grassFarMat, { collide: false, shadow: false });
   slab(-98, 500, -2.5, 0, 98, 500, grassFarMat, { collide: false, shadow: false });
 
-  // Sweden on the horizon (Helsingborg is ~4 km across the Sound)
-  box(80, 22, 900, lam(0x46586a), 470, 6, -150, { shadow: false });
-  box(60, 30, 300, lam(0x46586a), 460, 8, -420, { shadow: false });
+  // Sweden on the horizon (Helsingborg is ~4 km across the Sound) — hazy
+  box(80, 16, 900, lam(0x93a9ba), 480, 4, -150, { shadow: false });
+  box(60, 24, 300, lam(0x8aa2b4), 470, 6, -420, { shadow: false });
 
-  // courtyard cobbles (split around the stair trench)
+  // courtyard cobbles (split around the stair trench); each plane gets a
+  // repeat matched to its size so stones stay ~15 cm everywhere
   function cobblePlane(x0, x1, z0, z1, y) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), cobbleMat);
+    const t = cobbleTex.clone();
+    t.repeat.set((x1 - x0) / 3, (z1 - z0) / 3);
+    t.needsUpdate = true;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshLambertMaterial({ map: t }));
     m.rotation.x = -Math.PI / 2;
     m.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
     if (quality.shadows) m.receiveShadow = true;
@@ -325,43 +333,82 @@ EC.buildWorld = function (THREE, scene, quality) {
     rowAlong(-21, 20, 21, 20, 0, -1, (x) => x > 4.5 && x < 11.5);
     rowAlong(-25, -16, -25, 16, 1, 0, (x, z) => Math.abs(z) < 4.5);
     rowAlong(25, -16, 25, 16, -1, 0, (x, z) => Math.abs(z - 8) < 2.5);
-    // glass is deeper than the frame so it shows through as a visible pane
+    // glass is deeper than the frame so it shows through as a visible pane;
+    // ~55% of rooms light up at night, the rest stay dark
     const frameGeo = new THREE.BoxGeometry(1.7, 2.7, 0.16);
     const glassGeo = new THREE.BoxGeometry(1.42, 2.42, 0.34);
+    const barVGeo = new THREE.BoxGeometry(0.09, 2.42, 0.38);
+    const barHGeo = new THREE.BoxGeometry(1.42, 0.09, 0.38);
     const frameMat = lam(0xd6c8a4);
-    const glassMat = new THREE.MeshLambertMaterial({ color: 0x222c38, emissive: 0xffb45e, emissiveIntensity: 0 });
-    const fi = new THREE.InstancedMesh(frameGeo, frameMat, slots.length);
-    const gi = new THREE.InstancedMesh(glassGeo, glassMat, slots.length);
+    const barMat = lam(0xe6dcc2);
+    const glassLitMat = new THREE.MeshLambertMaterial({ color: 0x39495c, emissive: 0xffb45e, emissiveIntensity: 0 });
+    const glassDarkMat = new THREE.MeshLambertMaterial({ color: 0x2a3848 });
+    const lit = [], dark = [];
+    slots.forEach((s, i) => ((i * 2654435761 % 100) < 55 ? lit : dark).push(s));
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
-    slots.forEach(([x, y, z, ry], i) => {
-      q.setFromAxisAngle(up, ry);
-      m4.compose(new THREE.Vector3(x, y, z), q, one);
-      fi.setMatrixAt(i, m4);
-      gi.setMatrixAt(i, m4);
-    });
-    world.add(fi); world.add(gi);
-    EC._glassMat = glassMat; // night-time lit windows
+    function inst(geo, mat, list) {
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach(([x, y, z, ry], i) => {
+        q.setFromAxisAngle(up, ry);
+        m4.compose(new THREE.Vector3(x, y, z), q, one);
+        im.setMatrixAt(i, m4);
+      });
+      world.add(im);
+    }
+    inst(frameGeo, frameMat, slots);
+    inst(barVGeo, barMat, slots);
+    inst(barHGeo, barMat, slots);
+    inst(glassGeo, glassLitMat, lit);
+    inst(glassGeo, glassDarkMat, dark);
+    EC._glassMat = glassLitMat; // night-time lit windows
   }
 
   // ── courtyard: fountain, lamps, benches ────────────────────────────────────
   {
-    // the famous fountain (looted by Sweden, 1658)
-    const basin = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.2, 0.9, 18), graniteMat);
-    basin.position.set(0, 0.45, 4);
-    world.add(basin);
-    addCollider(-3.1, 3.1, 0, 1.2, 0.9, 7.1);
-    const fwater = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 0.1, 18), lam(0x3e6a80, { transparent: true, opacity: 0.9 }));
-    fwater.position.set(0, 0.82, 4);
-    world.add(fwater);
-    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2.4, 10), graniteMat);
-    ped.position.set(0, 1.9, 4);
+    // the famous gilded fountain (looted by Sweden, 1658)
+    const stone = lam(0x9c9a90);
+    const gold = lam(0xc9a227, { emissive: 0x3a2c08 });
+    const fwaterMat = lam(0x4a7890, { transparent: true, opacity: 0.85 });
+    function tier(r, y, h) {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.07, h, 18), stone);
+      basin.position.set(0, y + h / 2, 4);
+      world.add(basin);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.09, 6, 18), stone);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(0, y + h, 4);
+      world.add(rim);
+      const fw = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.18, r - 0.18, 0.08, 18), fwaterMat);
+      fw.position.set(0, y + h - 0.1, 4);
+      world.add(fw);
+    }
+    tier(3.0, 0, 0.95);                                  // great basin
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.55, 1.9, 10), stone);
+    ped.position.set(0, 1.8, 4);
     world.add(ped);
-    const fig = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 8), lam(0x7c9c5a)); // weathered bronze
-    fig.position.set(0, 3.8, 4);
-    world.add(fig);
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lam(0x7c9c5a));
-    orb.position.set(0, 4.7, 4);
-    world.add(orb);
+    tier(1.3, 2.6, 0.5);                                 // upper basin
+    const col2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 1.0, 8), stone);
+    col2.position.set(0, 3.5, 4);
+    world.add(col2);
+    // gilded figure with trident (Neptune ruled the original)
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 0.95, 8), gold);
+    body.position.set(0, 4.5, 4);
+    world.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 8), gold);
+    head.position.set(0, 5.12, 4);
+    world.add(head);
+    box(0.06, 1.5, 0.06, gold, 0.32, 4.6, 4, { collide: false, shadow: false });
+    box(0.3, 0.06, 0.06, gold, 0.32, 5.3, 4, { collide: false, shadow: false });
+    // four arcing jets into the great basin
+    const jetMat = lam(0xbcd8e4, { transparent: true, opacity: 0.65 });
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + Math.PI / 4;
+      const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 2.3, 5), jetMat);
+      jet.position.set(Math.cos(a) * 0.95, 2.2, 4 + Math.sin(a) * 0.95);
+      jet.rotation.z = Math.cos(a) * 0.6;
+      jet.rotation.x = -Math.sin(a) * 0.6;
+      world.add(jet);
+    }
+    addCollider(-3.1, 3.1, 0, 1.2, 0.9, 7.1);
   }
   const lanternMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a, emissive: 0xffc878, emissiveIntensity: 0 });
   function lampPost(x, z) {
@@ -525,6 +572,14 @@ EC.buildWorld = function (THREE, scene, quality) {
   parapetRun(-84.7, 84.7, 84.7, 84.7);   // south outer
   parapetRun(84.7, -84.7, 84.7, 84.7);   // east outer — the gun battery
 
+  // gravel walkways along the rampart tops
+  const gravelMat = lam(0x8d8472);
+  box(150, 0.08, 3, gravelMat, 0, RT + 0.04, -78, { collide: false, shadow: false });
+  box(150, 0.08, 3, gravelMat, 0, RT + 0.04, 78, { collide: false, shadow: false });
+  box(3, 0.08, 150, gravelMat, 78, RT + 0.04, 0, { collide: false, shadow: false });
+  box(3, 0.08, 64, gravelMat, -78, RT + 0.04, -44, { collide: false, shadow: false });
+  box(3, 0.08, 64, gravelMat, -78, RT + 0.04, 44, { collide: false, shadow: false });
+
   // access ramps (north & south) — walkable via groundHeightAt
   {
     const len = Math.hypot(23, RT);
@@ -551,6 +606,7 @@ EC.buildWorld = function (THREE, scene, quality) {
     }
     g.position.set(82, RT, z);
     world.add(g);
+    box(3.6, 0.1, 2.6, stoneDarkMat, 82, RT + 0.05, z, { collide: false, shadow: false });
     addCollider(80.8, 83.4, RT, RT + 1.4, z - 0.8, z + 0.8);
   }
   flagPole(82, 0, RT + 1.2, 7);
@@ -690,9 +746,9 @@ EC.buildWorld = function (THREE, scene, quality) {
       f.position.set(fx, 23.5, fz);
       world.add(f);
     }
-    // string course (mid-height sandstone band on the outer facades)
+    // string course (mid-height sandstone band, between the window rows)
     for (const r of [[-39.25, 39.25, -34.25, -33.75], [-39.25, 39.25, 33.75, 34.25], [-39.25, -38.75, -34.25, 34.25], [38.75, 39.25, -34.25, 34.25]]) {
-      slab(r[0], r[1], 7.5, 7.9, r[2], r[3], lam(0xe0d4b6), { collide: false, shadow: false });
+      slab(r[0], r[1], 6.0, 6.4, r[2], r[3], lam(0xe0d4b6), { collide: false, shadow: false });
     }
   }
 
