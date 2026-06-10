@@ -14,10 +14,11 @@ EC.createCharacters = function (THREE, scene, world) {
     c.width = 512; c.height = 192;
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    // depthTest on: walls now hide labels and speech
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
     sp.scale.set(scale * (512 / 192), scale, 1);
     sp.renderOrder = 10;
-    return { sp, c, tex };
+    return { sp, c, tex, baseScale: scale };
   }
 
   function drawName(s, name, title) {
@@ -308,7 +309,7 @@ EC.createCharacters = function (THREE, scene, world) {
       blob.position.y = 0.045;
       g.add(blob);
     }
-    return { group: g, legs, arms, mats };
+    return { group: g, legs, arms, mats, head, eyes: g.children.filter(o => o.material === eyeM) };
   }
 
   // ── Character ──────────────────────────────────────────────────────────────
@@ -323,6 +324,9 @@ EC.createCharacters = function (THREE, scene, world) {
       this.legs = b.legs;
       this.arms = b.arms;
       this.mats = b.mats;
+      this.head = b.head;
+      this.eyes = b.eyes;
+      this.blinkT = 2 + Math.random() * 3;
       this.baseOpacity = this.info.colors.ghost ? 0.55 : 1;
       this.pos = new THREE.Vector3(0, 0, 0);
       this.heading = 0;
@@ -429,6 +433,7 @@ EC.createCharacters = function (THREE, scene, world) {
       const sw = this.moving ? Math.sin(this.walkT) * 0.55 : 0;
       this.legs[0].rotation.x = sw;
       this.legs[1].rotation.x = -sw;
+      const talking = this.say_t > 0 && !this.moving && this.fallen < 0.5;
       let armSw = this.moving ? -sw * 0.8 : Math.sin(this.walkT * 0.4) * 0.04;
       if (this.anim === 'dig' && !this.moving) {
         const digT = Math.sin(this.walkT * 1.4);
@@ -439,15 +444,28 @@ EC.createCharacters = function (THREE, scene, world) {
         this.arms[1].rotation.x = -1.2 + fz * 0.6;
         this.arms[0].rotation.x = 0.2;
         this.group.position.x = this.pos.x + Math.sin(performance.now() * 0.004) * (this.id === 'hamlet' ? 0.5 : -0.5);
+      } else if (talking) {
+        // gesticulate while speaking
+        const tt = performance.now() * 0.0035;
+        this.arms[1].rotation.x = -0.35 + Math.sin(tt * 1.9) * 0.3;
+        this.arms[0].rotation.x = Math.sin(tt * 1.3 + 1) * 0.1;
       } else {
         this.arms[0].rotation.x = armSw;
         this.arms[1].rotation.x = -armSw;
       }
-      // falling / crouch
+      // head: nod while talking, settle otherwise; eyes blink
+      if (this.head) {
+        this.head.rotation.x = talking ? Math.sin(performance.now() * 0.006) * 0.07 : this.head.rotation.x * 0.9;
+      }
+      this.blinkT -= dt;
+      if (this.blinkT < -0.13) this.blinkT = 2 + Math.random() * 3.5;
+      const lid = this.blinkT < 0 ? 0.12 : 1;
+      for (const e of this.eyes) e.scale.y = lid;
+      // falling / crouch / idle breathing
       this.fallen += (this.fallenTarget - this.fallen) * Math.min(1, dt * 3);
       this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 4);
       this.group.rotation.z = this.fallen * Math.PI / 2;
-      this.group.scale.y = 1 - this.crouch * 0.25;
+      this.group.scale.y = (1 - this.crouch * 0.25) * (1 + Math.sin(this.walkT * 0.9) * 0.004);
 
       this.group.position.set(
         this.fencing ? this.group.position.x : this.pos.x,
@@ -460,9 +478,21 @@ EC.createCharacters = function (THREE, scene, world) {
         this.say_t -= dt;
         if (this.say_t <= 0) this.bubble.sp.visible = false;
       }
+      // labels & bubbles: cull by distance, keep a steady on-screen size
+      const pd2 = playerPos ? this.pos.distanceTo(playerPos) : 99;
+      const ls = Math.min(2.3, Math.max(0.55, pd2 / 10));
+      this.nameS.sp.visible = vis && pd2 < 24;
+      this.nameS.sp.scale.set(this.nameS.baseScale * (512 / 192) * ls, this.nameS.baseScale * ls, 1);
+      if (this.bubble.sp.visible) {
+        if (pd2 > 32) this.bubble.sp.visible = false;
+        else {
+          const bs = Math.min(1.7, Math.max(0.55, pd2 / 9));
+          this.bubble.sp.scale.set(this.bubble.baseScale * (512 / 192) * bs, this.bubble.baseScale * bs, 1);
+        }
+      }
       // ambient barks
       if (!this.inScene && vis && playerPos) {
-        const pd = this.pos.distanceTo(playerPos);
+        const pd = pd2;
         if (pd < 11) {
           // face the player a bit when idle and near
           if (!this.moving && pd < 6) this.targetHeading = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);

@@ -200,8 +200,10 @@ EC.boot = function (THREE) {
   };
   let zoneShown = '';
 
+  const voice = EC.createVoice(msg => toast(msg, 6000));
+
   $('btn-menu').onclick = () => openMenu('visit');
-  $('card-close').onclick = () => { ui.card.style.display = 'none'; document.body.classList.remove('ui-open'); };
+  $('card-close').onclick = () => { ui.card.style.display = 'none'; document.body.classList.remove('ui-open'); voice.stop(); };
   $('menu-close').onclick = closeMenu;
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => openMenu(b.dataset.tab));
   for (let i = 0; i < 3; i++) {
@@ -272,11 +274,29 @@ EC.boot = function (THREE) {
           <button class="go qbtn" data-q="high">High</button><br>
           <span class="hint">Low for older laptops/tablets (no shadows or antialiasing), Medium for most devices, High adds full sun shadows.</span></p>
         <p>You cannot fall from the ramparts, and the Sound is too cold to swim — walk the ramps and the bridge.</p>
+        <h3>Character voices</h3>
+        <p>
+          <label><input type="radio" name="vmode" value="off" ${voice.state.mode === 'off' ? 'checked' : ''}> Off</label> &nbsp;
+          <label><input type="radio" name="vmode" value="browser" ${voice.state.mode === 'browser' ? 'checked' : ''}> Browser voice (free)</label> &nbsp;
+          <label><input type="radio" name="vmode" value="eleven" ${voice.state.mode === 'eleven' ? 'checked' : ''}> ElevenLabs</label>
+        </p>
+        <p id="el-key-row" style="display:${voice.state.mode === 'eleven' ? 'block' : 'none'}">
+          <input type="password" id="el-key" placeholder="ElevenLabs API key" value="${voice.state.key.replace(/"/g, '&quot;')}">
+          <span class="hint">Stored only in this browser on this device, used only when you click a character (and cached, so repeats are free). Web pages cannot read your keychain — paste it once here. <b>Do not enter your key on shared or student devices</b>; give students the free browser voice instead.</span>
+        </p>
+        <p><label><input type="checkbox" id="v-scenes" ${voice.state.scenes ? 'checked' : ''}> Read scene dialogue aloud (always uses the free browser voice)</label></p>
         <p class="hint">An educational walking replica of Kronborg Castle (“Elsinore”), full scale: courtyard 50×40 m, Great Hall 62 m, ramparts and moat included. All dialogue is from Shakespeare’s Hamlet.</p>`;
       box.querySelectorAll('.qbtn').forEach(b => b.onclick = () => {
         try { localStorage.setItem('ec-quality', b.dataset.q); } catch (e) { /* private mode */ }
         location.reload();
       });
+      box.querySelectorAll('[name=vmode]').forEach(r => r.onchange = () => {
+        voice.state.mode = r.value;
+        voice.save();
+        $('el-key-row').style.display = r.value === 'eleven' ? 'block' : 'none';
+      });
+      $('el-key').onchange = () => { voice.state.key = $('el-key').value.trim(); voice.save(); };
+      $('v-scenes').onchange = () => { voice.state.scenes = $('v-scenes').checked; voice.save(); };
     }
   }
 
@@ -302,7 +322,11 @@ EC.boot = function (THREE) {
     showCard(`<h3>${info.name}</h3><p class="hint">${info.title} — currently ${c.group.visible ? c.activityDesc : 'withdrawn from sight'}</p>
       <p>${info.bio}</p>
       <p><b>Did you know?</b> ${info.facts}</p>
-      ${info.quotes.map(q => `<p class="quote">“${q}”</p>`).join('')}`);
+      ${info.quotes.map(q => `<p class="quote">“${q}”</p>`).join('')}
+      ${voice.state.mode !== 'off' ? '<p><button class="go" id="hear-btn">🔊 Hear ' + info.name + '</button></p>' : ''}`);
+    voice.speakCharacter(c);
+    const hb = $('hear-btn');
+    if (hb) hb.onclick = () => voice.speakCharacter(c);
   }
 
   // toast + subtitles from the scene engine
@@ -330,6 +354,7 @@ EC.boot = function (THREE) {
   mgr.listeners.onLine = (def, speaker, text) => {
     if (controls.pos.distanceTo(speaker.pos) > 30) return;
     if (audio) audio.cue();
+    voice.speakLine(speaker.id, text);
     ui.sub.innerHTML = `<b>${speaker.info.name.toUpperCase()}</b> — ${text}`;
     ui.sub.style.display = 'block';
     clearTimeout(subTimer);

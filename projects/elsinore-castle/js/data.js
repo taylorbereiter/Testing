@@ -156,6 +156,28 @@ EC.BARKS = {
   lucianus: ['Confederate season, else no creature seeing…'],
 };
 
+// ─── Voice profiles: p/r = browser-voice pitch/rate; el = ElevenLabs voice id
+EC.VOICES = {
+  hamlet:       { p: 1.0,  r: 1.0,  el: 'onwK4e9ZLuTAKqWW03F9' },
+  claudius:     { p: 0.8,  r: 0.95, el: 'JBFqnCBsd6RMkjVDRZzb' },
+  gertrude:     { p: 1.15, r: 0.98, el: 'XB0fDUnXU5powFXDhCwa' },
+  ophelia:      { p: 1.3,  r: 1.02, el: 'pFZP5JQG7iQjIQuC4Bku' },
+  polonius:     { p: 0.9,  r: 0.9,  el: 'nPczCjzI2devNBz1zQrb' },
+  laertes:      { p: 1.0,  r: 1.06, el: 'pNInz6obpgDQGcFmaJgB' },
+  horatio:      { p: 0.95, r: 1.0,  el: 'ErXwobaYiN019PkySvjV' },
+  ghost:        { p: 0.55, r: 0.8,  el: 'N2lVS1w4EtoT3dr4eOWO' },
+  rosencrantz:  { p: 1.05, r: 1.05, el: 'pNInz6obpgDQGcFmaJgB' },
+  guildenstern: { p: 0.98, r: 1.02, el: 'ErXwobaYiN019PkySvjV' },
+  marcellus:    { p: 0.85, r: 1.0,  el: 'JBFqnCBsd6RMkjVDRZzb' },
+  barnardo:     { p: 0.9,  r: 1.0,  el: 'onwK4e9ZLuTAKqWW03F9' },
+  francisco:    { p: 0.88, r: 0.98, el: 'pqHfZKP75CvOlQylNhV4' },
+  gravedigger:  { p: 0.72, r: 0.9,  el: 'pqHfZKP75CvOlQylNhV4' },
+  sexton2:      { p: 0.82, r: 0.95, el: 'pNInz6obpgDQGcFmaJgB' },
+  playerking:   { p: 0.85, r: 0.88, el: 'JBFqnCBsd6RMkjVDRZzb' },
+  playerqueen:  { p: 1.25, r: 1.0,  el: 'EXAVITQu4vr4xnSDxMaL' },
+  lucianus:     { p: 0.7,  r: 0.9,  el: 'N2lVS1w4EtoT3dr4eOWO' },
+};
+
 // ─── Educational hotspots: [x, z, y] — floating ⓘ markers ───────────────────
 EC.HOTSPOTS = [
   {

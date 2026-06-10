@@ -90,6 +90,10 @@
   .pname i { color: #b8ab85; font-size: 12.5px; }
   button.go, #toast button { background: var(--gold); color: #211a08; border: none;
     border-radius: 8px; padding: 8px 16px; font-family: inherit; font-weight: bold; cursor: pointer; }
+  #menu-body input[type=password] { width: 100%; padding: 9px 12px; margin: 4px 0 6px;
+    background: rgba(216,184,74,0.08); border: 1px solid rgba(216,184,74,0.4); border-radius: 8px;
+    color: var(--parch); font-family: monospace; font-size: 13px; }
+  #menu-body label { cursor: pointer; }
 
   /* intro */
   #intro { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
@@ -311,6 +315,28 @@ EC.BARKS = {
   playerking: ['We shall express our duty in his eye.', 'Full thirty times hath Phoebus’ cart gone round…'],
   playerqueen: ['So many journeys may the sun and moon make us again count o’er ere love be done!'],
   lucianus: ['Confederate season, else no creature seeing…'],
+};
+
+// ─── Voice profiles: p/r = browser-voice pitch/rate; el = ElevenLabs voice id
+EC.VOICES = {
+  hamlet:       { p: 1.0,  r: 1.0,  el: 'onwK4e9ZLuTAKqWW03F9' },
+  claudius:     { p: 0.8,  r: 0.95, el: 'JBFqnCBsd6RMkjVDRZzb' },
+  gertrude:     { p: 1.15, r: 0.98, el: 'XB0fDUnXU5powFXDhCwa' },
+  ophelia:      { p: 1.3,  r: 1.02, el: 'pFZP5JQG7iQjIQuC4Bku' },
+  polonius:     { p: 0.9,  r: 0.9,  el: 'nPczCjzI2devNBz1zQrb' },
+  laertes:      { p: 1.0,  r: 1.06, el: 'pNInz6obpgDQGcFmaJgB' },
+  horatio:      { p: 0.95, r: 1.0,  el: 'ErXwobaYiN019PkySvjV' },
+  ghost:        { p: 0.55, r: 0.8,  el: 'N2lVS1w4EtoT3dr4eOWO' },
+  rosencrantz:  { p: 1.05, r: 1.05, el: 'pNInz6obpgDQGcFmaJgB' },
+  guildenstern: { p: 0.98, r: 1.02, el: 'ErXwobaYiN019PkySvjV' },
+  marcellus:    { p: 0.85, r: 1.0,  el: 'JBFqnCBsd6RMkjVDRZzb' },
+  barnardo:     { p: 0.9,  r: 1.0,  el: 'onwK4e9ZLuTAKqWW03F9' },
+  francisco:    { p: 0.88, r: 0.98, el: 'pqHfZKP75CvOlQylNhV4' },
+  gravedigger:  { p: 0.72, r: 0.9,  el: 'pqHfZKP75CvOlQylNhV4' },
+  sexton2:      { p: 0.82, r: 0.95, el: 'pNInz6obpgDQGcFmaJgB' },
+  playerking:   { p: 0.85, r: 0.88, el: 'JBFqnCBsd6RMkjVDRZzb' },
+  playerqueen:  { p: 1.25, r: 1.0,  el: 'EXAVITQu4vr4xnSDxMaL' },
+  lucianus:     { p: 0.7,  r: 0.9,  el: 'N2lVS1w4EtoT3dr4eOWO' },
 };
 
 // ─── Educational hotspots: [x, z, y] — floating ⓘ markers ───────────────────
@@ -1054,6 +1080,97 @@ EC.createAudio = function () {
     // a soft lute cue when a character begins a line nearby
     cue() { if (enabled) pluck(SCALE[2 + (Math.random() * 4 | 0)] * 2, 0.03, 0.35); },
   };
+};
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// speech.js — character narration. Two engines:
+//   • browser voice (free, built-in speechSynthesis — safe for student devices)
+//   • ElevenLabs (optional; user pastes their API key, stored ONLY in this
+//     browser's localStorage on this device; responses cached per session so
+//     repeat clicks don't re-bill)
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+EC.createVoice = function (notify) {
+  const LS = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
+
+  const state = {
+    mode: LS('ec-voice-mode') || 'browser',          // off | browser | eleven
+    key: LS('ec-eleven-key') || '',
+    scenes: LS('ec-voice-scenes') === '1',           // read scene lines aloud (browser voice)
+  };
+  const cache = new Map();                            // charId|text → object URL
+  let current = null;
+
+  function save() {
+    store('ec-voice-mode', state.mode);
+    store('ec-eleven-key', state.key);
+    store('ec-voice-scenes', state.scenes ? '1' : '0');
+  }
+
+  function stop() {
+    if (current) { current.pause(); current = null; }
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) { /* unsupported */ }
+  }
+
+  function browserSpeak(text, prof) {
+    if (!('speechSynthesis' in window)) { notify('This browser has no built-in voices.'); return; }
+    stop();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-GB';
+    u.pitch = prof.p || 1;
+    u.rate = prof.r || 1;
+    speechSynthesis.speak(u);
+  }
+
+  async function elevenSpeak(charId, text, prof) {
+    const ck = charId + '|' + text;
+    if (!cache.has(ck)) {
+      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + prof.el + '?output_format=mp3_44100_64', {
+        method: 'POST',
+        headers: { 'xi-api-key': state.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_turbo_v2_5',
+          voice_settings: { stability: 0.45, similarity_boost: 0.7 },
+        }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      cache.set(ck, URL.createObjectURL(await res.blob()));
+    }
+    stop();
+    current = new Audio(cache.get(ck));
+    current.play();
+  }
+
+  // clicking a character: name, title and one of their famous quotes
+  function speakCharacter(c) {
+    if (state.mode === 'off') return;
+    const info = c.info;
+    const q = info.quotes[Math.random() * info.quotes.length | 0];
+    const text = info.name + ', ' + info.title + '. ' + q;
+    const prof = EC.VOICES[c.id] || { p: 1, r: 1 };
+    if (state.mode === 'eleven' && state.key && prof.el) {
+      elevenSpeak(c.id, text, prof).catch(e => {
+        notify('ElevenLabs voice failed (' + e.message + ') — using the browser voice instead.');
+        browserSpeak(text, prof);
+      });
+    } else {
+      browserSpeak(text, prof);
+    }
+  }
+
+  // scene dialogue read-aloud (browser voice only — keeps API costs at zero)
+  function speakLine(charId, text) {
+    if (!state.scenes || state.mode === 'off') return;
+    const prof = EC.VOICES[charId] || { p: 1, r: 1 };
+    browserSpeak(text.replace(/\([^)]*\)\s*/g, ''), prof);   // strip stage directions
+  }
+
+  return { state, save, stop, speakCharacter, speakLine };
 };
 
 </script>
@@ -2272,10 +2389,11 @@ EC.createCharacters = function (THREE, scene, world) {
     c.width = 512; c.height = 192;
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    // depthTest on: walls now hide labels and speech
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
     sp.scale.set(scale * (512 / 192), scale, 1);
     sp.renderOrder = 10;
-    return { sp, c, tex };
+    return { sp, c, tex, baseScale: scale };
   }
 
   function drawName(s, name, title) {
@@ -2566,7 +2684,7 @@ EC.createCharacters = function (THREE, scene, world) {
       blob.position.y = 0.045;
       g.add(blob);
     }
-    return { group: g, legs, arms, mats };
+    return { group: g, legs, arms, mats, head, eyes: g.children.filter(o => o.material === eyeM) };
   }
 
   // ── Character ──────────────────────────────────────────────────────────────
@@ -2581,6 +2699,9 @@ EC.createCharacters = function (THREE, scene, world) {
       this.legs = b.legs;
       this.arms = b.arms;
       this.mats = b.mats;
+      this.head = b.head;
+      this.eyes = b.eyes;
+      this.blinkT = 2 + Math.random() * 3;
       this.baseOpacity = this.info.colors.ghost ? 0.55 : 1;
       this.pos = new THREE.Vector3(0, 0, 0);
       this.heading = 0;
@@ -2687,6 +2808,7 @@ EC.createCharacters = function (THREE, scene, world) {
       const sw = this.moving ? Math.sin(this.walkT) * 0.55 : 0;
       this.legs[0].rotation.x = sw;
       this.legs[1].rotation.x = -sw;
+      const talking = this.say_t > 0 && !this.moving && this.fallen < 0.5;
       let armSw = this.moving ? -sw * 0.8 : Math.sin(this.walkT * 0.4) * 0.04;
       if (this.anim === 'dig' && !this.moving) {
         const digT = Math.sin(this.walkT * 1.4);
@@ -2697,15 +2819,28 @@ EC.createCharacters = function (THREE, scene, world) {
         this.arms[1].rotation.x = -1.2 + fz * 0.6;
         this.arms[0].rotation.x = 0.2;
         this.group.position.x = this.pos.x + Math.sin(performance.now() * 0.004) * (this.id === 'hamlet' ? 0.5 : -0.5);
+      } else if (talking) {
+        // gesticulate while speaking
+        const tt = performance.now() * 0.0035;
+        this.arms[1].rotation.x = -0.35 + Math.sin(tt * 1.9) * 0.3;
+        this.arms[0].rotation.x = Math.sin(tt * 1.3 + 1) * 0.1;
       } else {
         this.arms[0].rotation.x = armSw;
         this.arms[1].rotation.x = -armSw;
       }
-      // falling / crouch
+      // head: nod while talking, settle otherwise; eyes blink
+      if (this.head) {
+        this.head.rotation.x = talking ? Math.sin(performance.now() * 0.006) * 0.07 : this.head.rotation.x * 0.9;
+      }
+      this.blinkT -= dt;
+      if (this.blinkT < -0.13) this.blinkT = 2 + Math.random() * 3.5;
+      const lid = this.blinkT < 0 ? 0.12 : 1;
+      for (const e of this.eyes) e.scale.y = lid;
+      // falling / crouch / idle breathing
       this.fallen += (this.fallenTarget - this.fallen) * Math.min(1, dt * 3);
       this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 4);
       this.group.rotation.z = this.fallen * Math.PI / 2;
-      this.group.scale.y = 1 - this.crouch * 0.25;
+      this.group.scale.y = (1 - this.crouch * 0.25) * (1 + Math.sin(this.walkT * 0.9) * 0.004);
 
       this.group.position.set(
         this.fencing ? this.group.position.x : this.pos.x,
@@ -2718,9 +2853,21 @@ EC.createCharacters = function (THREE, scene, world) {
         this.say_t -= dt;
         if (this.say_t <= 0) this.bubble.sp.visible = false;
       }
+      // labels & bubbles: cull by distance, keep a steady on-screen size
+      const pd2 = playerPos ? this.pos.distanceTo(playerPos) : 99;
+      const ls = Math.min(2.3, Math.max(0.55, pd2 / 10));
+      this.nameS.sp.visible = vis && pd2 < 24;
+      this.nameS.sp.scale.set(this.nameS.baseScale * (512 / 192) * ls, this.nameS.baseScale * ls, 1);
+      if (this.bubble.sp.visible) {
+        if (pd2 > 32) this.bubble.sp.visible = false;
+        else {
+          const bs = Math.min(1.7, Math.max(0.55, pd2 / 9));
+          this.bubble.sp.scale.set(this.bubble.baseScale * (512 / 192) * bs, this.bubble.baseScale * bs, 1);
+        }
+      }
       // ambient barks
       if (!this.inScene && vis && playerPos) {
-        const pd = this.pos.distanceTo(playerPos);
+        const pd = pd2;
         if (pd < 11) {
           // face the player a bit when idle and near
           if (!this.moving && pd < 6) this.targetHeading = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
@@ -3339,8 +3486,10 @@ EC.boot = function (THREE) {
   };
   let zoneShown = '';
 
+  const voice = EC.createVoice(msg => toast(msg, 6000));
+
   $('btn-menu').onclick = () => openMenu('visit');
-  $('card-close').onclick = () => { ui.card.style.display = 'none'; document.body.classList.remove('ui-open'); };
+  $('card-close').onclick = () => { ui.card.style.display = 'none'; document.body.classList.remove('ui-open'); voice.stop(); };
   $('menu-close').onclick = closeMenu;
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => openMenu(b.dataset.tab));
   for (let i = 0; i < 3; i++) {
@@ -3411,11 +3560,29 @@ EC.boot = function (THREE) {
           <button class="go qbtn" data-q="high">High</button><br>
           <span class="hint">Low for older laptops/tablets (no shadows or antialiasing), Medium for most devices, High adds full sun shadows.</span></p>
         <p>You cannot fall from the ramparts, and the Sound is too cold to swim — walk the ramps and the bridge.</p>
+        <h3>Character voices</h3>
+        <p>
+          <label><input type="radio" name="vmode" value="off" ${voice.state.mode === 'off' ? 'checked' : ''}> Off</label> &nbsp;
+          <label><input type="radio" name="vmode" value="browser" ${voice.state.mode === 'browser' ? 'checked' : ''}> Browser voice (free)</label> &nbsp;
+          <label><input type="radio" name="vmode" value="eleven" ${voice.state.mode === 'eleven' ? 'checked' : ''}> ElevenLabs</label>
+        </p>
+        <p id="el-key-row" style="display:${voice.state.mode === 'eleven' ? 'block' : 'none'}">
+          <input type="password" id="el-key" placeholder="ElevenLabs API key" value="${voice.state.key.replace(/"/g, '&quot;')}">
+          <span class="hint">Stored only in this browser on this device, used only when you click a character (and cached, so repeats are free). Web pages cannot read your keychain — paste it once here. <b>Do not enter your key on shared or student devices</b>; give students the free browser voice instead.</span>
+        </p>
+        <p><label><input type="checkbox" id="v-scenes" ${voice.state.scenes ? 'checked' : ''}> Read scene dialogue aloud (always uses the free browser voice)</label></p>
         <p class="hint">An educational walking replica of Kronborg Castle (“Elsinore”), full scale: courtyard 50×40 m, Great Hall 62 m, ramparts and moat included. All dialogue is from Shakespeare’s Hamlet.</p>`;
       box.querySelectorAll('.qbtn').forEach(b => b.onclick = () => {
         try { localStorage.setItem('ec-quality', b.dataset.q); } catch (e) { /* private mode */ }
         location.reload();
       });
+      box.querySelectorAll('[name=vmode]').forEach(r => r.onchange = () => {
+        voice.state.mode = r.value;
+        voice.save();
+        $('el-key-row').style.display = r.value === 'eleven' ? 'block' : 'none';
+      });
+      $('el-key').onchange = () => { voice.state.key = $('el-key').value.trim(); voice.save(); };
+      $('v-scenes').onchange = () => { voice.state.scenes = $('v-scenes').checked; voice.save(); };
     }
   }
 
@@ -3441,7 +3608,11 @@ EC.boot = function (THREE) {
     showCard(`<h3>${info.name}</h3><p class="hint">${info.title} — currently ${c.group.visible ? c.activityDesc : 'withdrawn from sight'}</p>
       <p>${info.bio}</p>
       <p><b>Did you know?</b> ${info.facts}</p>
-      ${info.quotes.map(q => `<p class="quote">“${q}”</p>`).join('')}`);
+      ${info.quotes.map(q => `<p class="quote">“${q}”</p>`).join('')}
+      ${voice.state.mode !== 'off' ? '<p><button class="go" id="hear-btn">🔊 Hear ' + info.name + '</button></p>' : ''}`);
+    voice.speakCharacter(c);
+    const hb = $('hear-btn');
+    if (hb) hb.onclick = () => voice.speakCharacter(c);
   }
 
   // toast + subtitles from the scene engine
@@ -3469,6 +3640,7 @@ EC.boot = function (THREE) {
   mgr.listeners.onLine = (def, speaker, text) => {
     if (controls.pos.distanceTo(speaker.pos) > 30) return;
     if (audio) audio.cue();
+    voice.speakLine(speaker.id, text);
     ui.sub.innerHTML = `<b>${speaker.info.name.toUpperCase()}</b> — ${text}`;
     ui.sub.style.display = 'block';
     clearTimeout(subTimer);
