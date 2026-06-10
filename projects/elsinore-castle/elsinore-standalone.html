@@ -1,0 +1,2810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Elsinore — Kronborg Castle · an interactive Hamlet</title>
+<style>
+  :root { --gold: #d8b84a; --parch: #f3e9c8; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #070d1d;
+    font-family: Georgia, 'Times New Roman', serif; color: var(--parch);
+    touch-action: none; overscroll-behavior: none; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD */
+  #hud { position: fixed; top: env(safe-area-inset-top, 0); left: 0; right: 0;
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px; pointer-events: none; z-index: 5; }
+  .chip { background: rgba(12,10,6,0.72); border: 1px solid rgba(216,184,74,0.55);
+    border-radius: 10px; padding: 7px 12px; font-size: 15px; pointer-events: auto;
+    color: var(--parch); backdrop-filter: blur(4px); }
+  #clock { min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; }
+  .spd { cursor: pointer; opacity: 0.55; border: 1px solid rgba(216,184,74,0.35); }
+  .spd.on { opacity: 1; border-color: var(--gold); }
+  #btn-menu { margin-left: auto; cursor: pointer; font-size: 19px; padding: 6px 14px; }
+  #compass { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; padding: 0; overflow: hidden; }
+  #compass-n { font-weight: bold; color: var(--gold); transition: transform 0.1s linear; }
+
+  #zone { position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+    font-style: italic; font-size: 17px; color: var(--parch); text-shadow: 0 2px 6px #000;
+    pointer-events: none; z-index: 4; opacity: 0.95; }
+  #zone.pop { animation: zonepop 0.7s ease-out; }
+  @keyframes zonepop { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
+  #subtitle { display: none; position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(150px + env(safe-area-inset-bottom, 0)); max-width: min(640px, 92vw);
+    background: rgba(10,8,4,0.82); border: 1px solid rgba(216,184,74,0.5); border-radius: 10px;
+    padding: 10px 16px; font-size: 15px; line-height: 1.45; z-index: 6; pointer-events: none; }
+  #toast { display: none; position: fixed; left: 50%; transform: translateX(-50%);
+    top: 100px; max-width: min(520px, 92vw); background: rgba(16,12,5,0.9);
+    border: 1px solid var(--gold); border-radius: 12px; padding: 12px 18px;
+    font-size: 15px; line-height: 1.5; z-index: 7; text-align: center; }
+  #toast button { margin-top: 6px; }
+
+  /* joystick */
+  #joy-base { position: fixed; left: 22px; bottom: calc(26px + env(safe-area-inset-bottom, 0));
+    width: 124px; height: 124px; border-radius: 50%; background: rgba(20,16,8,0.4);
+    border: 2px solid rgba(216,184,74,0.5); z-index: 8; touch-action: none; }
+  #joy-knob { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 54px; height: 54px; border-radius: 50%;
+    background: rgba(216,184,74,0.55); border: 2px solid var(--gold); }
+
+  /* cards & menu */
+  #card { display: none; position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(18px + env(safe-area-inset-bottom, 0)); width: min(560px, 94vw);
+    max-height: 58vh; background: rgba(18,14,7,0.96); border: 1px solid var(--gold);
+    border-radius: 14px; z-index: 20; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  #card-body { padding: 16px 20px 20px; overflow-y: auto; max-height: calc(58vh - 20px); }
+  #card-close { position: absolute; top: 6px; right: 10px; background: none; border: none;
+    color: var(--gold); font-size: 26px; cursor: pointer; padding: 4px; }
+  #card h3 { margin: 2px 0 8px; color: var(--gold); }
+  #card p { margin: 8px 0; font-size: 14.5px; line-height: 1.55; }
+  .quote { font-style: italic; color: #e8d9a8; border-left: 3px solid var(--gold); padding-left: 10px; }
+  .hint { color: #b8ab85; font-size: 13.5px !important; }
+
+  #menu { display: none; position: fixed; inset: 0; z-index: 30; background: rgba(5,4,2,0.78);
+    backdrop-filter: blur(3px); flex-direction: column; align-items: center; justify-content: center; }
+  #menu-box { width: min(640px, 94vw); height: min(76vh, 700px); background: #171208;
+    border: 1px solid var(--gold); border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+  #menu-tabs { display: flex; border-bottom: 1px solid rgba(216,184,74,0.4); }
+  .tab { flex: 1; background: none; border: none; color: #b8ab85; font-family: inherit;
+    font-size: 14px; padding: 12px 4px; cursor: pointer; }
+  .tab.on { color: var(--gold); border-bottom: 2px solid var(--gold); }
+  #menu-body { flex: 1; overflow-y: auto; padding: 16px 20px; -webkit-overflow-scrolling: touch; }
+  #menu-body h2 { color: var(--gold); font-size: 19px; margin: 16px 0 6px; }
+  #menu-body h3 { color: var(--gold); margin: 4px 0 10px; }
+  #menu-body p { font-size: 14.5px; line-height: 1.6; }
+  #menu-close { background: none; border: 1px solid rgba(216,184,74,0.5); color: var(--parch);
+    font-family: inherit; margin: 10px auto 12px; padding: 8px 26px; border-radius: 10px; cursor: pointer; }
+  button.row { display: block; width: 100%; text-align: left; margin: 6px 0; padding: 12px 14px;
+    background: rgba(216,184,74,0.08); color: var(--parch); border: 1px solid rgba(216,184,74,0.35);
+    border-radius: 10px; font-family: inherit; font-size: 15px; cursor: pointer; }
+  .play-row { display: flex; align-items: center; gap: 10px; padding: 9px 4px;
+    border-bottom: 1px solid rgba(216,184,74,0.18); font-size: 14px; }
+  .ptime { color: var(--gold); font-variant-numeric: tabular-nums; min-width: 48px; }
+  .pname { flex: 1; line-height: 1.4; }
+  .pname i { color: #b8ab85; font-size: 12.5px; }
+  button.go, #toast button { background: var(--gold); color: #211a08; border: none;
+    border-radius: 8px; padding: 8px 16px; font-family: inherit; font-weight: bold; cursor: pointer; }
+
+  /* intro */
+  #intro { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; padding: 24px;
+    background: radial-gradient(ellipse at 50% 35%, #2a2310 0%, #0a0804 75%); }
+  #intro h1 { font-size: clamp(34px, 7vw, 58px); color: var(--gold); margin: 0 0 4px; letter-spacing: 2px; }
+  #intro h2 { font-size: clamp(15px, 3vw, 20px); font-weight: normal; font-style: italic;
+    color: var(--parch); margin: 0 0 18px; }
+  #intro p { max-width: 560px; font-size: 15px; line-height: 1.6; color: #d8cda8; }
+  #intro-controls { font-size: 13.5px; color: #b8ab85; margin-top: 10px; }
+  #start { margin-top: 22px; font-size: 19px; padding: 14px 46px; background: var(--gold);
+    color: #211a08; border: none; border-radius: 12px; font-family: inherit; font-weight: bold; cursor: pointer; }
+  #err { display: none; position: fixed; inset: auto 10px 10px 10px; z-index: 99; background: #4a1010;
+    border: 1px solid #c06060; border-radius: 8px; padding: 10px 14px; font-size: 13px;
+    font-family: monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div class="chip" id="clock">—</div>
+  <button class="chip spd" id="spd0">⏸</button>
+  <button class="chip spd on" id="spd1">1×</button>
+  <button class="chip spd" id="spd2">3×</button>
+  <div class="chip" id="compass"><span id="compass-n">N</span></div>
+  <button class="chip" id="btn-menu">☰ Guide</button>
+</div>
+<div id="zone"></div>
+<div id="subtitle"></div>
+<div id="toast"></div>
+
+<div id="card"><button id="card-close">×</button><div id="card-body"></div></div>
+
+<div id="menu">
+  <div id="menu-box">
+    <div id="menu-tabs">
+      <button class="tab" data-tab="visit">Visit</button>
+      <button class="tab" data-tab="playbill">Playbill</button>
+      <button class="tab" data-tab="people">People</button>
+      <button class="tab" data-tab="about">About</button>
+      <button class="tab" data-tab="help">Help</button>
+    </div>
+    <div id="menu-body"></div>
+    <button id="menu-close">Return to the castle</button>
+  </div>
+</div>
+
+<div id="intro">
+  <h1>ELSINORE</h1>
+  <h2>Kronborg Castle, Helsingør — the home of Hamlet</h2>
+  <p>Walk a full-scale replica of the great Renaissance fortress on the Øresund.
+     The court of Denmark lives out its day around you — and performs the scenes of
+     Shakespeare’s <i>Hamlet</i>, hour by hour, in their proper places: the Ghost on the
+     gun platform at midnight, the Mousetrap in the Great Hall, the gravediggers at their
+     work. Tap the gold ⓘ markers to learn the real castle’s history.</p>
+  <p id="intro-controls"></p>
+  <button id="start">Enter Elsinore</button>
+</div>
+
+<div id="err"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// data.js — educational content, characters, scenes, schedules, hotspots
+// All quotes are from Shakespeare's Hamlet (public domain).
+// Castle facts refer to Kronborg Castle, Helsingør, Denmark (UNESCO 2000).
+// ─────────────────────────────────────────────────────────────────────────────
+
+window.EC = window.EC || {};
+
+EC.CHAR_INFO = {
+  hamlet: {
+    name: 'Hamlet', title: 'Prince of Denmark',
+    colors: { robe: 0x16161d, trim: 0x2c2c38, hair: 0x4a3320, hat: null, prop: 'book' },
+    bio: 'Son of the late King Hamlet and Queen Gertrude. A student of Wittenberg called home for his father’s funeral — and his mother’s hasty remarriage to his uncle Claudius. The Ghost’s revelation of “murder most foul” sets him on a path of feigned madness, doubt, and revenge.',
+    facts: 'Hamlet is Shakespeare’s longest play (≈30,000 words). The prince speaks almost 40% of its lines. His “antic disposition” — pretended madness — lets Shakespeare ask whether performance and reality can be told apart.',
+    quotes: ['To be, or not to be: that is the question.', 'There are more things in heaven and earth, Horatio, than are dreamt of in your philosophy.', 'The play’s the thing wherein I’ll catch the conscience of the king.'],
+  },
+  claudius: {
+    name: 'Claudius', title: 'King of Denmark',
+    colors: { robe: 0x6e1220, trim: 0xc9a227, hair: 0x55402a, hat: 'crown', prop: null },
+    bio: 'Brother of the late king. He poured poison into his sleeping brother’s ear in the orchard, took the crown, and married the widowed queen — all within two months. A capable politician with a guilty conscience he cannot pray away.',
+    facts: 'Claudius is one of literature’s great studies of guilt: in Act III he admits his crime in soliloquy (“O, my offence is rank”) yet cannot give up “my crown, mine own ambition and my queen.”',
+    quotes: ['Though yet of Hamlet our dear brother’s death the memory be green…', 'My words fly up, my thoughts remain below: words without thoughts never to heaven go.'],
+  },
+  gertrude: {
+    name: 'Gertrude', title: 'Queen of Denmark',
+    colors: { robe: 0x7d3c98, trim: 0xc9a227, hair: 0x6b4e2e, hat: 'crown', prop: null },
+    bio: 'Hamlet’s mother. Her marriage to Claudius barely two months after her husband’s death (“The funeral baked meats did coldly furnish forth the marriage tables”) torments her son. Whether she knew of the murder is one of the play’s open questions.',
+    facts: 'Gertrude dies drinking the poisoned cup intended for Hamlet in the final duel — her last words a warning: “The drink, the drink! I am poison’d.”',
+    quotes: ['The lady doth protest too much, methinks.', 'Good Hamlet, cast thy nighted colour off.'],
+  },
+  ophelia: {
+    name: 'Ophelia', title: 'Daughter of Polonius',
+    colors: { robe: 0xa8c8e8, trim: 0xe8e0d0, hair: 0xc09050, hat: null, prop: 'flowers' },
+    bio: 'In love with Hamlet, obedient to her father. Used as bait to spy on the prince, rejected in the “nunnery” scene, and shattered by her father’s death, she descends into real madness — a mirror of Hamlet’s feigned kind — and drowns beneath a willow.',
+    facts: 'Ophelia’s flowers each carry Elizabethan meanings: rosemary (remembrance), pansies (thoughts), fennel (flattery), columbine (faithlessness), rue (regret), daisy (innocence), violets (faithfulness — “they withered all when my father died”).',
+    quotes: ['There’s rosemary, that’s for remembrance.', 'O, what a noble mind is here o’erthrown!'],
+  },
+  polonius: {
+    name: 'Polonius', title: 'Lord Chamberlain',
+    colors: { robe: 0x3a4a5a, trim: 0x8a8a78, hair: 0xbababa, hat: 'cap', prop: 'scroll' },
+    bio: 'Father of Laertes and Ophelia; the king’s long-winded counsellor. He spies for Claudius — and dies for it, stabbed through the arras (a wall tapestry) in Gertrude’s chamber when Hamlet mistakes him for the king.',
+    facts: 'His advice to Laertes (“This above all: to thine own self be true”) is among the most quoted passages in English — ironic, from the play’s busiest schemer.',
+    quotes: ['Brevity is the soul of wit.', 'Though this be madness, yet there is method in ’t.'],
+  },
+  laertes: {
+    name: 'Laertes', title: 'Son of Polonius',
+    colors: { robe: 0x1e5631, trim: 0xc9a227, hair: 0x2e2018, hat: 'cap', prop: 'sword' },
+    bio: 'Ophelia’s brother, a fiery foil to Hamlet. He leaves for France, storms back at his father’s death, and is drawn into Claudius’ plot: a “friendly” fencing match with a sharpened, poisoned foil.',
+    facts: 'Laertes and Hamlet are deliberate mirrors: each loses a father and seeks revenge — but where Hamlet hesitates, Laertes acts instantly, and both die by the same poisoned blade.',
+    quotes: ['To cut his throat i’ the church.', 'The treacherous instrument is in thy hand, unbated and envenom’d.'],
+  },
+  horatio: {
+    name: 'Horatio', title: 'Hamlet’s friend',
+    colors: { robe: 0x5a4632, trim: 0x8a7a5a, hair: 0x3a2a1a, hat: null, prop: 'book' },
+    bio: 'A poor scholar of Wittenberg and the one person Hamlet wholly trusts — “more an antique Roman than a Dane.” He survives to tell the story, as Hamlet begs with his dying breath.',
+    facts: 'Horatio is the play’s witness and the audience’s anchor: sceptical of the Ghost until he sees it, steady while everyone else schemes.',
+    quotes: ['Now cracks a noble heart. Good night, sweet prince, and flights of angels sing thee to thy rest!'],
+  },
+  ghost: {
+    name: 'The Ghost', title: 'Spirit of King Hamlet',
+    colors: { robe: 0x9ad0e8, trim: 0xbfe6f5, hair: 0xbfe6f5, hat: 'helmet', prop: null, ghost: true },
+    bio: 'The late king, “doom’d for a certain term to walk the night,” appearing in the armour he wore against Norway. He walks the gun platform between midnight and cock-crow, and charges his son: “Revenge his foul and most unnatural murder.”',
+    facts: 'Tradition says Shakespeare himself played the Ghost. Elizabethans debated whether ghosts were souls from Purgatory or devils in disguise — exactly Hamlet’s doubt, and why he stages “The Mousetrap” to test the story.',
+    quotes: ['I am thy father’s spirit, doom’d for a certain term to walk the night.', 'Murder most foul, as in the best it is.', 'Adieu, adieu! Hamlet, remember me.'],
+  },
+  rosencrantz: {
+    name: 'Rosencrantz', title: 'Courtier',
+    colors: { robe: 0x8a6d3b, trim: 0x5a4a2a, hair: 0x6a5030, hat: 'cap', prop: null },
+    bio: 'Hamlet’s school friend, summoned with Guildenstern to spy on the prince. The inseparable pair end up escorting Hamlet to England carrying — unknowingly — the order for his execution. Hamlet rewrites it with their names.',
+    facts: 'Tom Stoppard’s 1966 play “Rosencrantz and Guildenstern Are Dead” retells Hamlet from this pair’s baffled point of view.',
+    quotes: ['My honoured lord!'],
+  },
+  guildenstern: {
+    name: 'Guildenstern', title: 'Courtier',
+    colors: { robe: 0x7a5a8a, trim: 0x4a3a5a, hair: 0x4a3525, hat: 'cap', prop: null },
+    bio: 'The other half of the pair — even the king and queen mix their names up. Their fate gives the English ambassador one of the play’s last lines: “Rosencrantz and Guildenstern are dead.”',
+    facts: 'Both names were real Danish noble families; several Rosenkrantzes and Gyldenstiernes actually attended the Danish court at Kronborg.',
+    quotes: ['Heavens make our presence and our practices pleasant and helpful to him!'],
+  },
+  marcellus: {
+    name: 'Marcellus', title: 'Officer of the Watch',
+    colors: { robe: 0x44505c, trim: 0x96a0aa, hair: 0x3a3a3a, hat: 'helmet', prop: 'spear' },
+    bio: 'A sentinel on the castle platform who twice sees the Ghost and fetches Horatio — then Hamlet. He speaks one of the most famous lines in drama as the prince follows the spirit into the dark.',
+    facts: 'It is Marcellus, not Hamlet, who says “Something is rotten in the state of Denmark” (Act I, scene iv).',
+    quotes: ['Something is rotten in the state of Denmark.'],
+  },
+  barnardo: {
+    name: 'Barnardo', title: 'Sentinel',
+    colors: { robe: 0x3c4854, trim: 0x8a949e, hair: 0x2a2a2a, hat: 'helmet', prop: 'spear' },
+    bio: 'A guard of the night watch. The whole play opens with his nervous challenge in the freezing dark — “Who’s there?” — the wrong way round, since Francisco is the one on duty.',
+    facts: 'Hamlet opens at midnight in “bitter cold” — on a bare Elizabethan stage in daylight, the dialogue alone had to build the dark.',
+    quotes: ['Who’s there?', 'Last night of all, when yond same star that’s westward from the pole had made his course…'],
+  },
+  francisco: {
+    name: 'Francisco', title: 'Sentinel',
+    colors: { robe: 0x4a5662, trim: 0x9aa4ae, hair: 0x4a3a2a, hat: 'helmet', prop: 'spear' },
+    bio: 'The soldier Barnardo relieves at midnight in the play’s first moments. He has only a handful of lines, but one sets the whole mood of Elsinore.',
+    facts: '“’Tis bitter cold, and I am sick at heart” — before anything has happened, Denmark already feels wrong.',
+    quotes: ['’Tis bitter cold, and I am sick at heart.'],
+  },
+  gravedigger: {
+    name: 'First Gravedigger', title: 'Sexton & Clown',
+    colors: { robe: 0x6b5a3e, trim: 0x4a3a26, hair: 0x8a7a5a, hat: 'cap', prop: 'shovel' },
+    bio: 'A cheerful sexton who has dug graves “since that very day that young Hamlet was born.” He sings at his work, jokes about gallows-makers, and turns up the skull of Yorick, the old king’s jester.',
+    facts: 'The graveyard scene (Act V, scene i) gave the world its most iconic stage image: Hamlet holding Yorick’s skull. (He says “Alas, poor Yorick!” — not “I knew him well”; the real line is “I knew him, Horatio.”)',
+    quotes: ['In youth, when I did love, did love, methought it was very sweet…'],
+  },
+  sexton2: {
+    name: 'Second Gravedigger', title: 'The Other Clown',
+    colors: { robe: 0x5e5036, trim: 0x3e3422, hair: 0x5a4a30, hat: 'cap', prop: 'shovel' },
+    bio: 'The first gravedigger’s straight man, sent off to fetch “a stoup of liquor.” Their riddling debate about Ophelia’s burial smuggles real Elizabethan law into comedy.',
+    facts: 'Their argument parodies a famous real lawsuit (Hales v. Petit, 1554) about whether a suicide could receive Christian burial.',
+    quotes: ['Who builds stronger than a mason, a shipwright, or a carpenter?'],
+  },
+  playerking: {
+    name: 'Player King', title: 'Travelling actor',
+    colors: { robe: 0xb8860b, trim: 0x8a5a1a, hair: 0x6a5a4a, hat: 'crown', prop: null },
+    bio: 'Leader of the travelling tragedians of the city. At Hamlet’s request the troupe performs “The Murder of Gonzago” with sixteen inserted lines — a trap to make Claudius betray his guilt.',
+    facts: 'Touring companies really visited Danish castles: English actors — including William Kempe, later Shakespeare’s clown — performed at Elsinore for the Danish court in 1585–86. Some scholars think their stories of Kronborg reached Shakespeare directly.',
+    quotes: ['For us, and for our tragedy, here stooping to your clemency, we beg your hearing patiently.'],
+  },
+  playerqueen: {
+    name: 'Player Queen', title: 'Travelling actor',
+    colors: { robe: 0xc06080, trim: 0xe0c0d0, hair: 0x3a2a1a, hat: null, prop: null },
+    bio: 'On Elizabethan stages women’s parts were played by boys — Hamlet teases this actor about his voice “cracking.” In the Mousetrap the Player Queen vows never to remarry… which is exactly the point.',
+    facts: 'Gertrude’s dry review of this performance — “The lady doth protest too much, methinks” — is now an everyday English idiom.',
+    quotes: ['Both here and hence pursue me lasting strife, if once a widow, ever I be wife!'],
+  },
+  lucianus: {
+    name: 'Lucianus', title: 'Travelling actor',
+    colors: { robe: 0x303030, trim: 0x5a1a1a, hair: 0x1a1a1a, hat: null, prop: 'vial' },
+    bio: 'The villain of “The Murder of Gonzago” — “nephew to the king” — who pours poison into the sleeping player-king’s ear, re-enacting Claudius’ real crime before his face.',
+    facts: 'The poison-in-the-ear murder echoes a real scandal: the 1538 murder of the Duke of Urbino, allegedly via poison poured into his ear.',
+    quotes: ['Thoughts black, hands apt, drugs fit, and time agreeing…'],
+  },
+};
+
+// Ambient one-liners characters say near the player during free time.
+EC.BARKS = {
+  hamlet: ['O, that this too too solid flesh would melt…', 'Denmark’s a prison.', 'The time is out of joint: O cursed spite, that ever I was born to set it right!', 'What a piece of work is a man!'],
+  claudius: ['Madness in great ones must not unwatch’d go.', 'When sorrows come, they come not single spies, but in battalions.'],
+  gertrude: ['One woe doth tread upon another’s heel, so fast they follow.'],
+  ophelia: ['There’s rosemary, that’s for remembrance; pray, love, remember.', 'And there is pansies, that’s for thoughts.', 'We know what we are, but know not what we may be.'],
+  polonius: ['Brevity is the soul of wit.', 'Give every man thy ear, but few thy voice.', 'What do you read, my lord?'],
+  laertes: ['Best safety lies in fear.', 'The Sound air sharpens the sword-arm.'],
+  horatio: ['So have I heard and do in part believe it.', 'There needs no ghost, my lord, come from the grave to tell us this.'],
+  rosencrantz: ['My most dear lord!', 'We were sent for, ’tis true.'],
+  guildenstern: ['What should we say, my lord?'],
+  marcellus: ['Thus twice before, and jump at this dead hour, with martial stalk hath he gone by our watch.', 'Hold the watch. Keep your eyes on the platform.'],
+  barnardo: ['Long live the king!', '’Tis now struck twelve; get thee to bed.'],
+  francisco: ['For this relief much thanks: ’tis bitter cold.', 'Not a mouse stirring.'],
+  gravedigger: ['But age, with his stealing steps, hath claw’d me in his clutch…', 'A pick-axe, and a spade, a spade, for and a shrouding sheet…'],
+  sexton2: ['The gallows does well; but how does it well?'],
+  playerking: ['We shall express our duty in his eye.', 'Full thirty times hath Phoebus’ cart gone round…'],
+  playerqueen: ['So many journeys may the sun and moon make us again count o’er ere love be done!'],
+  lucianus: ['Confederate season, else no creature seeing…'],
+};
+
+// ─── Educational hotspots: [x, z, y] — floating ⓘ markers ───────────────────
+EC.HOTSPOTS = [
+  {
+    pos: [-47, 0, 3], title: 'The Dark Gate (Mørkeport)',
+    text: 'Kronborg is entered from the land side through a single guarded passage. The real castle’s approach winds through the Dark Gate and across two moats — a deliberate funnel so no army (and few smugglers) could rush the fortress. In the play, Elsinore is just as hard to leave: Hamlet calls Denmark itself “a prison.”',
+  },
+  {
+    pos: [0, 6.5, 2.5], title: 'The Courtyard & Fountain',
+    text: 'King Frederik II rebuilt a medieval fortress called Krogen into this Dutch-Renaissance palace (1574–1585), with sandstone facades and copper roofs. A magnificent gilded fountain stood here until 1658, when Swedish troops looted it during the Dano-Swedish War. Court life filled this yard — the natural stage for Hamlet’s “words, words, words.”',
+  },
+  {
+    pos: [4, 18, 2.5], title: 'The Chapel (1582)',
+    text: 'The chapel was consecrated in 1582 and is the only interior to survive the great fire of 1629 — its carved oak pews and gallery are original. In the play, a chapel like this is where Claudius tries to pray (“My words fly up, my thoughts remain below”) and Hamlet, sword drawn, decides not to kill him — the play’s great moment of fatal hesitation (Act III, sc. iii).',
+  },
+  {
+    pos: [-4, -18, 2.5], title: 'The Great Hall (Ballroom)',
+    text: 'At 62 metres, Kronborg’s ballroom was the longest hall in Northern Europe when finished in 1582 — in reality it occupies the upper floor of the south wing (placed at ground level here so everyone can walk in). Banquets here used trumpet fanfares and cannon salutes for every royal toast — exactly the custom Hamlet despises: “The king doth wake to-night and takes his rouse.” Here the court watches “The Mousetrap,” and here the final duel ends the play.',
+  },
+  {
+    pos: [19, 5.2, 2.2], title: 'Stairs to the Casemates',
+    text: 'Beneath Kronborg run the casemates — dark vaulted cellars where up to 1,000 soldiers could shelter with supplies for six weeks during a siege. Cold, damp and pitch-black, they were also used as storerooms, stables and a prison. Mind the steps.',
+  },
+  {
+    pos: [32, -2, -1.5], title: 'Holger Danske (Ogier the Dane)',
+    text: 'Legend says the hero Holger Danske sleeps in Kronborg’s casemates, his beard grown into the stone table — and will wake to save Denmark in its darkest hour. The famous statue (H.P. Pedersen-Dan, 1907) sits here in the dark. During WWII, the largest Danish resistance group named itself “Holger Danske” after him.',
+  },
+  {
+    pos: [78, 0, 9], title: 'The Gun Battery — the Ghost’s platform',
+    text: 'Cannons on the seaward rampart face the Øresund, the strait between Denmark and Sweden — the Swedish coast at Helsingborg is barely 4 km away. Shakespeare sets the Ghost scenes on “the platform”: this windswept battery is where the spirit walks between midnight and cock-crow (Act I). Return at night…',
+  },
+  {
+    pos: [60, -60, 8.5], title: 'The Sound Dues — why Kronborg is rich',
+    text: 'From 1429 to 1857 every ship passing through the Øresund paid a toll to the Danish crown — the Sound Dues, once a third of Denmark’s state income. Kronborg’s guns were the toll-booth’s enforcement. That wealth paid for the castle’s splendour — and made “Elsinore” a name every European sailor knew, probably including Shakespeare’s informants.',
+  },
+  {
+    pos: [-39.5, 38, 6], title: 'The Trumpeter’s Tower',
+    text: 'The tallest spire of Kronborg, about 62 m. Trumpeters sounded fanfares from here over the Sound — royal Danish pomp Shakespeare wrote into the play: trumpets and “ordnance shot off” accompany the king’s toasts, and again at the duel: “Give me the cups; and let the kettle to the trumpet speak.”',
+  },
+  {
+    pos: [39.5, -38, 6], title: 'The Telegraph Tower & the Flag',
+    text: 'The flat-topped corner tower flies the Dannebrog — by legend the flag that fell from the sky in 1219, the oldest continuously used national flag in the world. In the 1800s the tower carried an optical telegraph relaying signals across the Sound.',
+  },
+  {
+    pos: [0, 78, 9], title: 'Ramparts, Bastions & Moats',
+    text: 'After Swedish forces stormed and looted Kronborg in 1658, Denmark ringed it with some of Europe’s strongest star-shaped fortifications: angled bastions, dry and wet moats, and crownworks. The result is the layered fortress you walk today — palace inside, war-machine outside. UNESCO listed Kronborg as a World Heritage Site in 2000.',
+  },
+  {
+    pos: [10, 50, 2.5], title: 'The Queen’s Garden',
+    text: 'Renaissance castles kept formal herb and pleasure gardens within the walls. Ophelia’s world is told in plants: rosemary, pansies, fennel, columbine, rue, daisies, violets — and the willow by the brook where she drowns, “her clothes spread wide, and, mermaid-like, awhile they bore her up” (Act IV, sc. vii).',
+  },
+  {
+    pos: [-62, 110, 3], title: 'The Churchyard',
+    text: 'Act V opens here: two gravediggers joke and sing while digging Ophelia’s grave, and Hamlet, just returned to Denmark, lifts the skull of Yorick — the jester who carried him as a boy — and stares mortality in the face. “Alexander died, Alexander was buried, Alexander returneth into dust.”',
+  },
+  {
+    pos: [-48, 99, 2.5], title: 'The Willow by the Water',
+    text: '“There is a willow grows aslant a brook, that shows his hoar leaves in the glassy stream.” Gertrude’s lyrical report of Ophelia’s drowning (Act IV, sc. vii) is one of the most painted passages in literature — most famously by John Everett Millais (1851–52).',
+  },
+  {
+    pos: [-95, -8, 3], title: 'Shakespeare at Elsinore?',
+    text: 'Shakespeare almost certainly never visited Denmark — but actors from his world did. English players performed for the Danish court at Elsinore in 1585–86, and Frederik II’s brand-new Kronborg was famous across Europe. Hamlet (written ≈1600) is based on the medieval Danish legend of Amleth, told by Saxo Grammaticus ≈1200. Since 1816 the play has been staged at the real castle again and again — with Hamlets including Laurence Olivier, John Gielgud, Christopher Plummer and Jude Law.',
+  },
+  {
+    pos: [39.5, 38, 6], title: 'Royal Apartments & the King’s Tower',
+    text: 'The king’s and queen’s chambers occupied separate wings, linked by galleries — in the play Gertrude’s “closet” is where Hamlet confronts his mother and kills the eavesdropping Polonius through the arras (wall tapestry): “How now! a rat? Dead, for a ducat, dead!” (Act III, sc. iv).',
+  },
+];
+
+// ─── Teleport destinations (menu “Visit”) ────────────────────────────────────
+// face: camera yaw — 0 looks north (−z), −π/2 east, π south, π/2 west
+EC.PLACES = [
+  { id: 'bridge',    name: 'Castle approach & bridge', pos: [-108, 0],  face: -Math.PI / 2 },
+  { id: 'courtyard', name: 'The Courtyard',            pos: [-14, 0],   face: -Math.PI / 2 },
+  { id: 'hall',      name: 'The Great Hall',           pos: [0, -15],   face: 0 },
+  { id: 'chapel',    name: 'The Chapel',               pos: [8, 15],    face: Math.PI },
+  { id: 'casemates', name: 'The Casemates (stairs down)', pos: [13, 8], face: -Math.PI / 2 },
+  { id: 'battery',   name: 'Gun Battery (sea view)',   pos: [74, 0],    face: -Math.PI / 2 },
+  { id: 'ramparts',  name: 'North Rampart walk',       pos: [20, -77],  face: Math.PI / 2 },
+  { id: 'garden',    name: 'The Queen’s Garden',       pos: [10, 47],   face: Math.PI },
+  { id: 'graveyard', name: 'The Churchyard',           pos: [-62, 105], face: Math.PI },
+];
+
+// ─── Scheduled scenes (gameHour) ─────────────────────────────────────────────
+// who/marks reference nav nodes (see nav.js). Lines run in real time.
+EC.SCENES = [
+  {
+    id: 'watch', hour: 0.5, title: 'The Watch', ref: 'Act I, scene i — the platform',
+    place: 'rampN',
+    marks: { barnardo: ['rampN', 0, 0], francisco: ['rampN', 3, 1], marcellus: ['rampN', -3, 1], horatio: ['rampN', -1.5, 2.5], ghost: ['rampNE', 0, 0] },
+    lines: [
+      { who: 'barnardo', text: 'Who’s there?' },
+      { who: 'francisco', text: 'Nay, answer me: stand, and unfold yourself.' },
+      { who: 'barnardo', text: 'Long live the king!' },
+      { who: 'francisco', text: 'You come most carefully upon your hour. ’Tis bitter cold, and I am sick at heart.' },
+      { who: 'marcellus', text: 'Horatio says ’tis but our fantasy, and will not let belief take hold of him.' },
+      { who: 'horatio', text: 'Tush, tush, ’twill not appear.' },
+      { who: 'barnardo', text: 'Last night of all, when yond same star that’s westward from the pole had made his course… the bell then beating one—' },
+      { who: 'marcellus', text: 'Peace, break thee off; look, where it comes again!', action: 'ghostWalk' },
+      { who: 'barnardo', text: 'In the same figure, like the king that’s dead.' },
+      { who: 'horatio', text: 'Most like: it harrows me with fear and wonder.' },
+      { who: 'horatio', text: 'Stay! speak, speak! I charge thee, speak!' },
+      { who: 'marcellus', text: '’Tis gone, and will not answer.', action: 'ghostFade' },
+      { who: 'horatio', text: 'This bodes some strange eruption to our state. Let us impart what we have seen to-night unto young Hamlet.' },
+    ],
+  },
+  {
+    id: 'ghosttale', hour: 1.4, title: 'The Ghost’s Tale', ref: 'Act I, scenes iv–v — the battery',
+    place: 'rampE',
+    marks: { hamlet: ['rampE', -2, 1], horatio: ['rampE', -5, 3], marcellus: ['rampE', -5, -2], ghost: ['rampE', 3, 0] },
+    lines: [
+      { who: 'hamlet', text: 'The air bites shrewdly; it is very cold.' },
+      { who: 'horatio', text: 'Look, my lord, it comes!', action: 'ghostShow' },
+      { who: 'hamlet', text: 'Angels and ministers of grace defend us! … I’ll call thee Hamlet, King, father, royal Dane: O, answer me!' },
+      { who: 'ghost', text: 'Mark me. My hour is almost come, when I to sulphurous and tormenting flames must render up myself.' },
+      { who: 'ghost', text: 'I am thy father’s spirit, doom’d for a certain term to walk the night.' },
+      { who: 'ghost', text: 'If thou didst ever thy dear father love — revenge his foul and most unnatural murder.' },
+      { who: 'hamlet', text: 'Murder!' },
+      { who: 'ghost', text: 'Murder most foul, as in the best it is; but this most foul, strange and unnatural.' },
+      { who: 'ghost', text: 'The serpent that did sting thy father’s life now wears his crown.' },
+      { who: 'hamlet', text: 'O my prophetic soul! My uncle!' },
+      { who: 'ghost', text: 'Sleeping within my orchard, thy uncle stole with juice of cursed hebenon in a vial, and in the porches of my ears did pour the leperous distilment…' },
+      { who: 'ghost', text: 'The glow-worm shows the matin to be near. Adieu, adieu! Hamlet, remember me.', action: 'ghostFade' },
+      { who: 'hamlet', text: 'Remember thee! Ay, thou poor ghost, while memory holds a seat in this distracted globe.' },
+      { who: 'marcellus', text: 'Something is rotten in the state of Denmark.' },
+      { who: 'hamlet', text: 'There are more things in heaven and earth, Horatio, than are dreamt of in your philosophy.' },
+      { who: 'hamlet', text: 'The time is out of joint: O cursed spite, that ever I was born to set it right!' },
+    ],
+  },
+  {
+    id: 'court', hour: 9, title: 'The Court Assembles', ref: 'Act I, scene ii — the Great Hall',
+    place: 'hallE',
+    marks: { claudius: ['hallE', 0, 0], gertrude: ['hallE', 2, 0.5], polonius: ['hallE', -3, 2], laertes: ['hallE', -5, 3], hamlet: ['hallE', -7, 4.5], horatio: ['hallE', -10, 4] },
+    lines: [
+      { who: 'claudius', text: 'Though yet of Hamlet our dear brother’s death the memory be green… yet so far hath discretion fought with nature that we with wisest sorrow think on him, together with remembrance of ourselves.' },
+      { who: 'claudius', text: 'Therefore our sometime sister, now our queen… have we, as ’twere with a defeated joy, taken to wife.' },
+      { who: 'laertes', text: 'My dread lord, your leave and favour to return to France.' },
+      { who: 'claudius', text: 'Take thy fair hour, Laertes; time be thine. But now, my cousin Hamlet, and my son—' },
+      { who: 'hamlet', text: '(aside) A little more than kin, and less than kind.' },
+      { who: 'claudius', text: 'How is it that the clouds still hang on you?' },
+      { who: 'hamlet', text: 'Not so, my lord; I am too much i’ the sun.' },
+      { who: 'gertrude', text: 'Good Hamlet, cast thy nighted colour off. Do not for ever with thy vailed lids seek for thy noble father in the dust.' },
+      { who: 'hamlet', text: 'Seems, madam! nay it is; I know not “seems.” … I have that within which passeth show; these but the trappings and the suits of woe.' },
+      { who: 'claudius', text: '’Tis sweet and commendable in your nature, Hamlet, to give these mourning duties to your father… but to persever in obstinate condolement is a course of impious stubbornness.' },
+      { who: 'gertrude', text: 'Let not thy mother lose her prayers, Hamlet: I pray thee, stay with us; go not to Wittenberg.' },
+      { who: 'hamlet', text: 'I shall in all my best obey you, madam.' },
+    ],
+  },
+  {
+    id: 'advice', hour: 10.5, title: 'Polonius’ Advice', ref: 'Act I, scene iii — before the gate',
+    place: 'courtW',
+    marks: { polonius: ['courtW', 0, -1.5], laertes: ['courtW', 2, 1], ophelia: ['courtW', -2, 1.5] },
+    lines: [
+      { who: 'laertes', text: 'My necessaries are embark’d: farewell. And, sister… do not sleep, but let me hear from you.' },
+      { who: 'polonius', text: 'Yet here, Laertes! aboard, aboard, for shame! … And these few precepts in thy memory see thou character.' },
+      { who: 'polonius', text: 'Give thy thoughts no tongue, nor any unproportioned thought his act.' },
+      { who: 'polonius', text: 'Neither a borrower nor a lender be; for loan oft loses both itself and friend.' },
+      { who: 'polonius', text: 'This above all: to thine own self be true, and it must follow, as the night the day, thou canst not then be false to any man.' },
+      { who: 'laertes', text: 'Most humbly do I take my leave, my lord. Farewell, Ophelia; and remember well what I have said to you.', action: 'laertesExit' },
+      { who: 'ophelia', text: '’Tis in my memory lock’d, and you yourself shall keep the key of it.' },
+      { who: 'polonius', text: 'What is’t, Ophelia, he hath said to you? … Lord Hamlet? Affection! pooh! you speak like a green girl.' },
+      { who: 'ophelia', text: 'I shall obey, my lord.' },
+    ],
+  },
+  {
+    id: 'words', hour: 12, title: '“Words, words, words”', ref: 'Act II, scene ii — the lobby',
+    place: 'cyE',
+    marks: { hamlet: ['cyE', 0, 0], polonius: ['cyE', -3, 1] },
+    lines: [
+      { who: 'polonius', text: 'How does my good Lord Hamlet?' },
+      { who: 'hamlet', text: 'Well, God-a-mercy.' },
+      { who: 'polonius', text: 'Do you know me, my lord?' },
+      { who: 'hamlet', text: 'Excellent well; you are a fishmonger.' },
+      { who: 'polonius', text: 'Not I, my lord.' },
+      { who: 'hamlet', text: 'Then I would you were so honest a man.' },
+      { who: 'polonius', text: 'What do you read, my lord?' },
+      { who: 'hamlet', text: 'Words, words, words.' },
+      { who: 'polonius', text: '(aside) Though this be madness, yet there is method in ’t. — Will you walk out of the air, my lord?' },
+      { who: 'hamlet', text: 'Into my grave.' },
+      { who: 'polonius', text: '(aside) How pregnant sometimes his replies are!' },
+      { who: 'hamlet', text: 'You cannot, sir, take from me any thing that I will more willingly part withal: except my life, except my life, except my life.' },
+    ],
+  },
+  {
+    id: 'players', hour: 13.5, title: 'The Players Arrive', ref: 'Act II, scene ii — the courtyard',
+    place: 'cyC',
+    marks: { playerking: ['cyC', 0, 0], playerqueen: ['cyC', 2, 1], lucianus: ['cyC', -2, 1], hamlet: ['cyC', 0, -3.5], rosencrantz: ['cyC', 4, -2], guildenstern: ['cyC', -4, -2], polonius: ['cyC', 6, 1] },
+    lines: [
+      { who: 'polonius', text: 'The actors are come hither, my lord. The best actors in the world, either for tragedy, comedy, history, pastoral… these are the only men.' },
+      { who: 'hamlet', text: 'You are welcome, masters; welcome, all. O, my old friend! thy face is valanced since I saw thee last.' },
+      { who: 'hamlet', text: 'We’ll hear a play to-morrow. Can you play the Murder of Gonzago? — and could you study a speech of some dozen or sixteen lines, which I would set down and insert in’t?' },
+      { who: 'playerking', text: 'Ay, my lord.' },
+      { who: 'hamlet', text: 'Very well. Follow that lord; and look you mock him not.' },
+      { who: 'hamlet', text: '(alone) I have heard that guilty creatures sitting at a play have by the very cunning of the scene been struck so to the soul that presently they have proclaim’d their malefactions.' },
+      { who: 'hamlet', text: 'The play’s the thing wherein I’ll catch the conscience of the king.' },
+    ],
+  },
+  {
+    id: 'tobe', hour: 15, title: '“To be, or not to be”', ref: 'Act III, scene i — the soliloquy',
+    place: 'rampE',
+    marks: { hamlet: ['rampE', 0, 0] },
+    lines: [
+      { who: 'hamlet', text: 'To be, or not to be: that is the question:' },
+      { who: 'hamlet', text: 'Whether ’tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles, and by opposing end them?' },
+      { who: 'hamlet', text: 'To die: to sleep; no more; and by a sleep to say we end the heart-ache and the thousand natural shocks that flesh is heir to.' },
+      { who: 'hamlet', text: 'To die, to sleep; to sleep: perchance to dream: ay, there’s the rub; for in that sleep of death what dreams may come… must give us pause.' },
+      { who: 'hamlet', text: 'But that the dread of something after death, the undiscover’d country from whose bourn no traveller returns, puzzles the will…' },
+      { who: 'hamlet', text: 'Thus conscience does make cowards of us all; and thus the native hue of resolution is sicklied o’er with the pale cast of thought.' },
+    ],
+  },
+  {
+    id: 'nunnery', hour: 15.75, title: 'The Nunnery Scene', ref: 'Act III, scene i — the lobby',
+    place: 'chapelDoorOut',
+    marks: { ophelia: ['chapelDoorOut', 0, 0], hamlet: ['chapelDoorOut', -3, -1], claudius: ['chapelDoorOut', 8, -2], polonius: ['chapelDoorOut', 10, -1] },
+    lines: [
+      { who: 'ophelia', text: 'Good my lord, how does your honour for this many a day?' },
+      { who: 'hamlet', text: 'I humbly thank you; well, well, well.' },
+      { who: 'ophelia', text: 'My lord, I have remembrances of yours, that I have longed long to re-deliver; I pray you, now receive them.' },
+      { who: 'hamlet', text: 'No, not I; I never gave you aught.' },
+      { who: 'hamlet', text: 'I did love you once.' },
+      { who: 'ophelia', text: 'Indeed, my lord, you made me believe so.' },
+      { who: 'hamlet', text: 'You should not have believed me… I loved you not.' },
+      { who: 'ophelia', text: 'I was the more deceived.' },
+      { who: 'hamlet', text: 'Get thee to a nunnery: why wouldst thou be a breeder of sinners? I am myself indifferent honest; but yet I could accuse me of such things that it were better my mother had not borne me.' },
+      { who: 'hamlet', text: 'I say, we will have no more marriages: those that are married already, all but one, shall live. To a nunnery, go.' },
+      { who: 'ophelia', text: 'O, what a noble mind is here o’erthrown! … O, woe is me, to have seen what I have seen, see what I see!' },
+      { who: 'claudius', text: '(to Polonius) Love! his affections do not that way tend… There’s something in his soul o’er which his melancholy sits on brood.' },
+      { who: 'claudius', text: 'He shall with speed to England… Madness in great ones must not unwatch’d go.' },
+    ],
+  },
+  {
+    id: 'flowers', hour: 17, title: 'Ophelia’s Flowers', ref: 'Act IV, scene v — the garden',
+    place: 'gardenA',
+    marks: { ophelia: ['gardenA', 0, 0], gertrude: ['gardenA', 2.5, 1], laertes: ['gardenA', -2.5, 1] },
+    lines: [
+      { who: 'ophelia', text: '(sings) How should I your true love know from another one? By his cockle hat and staff, and his sandal shoon.' },
+      { who: 'gertrude', text: 'Alas, sweet lady, what imports this song?' },
+      { who: 'ophelia', text: 'Say you? nay, pray you, mark. (sings) He is dead and gone, lady, he is dead and gone; at his head a grass-green turf, at his heels a stone.' },
+      { who: 'laertes', text: 'O heat, dry up my brains! … Dear maid, kind sister, sweet Ophelia! O heavens! is’t possible, a young maid’s wits should be as mortal as an old man’s life?' },
+      { who: 'ophelia', text: 'There’s rosemary, that’s for remembrance; pray, love, remember: and there is pansies, that’s for thoughts.' },
+      { who: 'ophelia', text: 'There’s fennel for you, and columbines: there’s rue for you; and here’s some for me… there’s a daisy: I would give you some violets, but they withered all when my father died.' },
+      { who: 'laertes', text: 'Thought and affliction, passion, hell itself, she turns to favour and to prettiness.' },
+      { who: 'ophelia', text: '(sings) And will he not come again? No, no, he is dead: go to thy death-bed: he never will come again.' },
+    ],
+  },
+  {
+    id: 'mousetrap', hour: 19, title: 'The Mousetrap', ref: 'Act III, scene ii — the Great Hall',
+    place: 'hallW',
+    marks: {
+      playerking: ['hallW', 0, -1.5], playerqueen: ['hallW', 2, -1.5], lucianus: ['hallW', -2.5, -1.5],
+      claudius: ['hallW', 2, 3.5], gertrude: ['hallW', 4.5, 3.5], hamlet: ['hallW', -3, 4.3], ophelia: ['hallW', -5, 4.3],
+      polonius: ['hallW', 7, 4.3], horatio: ['hallW', -8, 3.5], rosencrantz: ['hallW', 9, 5], guildenstern: ['hallW', 11, 5], laertes: ['hallW', -8, 5],
+    },
+    lines: [
+      { who: 'hamlet', text: 'Speak the speech, I pray you, as I pronounced it to you, trippingly on the tongue… Suit the action to the word, the word to the action.' },
+      { who: 'hamlet', text: '(to Horatio) There is a play to-night before the king; one scene of it comes near the circumstance of my father’s death. Observe mine uncle.' },
+      { who: 'claudius', text: 'How fares our cousin Hamlet?' },
+      { who: 'hamlet', text: 'Excellent, i’ faith; of the chameleon’s dish: I eat the air, promise-crammed.' },
+      { who: 'playerking', text: '(performing) Full thirty times hath Phoebus’ cart gone round Neptune’s salt wash and Tellus’ orbed ground… since love our hearts and Hymen did our hands unite.' },
+      { who: 'playerqueen', text: '(performing) Both here and hence pursue me lasting strife, if once a widow, ever I be wife!' },
+      { who: 'hamlet', text: 'Madam, how like you this play?' },
+      { who: 'gertrude', text: 'The lady doth protest much, methinks.' },
+      { who: 'claudius', text: 'Have you heard the argument? Is there no offence in ’t?' },
+      { who: 'hamlet', text: 'No, no, they do but jest, poison in jest; no offence i’ the world. The play is the image of a murder done in Vienna… ’tis a knavish piece of work: but what o’ that?' },
+      { who: 'lucianus', text: '(performing) Thoughts black, hands apt, drugs fit, and time agreeing… thy natural magic and dire property on wholesome life usurp immediately.', action: 'poison' },
+      { who: 'hamlet', text: 'He poisons him i’ the garden for’s estate… you shall see anon how the murderer gets the love of Gonzago’s wife.' },
+      { who: 'ophelia', text: 'The king rises.' },
+      { who: 'hamlet', text: 'What, frighted with false fire!' },
+      { who: 'gertrude', text: 'How fares my lord?' },
+      { who: 'polonius', text: 'Give o’er the play.' },
+      { who: 'claudius', text: 'Give me some light: away!', action: 'kingFlees' },
+      { who: 'hamlet', text: 'Why, let the stricken deer go weep, the hart ungalled play… O good Horatio, I’ll take the ghost’s word for a thousand pound. Didst perceive?' },
+      { who: 'horatio', text: 'Very well, my lord… I did very well note him.' },
+    ],
+  },
+  {
+    id: 'prayer', hour: 21, title: 'The Prayer Scene', ref: 'Act III, scene iii — the chapel',
+    place: 'altar',
+    marks: { claudius: ['altar', 0, 0], hamlet: ['altar', -6, 0] },
+    lines: [
+      { who: 'claudius', text: 'O, my offence is rank, it smells to heaven; it hath the primal eldest curse upon’t, a brother’s murder.' },
+      { who: 'claudius', text: 'What if this cursed hand were thicker than itself with brother’s blood, is there not rain enough in the sweet heavens to wash it white as snow?' },
+      { who: 'claudius', text: 'But, O, what form of prayer can serve my turn? “Forgive me my foul murder”? That cannot be; since I am still possess’d of those effects for which I did the murder — my crown, mine own ambition and my queen.' },
+      { who: 'hamlet', text: '(unseen) Now might I do it pat, now he is praying; and now I’ll do’t. And so he goes to heaven; and so am I revenged. That would be scann’d.' },
+      { who: 'hamlet', text: 'A villain kills my father; and for that, I, his sole son, do this same villain send to heaven. O, this is hire and salary, not revenge.' },
+      { who: 'hamlet', text: 'Up, sword; and know thou a more horrid hent… when he is drunk asleep, or in his rage — then trip him, that his heels may kick at heaven.' },
+      { who: 'claudius', text: '(rising) My words fly up, my thoughts remain below: words without thoughts never to heaven go.' },
+    ],
+  },
+  {
+    id: 'duel', hour: 22, title: 'The Duel', ref: 'Act V, scene ii — the Great Hall',
+    place: 'hallC',
+    marks: {
+      hamlet: ['hallC', -3, -3], laertes: ['hallC', 3, -3], claudius: ['hallC', 3, 3.5], gertrude: ['hallC', 0.5, 3.5],
+      horatio: ['hallC', -6, 3], polonius: null, ophelia: null,
+      rosencrantz: null, guildenstern: null,
+    },
+    lines: [
+      { who: 'hamlet', text: 'Give me your pardon, sir: I’ve done you wrong… Was’t Hamlet wrong’d Laertes? Never Hamlet. His madness is poor Hamlet’s enemy.' },
+      { who: 'laertes', text: 'I am satisfied in nature… I do receive your offer’d love like love, and will not wrong it.' },
+      { who: 'hamlet', text: 'Give us the foils. Come on.', action: 'fence' },
+      { who: 'claudius', text: 'Set me the stoups of wine upon that table. If Hamlet give the first or second hit… the king shall drink to Hamlet’s better breath; and in the cup an union shall he throw.' },
+      { who: 'hamlet', text: 'One.' },
+      { who: 'laertes', text: 'No.' },
+      { who: 'hamlet', text: 'Judgment. — A hit, a very palpable hit.' },
+      { who: 'gertrude', text: 'The queen carouses to thy fortune, Hamlet. (drinks)' },
+      { who: 'claudius', text: '(aside) It is the poison’d cup: it is too late.' },
+      { who: 'laertes', text: 'Have at you now!', action: 'fence2' },
+      { who: 'gertrude', text: 'No, no, the drink, the drink — O my dear Hamlet — the drink, the drink! I am poison’d.', action: 'gertrudeFalls' },
+      { who: 'laertes', text: '(falling) Hamlet, thou art slain… the treacherous instrument is in thy hand, unbated and envenom’d… the king, the king’s to blame.', action: 'laertesFalls' },
+      { who: 'hamlet', text: 'The point envenom’d too! Then, venom, to thy work.', action: 'kingFalls' },
+      { who: 'laertes', text: 'He is justly served… Exchange forgiveness with me, noble Hamlet: mine and my father’s death come not upon thee, nor thine on me!' },
+      { who: 'hamlet', text: 'Heaven make thee free of it! I follow thee… I am dead, Horatio. Wretched queen, adieu!' },
+      { who: 'hamlet', text: 'O, I could tell you — but let it be. Horatio, I am dead; thou livest; report me and my cause aright to the unsatisfied.' },
+      { who: 'hamlet', text: 'The rest is silence.', action: 'hamletFalls' },
+      { who: 'horatio', text: 'Now cracks a noble heart. Good night, sweet prince, and flights of angels sing thee to thy rest!' },
+      { who: 'horatio', text: 'And let me speak to the yet unknowing world how these things came about… All this can I truly deliver.' },
+    ],
+  },
+  {
+    id: 'graves', hour: 11, title: 'The Gravediggers', ref: 'Act V, scene i — the churchyard',
+    place: 'graveyard',
+    marks: { gravedigger: ['graveyard', 0, 0], sexton2: ['graveyard', 2.5, 0.5], hamlet: null, horatio: null },
+    optional: true,
+    lines: [
+      { who: 'gravedigger', text: 'Is she to be buried in Christian burial that wilfully seeks her own salvation?' },
+      { who: 'sexton2', text: 'I tell thee she is: and therefore make her grave straight: the crowner hath sat on her, and finds it Christian burial.' },
+      { who: 'gravedigger', text: 'How can that be, unless she drowned herself in her own defence? … Here lies the water; good: here stands the man; good.' },
+      { who: 'sexton2', text: 'Who builds stronger than a mason, a shipwright, or a carpenter?' },
+      { who: 'gravedigger', text: 'A grave-maker: the houses that he makes last till doomsday. (sings) In youth, when I did love, did love, methought it was very sweet…' },
+      { who: 'gravedigger', text: 'Here’s a skull now; this skull has lain in the earth three and twenty years… This same skull, sir, was Yorick’s skull, the king’s jester.' },
+    ],
+  },
+];
+
+// ─── Daily schedules (outside scenes). Activities by [startHour, endHour) ────
+// type: idle | wander | patrol | off ; nodes are nav-node ids
+EC.SCHEDULES = {
+  hamlet: [
+    [0, 3, { type: 'wander', nodes: ['rampE', 'rampNE', 'rampN'] }],
+    [3, 8.5, { type: 'off' }],
+    [8.5, 10.5, { type: 'idle', node: 'hallE' }],
+    [10.5, 13.5, { type: 'wander', nodes: ['cyE', 'cyC', 'cyS'] }],
+    [13.5, 16.5, { type: 'wander', nodes: ['cyC', 'rampE', 'chapelDoorOut'] }],
+    [16.5, 18.5, { type: 'wander', nodes: ['rampE', 'rampSE', 'battery2'] }],
+    [18.5, 21, { type: 'idle', node: 'hallW' }],
+    [21, 23, { type: 'wander', nodes: ['altar', 'chapelIn', 'hallC'] }],
+    [23, 24, { type: 'wander', nodes: ['rampN', 'rampE'] }],
+  ],
+  claudius: [
+    [0, 8, { type: 'off' }],
+    [8, 11, { type: 'idle', node: 'hallE' }],
+    [11, 14, { type: 'wander', nodes: ['hallE', 'hallC', 'cyW'] }],
+    [14, 17, { type: 'wander', nodes: ['chapelDoorOut', 'cyS', 'gardenB'] }],
+    [17, 19, { type: 'wander', nodes: ['gardenA', 'gardenB', 'cyS'] }],
+    [19, 21, { type: 'idle', node: 'hallW' }],
+    [21, 22, { type: 'idle', node: 'altar' }],
+    [22, 24, { type: 'idle', node: 'hallC' }],
+  ],
+  gertrude: [
+    [0, 8.5, { type: 'off' }],
+    [8.5, 11, { type: 'idle', node: 'hallE' }],
+    [11, 14, { type: 'wander', nodes: ['cyW', 'cyC', 'cyN'] }],
+    [14, 16.5, { type: 'wander', nodes: ['gardenA', 'gardenB'] }],
+    [16.5, 18.5, { type: 'wander', nodes: ['gardenA', 'cyS', 'gardenB'] }],
+    [18.5, 22.5, { type: 'idle', node: 'hallW' }],
+    [22.5, 24, { type: 'off' }],
+  ],
+  ophelia: [
+    [0, 8, { type: 'off' }],
+    [8, 10, { type: 'wander', nodes: ['gardenA', 'gardenB'] }],
+    [10, 12, { type: 'wander', nodes: ['cyW', 'cyS', 'chapelDoorOut'] }],
+    [12, 14, { type: 'idle', node: 'chapelIn' }],
+    [14, 16.5, { type: 'wander', nodes: ['chapelDoorOut', 'cyS'] }],
+    [16.5, 18.5, { type: 'wander', nodes: ['gardenA', 'gardenB', 'willow'] }],
+    [18.5, 20.5, { type: 'idle', node: 'hallW' }],
+    [20.5, 24, { type: 'off' }],
+  ],
+  polonius: [
+    [0, 7.5, { type: 'off' }],
+    [7.5, 10.5, { type: 'wander', nodes: ['hallE', 'hallC', 'cyN'] }],
+    [10.5, 13, { type: 'wander', nodes: ['courtW', 'cyC', 'cyE'] }],
+    [13, 16.5, { type: 'wander', nodes: ['cyC', 'chapelDoorOut', 'cyS'] }],
+    [16.5, 19, { type: 'wander', nodes: ['hallC', 'cyN', 'cyW'] }],
+    [19, 21.5, { type: 'idle', node: 'hallW' }],
+    [21.5, 24, { type: 'off' }],
+  ],
+  laertes: [
+    [0, 8, { type: 'off' }],
+    [8, 10.5, { type: 'patrol', nodes: ['cyC', 'cyS', 'cyC', 'cyN'] }],
+    [10.5, 11.2, { type: 'idle', node: 'courtW' }],
+    [11.2, 16.5, { type: 'off' }],
+    [16.5, 18.5, { type: 'wander', nodes: ['gardenA', 'gardenB'] }],
+    [18.5, 23, { type: 'idle', node: 'hallW' }],
+    [23, 24, { type: 'off' }],
+  ],
+  horatio: [
+    [0, 2.5, { type: 'wander', nodes: ['rampN', 'rampE', 'rampNE'] }],
+    [2.5, 8.5, { type: 'off' }],
+    [8.5, 12, { type: 'wander', nodes: ['hallE', 'cyN', 'cyE'] }],
+    [12, 16, { type: 'wander', nodes: ['cyE', 'cyC', 'rampE'] }],
+    [16, 18.5, { type: 'wander', nodes: ['rampE', 'battery2'] }],
+    [18.5, 23, { type: 'idle', node: 'hallW' }],
+    [23, 24, { type: 'wander', nodes: ['rampN', 'rampNE'] }],
+  ],
+  ghost: [
+    [0, 2.5, { type: 'patrol', nodes: ['rampN', 'rampNE', 'rampE'], ghost: true }],
+    [2.5, 23.5, { type: 'off' }],
+    [23.5, 24, { type: 'patrol', nodes: ['rampN', 'rampNE'], ghost: true }],
+  ],
+  rosencrantz: [
+    [0, 9, { type: 'off' }],
+    [9, 18, { type: 'patrol', nodes: ['cyN', 'cyE', 'cyS', 'cyW'] }],
+    [18, 22.5, { type: 'idle', node: 'hallW' }],
+    [22.5, 24, { type: 'off' }],
+  ],
+  guildenstern: [
+    [0, 9, { type: 'off' }],
+    [9, 18, { type: 'patrol', nodes: ['cyE', 'cyS', 'cyW', 'cyN'] }],
+    [18, 22.5, { type: 'idle', node: 'hallW' }],
+    [22.5, 24, { type: 'off' }],
+  ],
+  marcellus: [
+    [0, 3, { type: 'patrol', nodes: ['rampN', 'rampNE'] }],
+    [3, 9, { type: 'off' }],
+    [9, 15, { type: 'patrol', nodes: ['gateOut', 'apronW', 'rampGapW'] }],
+    [15, 21, { type: 'patrol', nodes: ['rampSE', 'rampE', 'rampNE'] }],
+    [21, 24, { type: 'patrol', nodes: ['rampN', 'rampNE'] }],
+  ],
+  barnardo: [
+    [0, 3, { type: 'patrol', nodes: ['rampNE', 'rampN', 'rampNW'] }],
+    [3, 10, { type: 'off' }],
+    [10, 16, { type: 'idle', node: 'gateOut' }],
+    [16, 22, { type: 'patrol', nodes: ['rampN', 'rampNW'] }],
+    [22, 24, { type: 'patrol', nodes: ['rampN', 'rampNE'] }],
+  ],
+  francisco: [
+    [0, 1, { type: 'idle', node: 'rampN' }],
+    [1, 8, { type: 'off' }],
+    [8, 14, { type: 'patrol', nodes: ['rampE', 'rampSE', 'rampS'] }],
+    [14, 20, { type: 'idle', node: 'gateMid' }],
+    [20, 24, { type: 'patrol', nodes: ['rampS', 'rampSE'] }],
+  ],
+  gravedigger: [
+    [0, 8, { type: 'off' }],
+    [8, 17.5, { type: 'idle', node: 'graveyard', anim: 'dig' }],
+    [17.5, 24, { type: 'off' }],
+  ],
+  sexton2: [
+    [0, 8.5, { type: 'off' }],
+    [8.5, 17, { type: 'wander', nodes: ['graveyard', 'gyB'], anim: 'dig' }],
+    [17, 24, { type: 'off' }],
+  ],
+  playerking: [
+    [0, 13.2, { type: 'off' }],
+    [13.2, 13.5, { type: 'idle', node: 'bridgeW' }],
+    [13.5, 18.5, { type: 'wander', nodes: ['cyC', 'cyN'] }],
+    [18.5, 20.5, { type: 'idle', node: 'hallW' }],
+    [20.5, 24, { type: 'off' }],
+  ],
+  playerqueen: [
+    [0, 13.2, { type: 'off' }],
+    [13.2, 13.5, { type: 'idle', node: 'bridgeW' }],
+    [13.5, 18.5, { type: 'wander', nodes: ['cyN', 'cyC'] }],
+    [18.5, 20.5, { type: 'idle', node: 'hallW' }],
+    [20.5, 24, { type: 'off' }],
+  ],
+  lucianus: [
+    [0, 13.2, { type: 'off' }],
+    [13.2, 13.5, { type: 'idle', node: 'bridgeW' }],
+    [13.5, 18.5, { type: 'wander', nodes: ['cyC', 'cyS'] }],
+    [18.5, 20.5, { type: 'idle', node: 'hallW' }],
+    [20.5, 24, { type: 'off' }],
+  ],
+};
+
+EC.ABOUT_HTML = `
+<h2>Elsinore — Kronborg Castle</h2>
+<p><b>Kronborg</b> stands at Helsingør (“Elsinore” in English), on the narrowest point of the
+Øresund — the strait between Denmark and Sweden, barely 4&nbsp;km wide. A fortress called
+<i>Krogen</i> (“the Hook”) was built here by King Erik of Pomerania in the 1420s to enforce the
+<b>Sound Dues</b>: a toll on every ship entering or leaving the Baltic, for over 400 years one of
+Denmark’s main sources of income.</p>
+<p>King <b>Frederik II</b> rebuilt Krogen into a magnificent Dutch-Renaissance palace
+(1574–1585) and renamed it <b>Kronborg</b> — “castle of the crown.” Its sandstone facades,
+copper-green roofs, the 62-metre <b>Great Hall</b> (then the longest in Northern Europe), the
+chapel of 1582, and the casemates beneath made it famous across Europe. The castle burned in
+1629 (all but the chapel), was rebuilt by Christian IV, stormed and looted by Swedish troops in
+1658, and afterwards ringed with the massive star-shaped ramparts you can walk today. From 1739
+to the 1900s it served as barracks and a prison. It became a <b>UNESCO World Heritage Site</b>
+in 2000.</p>
+<h2>Hamlet at Elsinore</h2>
+<p>Shakespeare set <i>The Tragedie of Hamlet, Prince of Denmarke</i> (written ≈1600) at
+“Elsinore,” drawing on the medieval Danish legend of <b>Amleth</b> recorded by Saxo
+Grammaticus around 1200. He almost certainly never saw the castle — but English actors
+(including Will Kempe, later the clown of Shakespeare’s own company) performed at Elsinore in
+1585–86, when Kronborg was brand new and the talk of Europe. Since 1816 the play has returned
+home: Hamlet is regularly staged in the castle courtyard, with Hamlets including Laurence
+Olivier (1937), John Gielgud, Richard Burton, Christopher Plummer, Derek Jacobi and Jude Law.</p>
+<h2>This replica</h2>
+<p>The model is laid out at <b>true scale</b>: a four-winged palace around a 50×40&nbsp;m
+courtyard, the 62&nbsp;m Great Hall, the Trumpeter’s Tower (≈62&nbsp;m), ramparts, moat,
+gun battery facing the Sound — and Sweden on the horizon. It is a faithful <i>impression</i>,
+not a survey model; one liberty is marked on its plaque (the Great Hall is shown at courtyard
+level — in reality it is on the upper floor of the south wing). Around the grounds,
+<b>fifteen ⓘ markers</b> tell the castle’s history, and the residents of Elsinore play out
+<b>twelve scenes from Hamlet</b> on a daily cycle — open the <b>Playbill</b> to jump to any of
+them. All dialogue is Shakespeare’s text.</p>
+<h2>Tips</h2>
+<p>Time runs fast (one castle day ≈ 12 minutes; use ⏸/1×/3× or the Playbill’s
+“Go” buttons). The Ghost only walks between midnight and cock-crow. You cannot swim in the
+moat or the Sound — Ophelia’s fate is warning enough.</p>`;
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// nav.js — waypoint graph + A* pathfinding for NPC movement
+// Coordinates in metres: x → east, z → south, y → up. Courtyard centre ≈ origin.
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+(function () {
+  const NODES = {
+    // approach & bridge
+    bridgeW:   [-112, 0, 0],
+    bridgeE:   [-84, 0, 0],
+    rampGapW:  [-72, 0, 0],
+    apronW:    [-55, 0, 0],
+    gateOut:   [-44, 0, 0],
+    gateMid:   [-32, 0, 0],
+    courtW:    [-20, 0, 0],
+    // courtyard (fountain stands at (0, 4) — no node path crosses it)
+    cyC:  [0, -6, 0],
+    cyN:  [0, -14, 0],
+    cyS:  [0, 14, 0],
+    cyE:  [15, 0, 0],
+    cyW:  [-14, 6, 0],
+    // great hall (north wing interior)
+    hallDoor: [0, -19, 0],
+    hallC:    [0, -27, 0],
+    hallW:    [-21, -27, 0],
+    hallE:    [22, -27, 0],
+    // chapel (south wing, east half)
+    chapelDoorOut: [8, 16, 0],
+    chapelIn:      [8, 27, 0],
+    altar:         [29, 27, 0],
+    // casemates
+    caseTop:    [14, 8, 0],
+    caseBottom: [29, 8, -4.2],
+    holger:     [32, -2, -4.2],
+    // apron ring (ground between castle and ramparts)
+    apN:  [0, -52, 0],
+    apS:  [0, 52, 0],
+    apE:  [52, 0, 0],
+    apNE: [52, -52, 0],
+    apSE: [52, 52, 0],
+    apSW: [-52, 52, 0],
+    apNW: [-52, -52, 0],
+    // garden (south apron)
+    gardenA: [6, 48, 0],
+    gardenB: [17, 51, 0],
+    // rampart ramps + rampart walk (top = 6 m)
+    rampNbase: [20, -48, 0],
+    rampNtop:  [20, -77, 6],
+    rampSbase: [-20, 48, 0],
+    rampStop:  [-20, 77, 6],
+    rampN:  [0, -77, 6],
+    rampNE: [77, -77, 6],
+    rampE:  [77, 0, 6],
+    battery2: [77, 30, 6],
+    rampSE: [77, 77, 6],
+    rampS:  [0, 77, 6],
+    rampSW: [-77, 77, 6],
+    rampNW: [-77, -77, 6],
+    rampWn: [-77, -30, 6],
+    rampWs: [-77, 30, 6],
+    // outside the moat
+    outSW:     [-104, 55, 0],
+    graveyard: [-62, 110, 0],
+    gyB:       [-72, 116, 0],
+    willow:    [-48, 100, 0],
+  };
+
+  const EDGES = [
+    ['bridgeW', 'bridgeE'], ['bridgeE', 'rampGapW'], ['rampGapW', 'apronW'],
+    ['apronW', 'gateOut'], ['gateOut', 'gateMid'], ['gateMid', 'courtW'],
+    ['courtW', 'cyC'], ['courtW', 'cyW'], ['cyC', 'cyN'], ['cyC', 'cyE'], ['cyW', 'cyN'], ['cyW', 'cyS'],
+    ['cyN', 'cyE'], ['cyS', 'cyE'], ['cyS', 'chapelDoorOut'],
+    ['cyN', 'hallDoor'], ['hallDoor', 'hallC'], ['hallC', 'hallW'], ['hallC', 'hallE'],
+    ['chapelDoorOut', 'chapelIn'], ['chapelIn', 'altar'], ['chapelDoorOut', 'cyE'],
+    ['cyE', 'caseTop'], ['caseTop', 'caseBottom'], ['caseBottom', 'holger'],
+    // courtyard ↔ apron only through the west gate
+    ['apronW', 'apNW'], ['apronW', 'apSW'],
+    ['apNW', 'apN'], ['apN', 'apNE'], ['apNE', 'apE'], ['apE', 'apSE'], ['apSE', 'apS'], ['apS', 'apSW'],
+    ['apS', 'gardenA'], ['gardenA', 'gardenB'], ['gardenB', 'apSE'],
+    ['apN', 'rampNbase'], ['rampNbase', 'rampNtop'], ['rampNtop', 'rampN'], ['rampNtop', 'rampNE'],
+    ['apS', 'rampSbase'], ['rampSbase', 'rampStop'], ['rampStop', 'rampS'], ['rampStop', 'rampSW'],
+    ['rampN', 'rampNE'], ['rampN', 'rampNW'], ['rampNE', 'rampE'], ['rampE', 'battery2'], ['battery2', 'rampSE'],
+    ['rampSE', 'rampS'], ['rampS', 'rampSW'], ['rampSW', 'rampWs'], ['rampNW', 'rampWn'],
+    ['bridgeW', 'outSW'], ['outSW', 'graveyard'], ['graveyard', 'gyB'], ['graveyard', 'willow'],
+  ];
+
+  const adj = {};
+  for (const id of Object.keys(NODES)) adj[id] = [];
+  for (const [a, b] of EDGES) {
+    const [ax, az] = NODES[a], [bx, bz] = NODES[b];
+    const d = Math.hypot(ax - bx, az - bz);
+    adj[a].push([b, d]);
+    adj[b].push([a, d]);
+  }
+
+  function h(a, b) {
+    const [ax, az] = NODES[a], [bx, bz] = NODES[b];
+    return Math.hypot(ax - bx, az - bz);
+  }
+
+  function nearestNode(x, z, y = 0) {
+    let best = null, bd = Infinity;
+    for (const id of Object.keys(NODES)) {
+      const n = NODES[id];
+      // strongly prefer nodes on the same level so NPCs route via ramps/stairs
+      const d = Math.hypot(n[0] - x, n[1] - z) + Math.abs((n[2] || 0) - y) * 30;
+      if (d < bd) { bd = d; best = id; }
+    }
+    return best;
+  }
+
+  // A* over node ids; returns array of node ids (start..goal) or null.
+  function findPath(startId, goalId) {
+    if (startId === goalId) return [startId];
+    const open = new Map([[startId, 0]]);
+    const g = { [startId]: 0 };
+    const came = {};
+    const f = { [startId]: h(startId, goalId) };
+    while (open.size) {
+      let cur = null, bf = Infinity;
+      for (const id of open.keys()) if (f[id] < bf) { bf = f[id]; cur = id; }
+      if (cur === goalId) {
+        const path = [cur];
+        while (came[cur]) { cur = came[cur]; path.unshift(cur); }
+        return path;
+      }
+      open.delete(cur);
+      for (const [nb, d] of adj[cur]) {
+        const ng = g[cur] + d;
+        if (ng < (g[nb] !== undefined ? g[nb] : Infinity)) {
+          came[nb] = cur;
+          g[nb] = ng;
+          f[nb] = ng + h(nb, goalId);
+          open.set(nb, ng);
+        }
+      }
+    }
+    return null;
+  }
+
+  function nodePos(id) {
+    const n = NODES[id];
+    return n ? { x: n[0], z: n[1], y: n[2] || 0 } : null;
+  }
+
+  EC.NAV = { NODES, nearestNode, findPath, nodePos };
+})();
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// castle.js — builds the full-scale Kronborg / Elsinore model
+// Layout (metres, x→east, z→south):
+//   courtyard 50×40 around origin · wings 14 m deep, walls to 16 m, roofs to 23 m
+//   Great Hall 62×11 m in the north wing · chapel in the south wing
+//   casemates −4.2 m under the east wing · rampart ring (top +6 m) at |71..85|
+//   moat |86..98| · bridge west · churchyard & willow south-west · sea east+north
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+EC.buildWorld = function (THREE, scene, quality) {
+  const colliders = [];
+  const flags = [];
+  const lampPoints = [];
+  const world = new THREE.Group();
+  scene.add(world);
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+  function addCollider(x0, x1, y0, y1, z0, z1) {
+    colliders.push([Math.min(x0, x1), Math.max(x0, x1), y0, y1, Math.min(z0, z1), Math.max(z0, z1)]);
+  }
+
+  const matCache = {};
+  function lam(color, opts) {
+    const key = color + JSON.stringify(opts || {});
+    if (!matCache[key]) matCache[key] = new THREE.MeshLambertMaterial(Object.assign({ color }, opts));
+    return matCache[key];
+  }
+
+  function canvasTex(size, draw, repX, repY) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    draw(c.getContext('2d'), size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repX || 1, repY || 1);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
+  // sandstone wall texture
+  const sandTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#c7b594'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 420; i++) {
+      g.fillStyle = `rgba(${150 + Math.random() * 60 | 0},${135 + Math.random() * 50 | 0},${100 + Math.random() * 45 | 0},0.25)`;
+      g.fillRect(Math.random() * s, Math.random() * s, 2 + Math.random() * 8, 2 + Math.random() * 5);
+    }
+    g.strokeStyle = 'rgba(110,98,75,0.35)'; g.lineWidth = 1.4;
+    for (let y = 0; y < s; y += 22) { g.beginPath(); g.moveTo(0, y); g.lineTo(s, y); g.stroke(); }
+    for (let y = 0; y < s; y += 22) for (let x = (y / 22 % 2) * 24; x < s; x += 48) {
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 22); g.stroke();
+    }
+  }, 6, 3);
+  const wallMat = new THREE.MeshLambertMaterial({ map: sandTex, color: 0xd8caa8 });
+
+  // cobblestone ground texture
+  const cobbleTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#6e6a60'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 320; i++) {
+      const v = 95 + Math.random() * 55 | 0;
+      g.fillStyle = `rgb(${v},${v - 4},${v - 10})`;
+      g.beginPath();
+      g.ellipse(Math.random() * s, Math.random() * s, 5 + Math.random() * 7, 4 + Math.random() * 6, Math.random() * 3, 0, 7);
+      g.fill();
+    }
+  }, 14, 11);
+  const cobbleMat = new THREE.MeshLambertMaterial({ map: cobbleTex });
+
+  const grassMat = lam(0x5d7350);
+  const earthMat = lam(0x6c7a55);
+  const graniteMat = lam(0x6d6d6d);
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x3e8a72, side: THREE.DoubleSide }); // copper green
+  const woodMat = lam(0x6a4a2e);
+  const darkWoodMat = lam(0x4a3220);
+  const stoneDarkMat = lam(0x4a4a4e);
+  const goldMat = lam(0xc9a227, { emissive: 0x3a2c08 });
+
+  function box(w, h, d, mat, x, y, z, opts) {
+    opts = opts || {};
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    if (opts.ry) m.rotation.y = opts.ry;
+    if (opts.rx) m.rotation.x = opts.rx;
+    if (opts.rz) m.rotation.z = opts.rz;
+    if (opts.shadow !== false && quality.shadows) { m.castShadow = true; m.receiveShadow = true; }
+    world.add(m);
+    if (opts.collide) addCollider(x - w / 2, x + w / 2, y - h / 2, y + h / 2, z - d / 2, z + d / 2);
+    return m;
+  }
+
+  // axis-aligned wall slab from extents (adds collider)
+  function slab(x0, x1, y0, y1, z0, z1, mat, opts) {
+    return box(x1 - x0, y1 - y0, z1 - z0, mat || wallMat, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2,
+      Object.assign({ collide: true }, opts));
+  }
+
+  // triangular roof prism: width w along x, depth d along z, apex height h
+  function roofPrism(w, d, h, x, y, z, ry) {
+    const hw = w / 2, hd = d / 2;
+    const v = [
+      // front slope (z+)
+      -hw, 0, hd, hw, 0, hd, hw, h, 0, -hw, 0, hd, hw, h, 0, -hw, h, 0,
+      // back slope (z-)
+      hw, 0, -hd, -hw, 0, -hd, -hw, h, 0, hw, 0, -hd, -hw, h, 0, hw, h, 0,
+      // left gable
+      -hw, 0, -hd, -hw, 0, hd, -hw, h, 0,
+      // right gable
+      hw, 0, hd, hw, 0, -hd, hw, h, 0,
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, roofMat);
+    m.position.set(x, y, z);
+    if (ry) m.rotation.y = ry;
+    if (quality.shadows) m.castShadow = true;
+    world.add(m);
+    return m;
+  }
+
+  // ── ground, water, lands ───────────────────────────────────────────────────
+  // the Sound (one big water plane; the moat shares its level — at Kronborg the
+  // moats connect to the sea)
+  const waterMat = new THREE.MeshLambertMaterial({ color: 0x2e4a5e, transparent: true, opacity: 0.92 });
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), waterMat);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = -1.7;
+  world.add(water);
+
+  // castle island (−86..86) with a hole for the casemate stair trench
+  {
+    const sh = new THREE.Shape();
+    sh.moveTo(-86, -86); sh.lineTo(86, -86); sh.lineTo(86, 86); sh.lineTo(-86, 86); sh.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(16.8, 6.35); hole.lineTo(27.8, 6.35); hole.lineTo(27.8, 9.65); hole.lineTo(16.8, 9.65); hole.closePath();
+    sh.holes.push(hole);
+    const geo = new THREE.ShapeGeometry(sh);
+    const m = new THREE.Mesh(geo, grassMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0;
+    if (quality.shadows) m.receiveShadow = true;
+    world.add(m);
+    // granite revetment skirt around the island
+    slab(-86.4, 86.4, -3, 0.05, -86.4, -86, graniteMat, { collide: false });
+    slab(-86.4, 86.4, -3, 0.05, 86, 86.4, graniteMat, { collide: false });
+    slab(-86.4, -86, -3, 0.05, -86, 86, graniteMat, { collide: false });
+    slab(86, 86.4, -3, 0.05, -86, 86, graniteMat, { collide: false });
+  }
+
+  // outer lands: west bank and south bank (the sea takes north & east)
+  slab(-500, -98, -2.5, 0, -500, 500, grassMat, { collide: false, shadow: false });
+  slab(-98, 500, -2.5, 0, 98, 500, grassMat, { collide: false, shadow: false });
+
+  // Sweden on the horizon (Helsingborg is ~4 km across the Sound)
+  box(80, 22, 900, lam(0x46586a), 470, 6, -150, { shadow: false });
+  box(60, 30, 300, lam(0x46586a), 460, 8, -420, { shadow: false });
+
+  // courtyard cobbles (split around the stair trench)
+  function cobblePlane(x0, x1, z0, z1, y) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), cobbleMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+    if (quality.shadows) m.receiveShadow = true;
+    world.add(m);
+  }
+  cobblePlane(-25, 16.6, -20, 20, 0.03);
+  cobblePlane(16.6, 25, -20, 6.3, 0.03);
+  cobblePlane(16.6, 25, 9.7, 20, 0.03);
+  // gate road: tunnel → bridge
+  cobblePlane(-86, -25, -3.5, 3.5, 0.03);
+
+  // ── the four wings ─────────────────────────────────────────────────────────
+  const H = 16; // wall height
+
+  // NORTH WING — contains the Great Hall (62×11 m interior)
+  slab(-39, 39, 0, H, -34, -32.5);                    // outer wall
+  slab(-39, -2, 0, H, -21.5, -20);                    // inner wall, west of door
+  slab(2, 39, 0, H, -21.5, -20);                      // inner wall, east of door
+  slab(-2, 2, 5, H, -21.5, -20);                      // lintel over hall door
+  slab(-39, -31, 0, H, -32.5, -21.5);                 // west end block
+  slab(31, 39, 0, H, -32.5, -21.5);                   // east end block
+  slab(-31, 31, 8, 9, -32.5, -21.5, stoneDarkMat, { collide: false }); // hall ceiling
+  roofPrism(78, 14, 7, 0, H, -27);
+
+  // SOUTH WING — chapel in the east half (interior x 2..36)
+  slab(-39, 39, 0, H, 32.5, 34);                      // outer wall
+  slab(-39, 2, 0, H, 20, 34);                         // solid west block
+  slab(2, 6, 0, H, 20, 21.5);                         // inner wall, west of chapel door
+  slab(10, 36, 0, H, 20, 21.5);                       // inner wall, east of chapel door
+  slab(6, 10, 5, H, 20, 21.5);                        // lintel over chapel door
+  slab(36, 39, 0, H, 20, 34);                         // east end block
+  slab(2, 36, 8, 9, 21.5, 32.5, stoneDarkMat, { collide: false }); // chapel ceiling
+  roofPrism(78, 14, 7, 0, H, 27);
+
+  // WEST WING — the Dark Gate passes through at |z| < 3
+  slab(-39, -25, 0, H, -20, -3);
+  slab(-39, -25, 0, H, 3, 20);
+  slab(-39, -25, 5, H, -3, 3);                        // over the gate tunnel
+  roofPrism(40, 14, 7, -32, H, 0, Math.PI / 2);
+
+  // EAST WING — solid above ground; casemates below
+  slab(25, 39, 0, H, -20, 20);
+  roofPrism(40, 14, 7, 32, H, 0, Math.PI / 2);
+
+  // plinth (granite skirting) around the outer footprint
+  for (const [x0, x1, z0, z1] of [
+    [-39.4, 39.4, -34.4, -33.9], [-39.4, 39.4, 33.9, 34.4],
+    [-39.4, -38.9, -34.4, 34.4], [38.9, 39.4, -34.4, 34.4],
+  ]) slab(x0, x1, 0, 1.5, z0, z1, graniteMat, { collide: false });
+
+  // cornice bands
+  for (const r of [[-39.2, 39.2, -34.2, -32.4], [-39.2, 39.2, 32.4, 34.2], [-39.2, -24.8, -20.2, 20.2], [24.8, 39.2, -20.2, 20.2]]) {
+    slab(r[0], r[1], 15.3, 15.8, r[2], r[3], lam(0xe6dcc2), { collide: false, shadow: false });
+  }
+
+  // gate arch dressing + dedication plaque
+  box(1.6, 10, 10, graniteMat, -39.3, 5, 0, { collide: false });
+  box(1.7, 5.2, 6.4, stoneDarkMat, -39.35, 2.6, 0, { collide: false });
+  // (the dark opening itself)
+  {
+    const plaqueTex = canvasTex(512, (g, s) => {
+      g.fillStyle = '#9a8a66'; g.fillRect(0, 0, s, s);
+      g.fillStyle = '#3a3020';
+      g.font = 'bold 56px Georgia, serif'; g.textAlign = 'center';
+      g.fillText('KRONBORG', s / 2, 150);
+      g.font = '34px Georgia, serif';
+      g.fillText('FRIDERICVS · II · REX · DANIÆ', s / 2, 250);
+      g.fillText('ANNO · MDLXXXV', s / 2, 320);
+      g.font = 'italic 30px Georgia, serif';
+      g.fillText('“Welcome to Elsinore”', s / 2, 420);
+    });
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshLambertMaterial({ map: plaqueTex }));
+    p.position.set(-39.45, 9.5, 0);
+    p.rotation.y = -Math.PI / 2;
+    world.add(p);
+  }
+
+  // ── corner towers ──────────────────────────────────────────────────────────
+  function towerRound(x, z, r, h, spireH, name) {
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, h, 14), wallMat);
+    cyl.position.set(x, h / 2, z);
+    if (quality.shadows) { cyl.castShadow = true; cyl.receiveShadow = true; }
+    world.add(cyl);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.18, r * 1.18, 1.2, 14), lam(0xe6dcc2));
+    rim.position.set(x, h, z);
+    world.add(rim);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r * 1.12, spireH, 14), roofMat);
+    cone.position.set(x, h + 0.6 + spireH / 2, z);
+    if (quality.shadows) cone.castShadow = true;
+    world.add(cone);
+    // gilt finial
+    const fin = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), lam(0xd8b84a, { emissive: 0x553f08 }));
+    fin.position.set(x, h + 0.6 + spireH + 0.4, z);
+    world.add(fin);
+    addCollider(x - r, x + r, 0, h, z - r, z + r);
+  }
+  towerRound(-38, 33, 5.5, 34, 20, 'Trumpeter’s Tower');   // SW — the tall spire (~62 m total in reality)
+  towerRound(-38, -33, 4.5, 22, 11, 'King’s Tower');       // NW
+  towerRound(38, 33, 4.5, 22, 11, 'Queen’s Tower');        // SE
+
+  // Telegraph Tower (NE) — square, flat-topped, flies the Dannebrog
+  slab(33, 43, 0, 24, -38, -28);
+  slab(32.6, 43.4, 24, 25.4, -38.4, -27.6, lam(0xe6dcc2), { collide: false });
+  flagPole(38, -33, 25.4, 8);
+
+  function flagPole(x, z, baseY, h) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, h, 6), lam(0xcccccc));
+    pole.position.set(x, baseY + h / 2, z);
+    world.add(pole);
+    const flagTex = canvasTex(128, (g, s) => {
+      g.fillStyle = '#c8102e'; g.fillRect(0, 0, s, s);
+      g.fillStyle = '#fff';
+      g.fillRect(s * 0.28, 0, s * 0.14, s);
+      g.fillRect(0, s * 0.43, s, s * 0.14);
+    });
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.9),
+      new THREE.MeshLambertMaterial({ map: flagTex, side: THREE.DoubleSide }));
+    flag.position.set(x + 1.35, baseY + h - 1.2, z);
+    world.add(flag);
+    flags.push(flag);
+  }
+
+  // ── windows (instanced) ────────────────────────────────────────────────────
+  {
+    const slots = [];
+    function rowAlong(x0, z0, x1, z1, nx, nz, skip) {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const n = Math.floor(len / 5);
+      for (let i = 0; i <= n; i++) {
+        const t = n === 0 ? 0.5 : i / n;
+        const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+        if (skip && skip(x, z)) continue;
+        for (const y of [3.6, 8.2, 12.6]) slots.push([x + nx * 0.12, y, z + nz * 0.12, Math.atan2(nx, nz)]);
+      }
+    }
+    // outer facades
+    rowAlong(-35, -34, 35, -34, 0, -1);
+    rowAlong(-35, 34, 35, 34, 0, 1);
+    rowAlong(-39, -28, -39, 28, -1, 0, (x, z) => Math.abs(z) < 5);
+    rowAlong(39, -25, 39, 25, 1, 0);
+    // courtyard facades
+    rowAlong(-21, -20, 21, -20, 0, 1, (x) => Math.abs(x) < 3.4);
+    rowAlong(-21, 20, 21, 20, 0, -1, (x) => x > 4.5 && x < 11.5);
+    rowAlong(-25, -16, -25, 16, 1, 0, (x, z) => Math.abs(z) < 4.5);
+    rowAlong(25, -16, 25, 16, -1, 0, (x, z) => Math.abs(z - 8) < 2.5);
+    const frameGeo = new THREE.BoxGeometry(1.7, 2.7, 0.18);
+    const glassGeo = new THREE.BoxGeometry(1.35, 2.35, 0.14);
+    const frameMat = lam(0xe2d6b8);
+    const glassMat = new THREE.MeshLambertMaterial({ color: 0x222c38, emissive: 0xffb45e, emissiveIntensity: 0 });
+    const fi = new THREE.InstancedMesh(frameGeo, frameMat, slots.length);
+    const gi = new THREE.InstancedMesh(glassGeo, glassMat, slots.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+    slots.forEach(([x, y, z, ry], i) => {
+      q.setFromAxisAngle(up, ry);
+      m4.compose(new THREE.Vector3(x, y, z), q, one);
+      fi.setMatrixAt(i, m4);
+      gi.setMatrixAt(i, m4);
+    });
+    world.add(fi); world.add(gi);
+    EC._glassMat = glassMat; // night-time lit windows
+  }
+
+  // ── courtyard: fountain, lamps, benches ────────────────────────────────────
+  {
+    // the famous fountain (looted by Sweden, 1658)
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.2, 0.9, 18), graniteMat);
+    basin.position.set(0, 0.45, 4);
+    world.add(basin);
+    addCollider(-3.1, 3.1, 0, 1.2, 0.9, 7.1);
+    const fwater = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 0.1, 18), lam(0x3e6a80, { transparent: true, opacity: 0.9 }));
+    fwater.position.set(0, 0.82, 4);
+    world.add(fwater);
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2.4, 10), graniteMat);
+    ped.position.set(0, 1.9, 4);
+    world.add(ped);
+    const fig = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 8), lam(0x7c9c5a)); // weathered bronze
+    fig.position.set(0, 3.8, 4);
+    world.add(fig);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lam(0x7c9c5a));
+    orb.position.set(0, 4.7, 4);
+    world.add(orb);
+  }
+  const lanternMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a, emissive: 0xffc878, emissiveIntensity: 0 });
+  function lampPost(x, z) {
+    box(0.18, 3.4, 0.18, stoneDarkMat, x, 1.7, z, { collide: true });
+    box(0.5, 0.7, 0.5, lanternMat, x, 3.55, z, { collide: false });
+    lampPoints.push({ x, y: 3.6, z, color: 0xffc070, intensity: 26, range: 22, nightOnly: true });
+  }
+  lampPost(-11, -11); lampPost(11, -11); lampPost(-11, 13); lampPost(11, 13);
+  box(2.4, 0.5, 0.6, woodMat, -22, 0.25, -10, { collide: true });
+  box(2.4, 0.5, 0.6, woodMat, 22.2, 0.25, 12, { collide: true });
+
+  // ── Great Hall interior ────────────────────────────────────────────────────
+  {
+    const woodFloor = new THREE.Mesh(new THREE.PlaneGeometry(62, 11), lam(0x7a5a38));
+    woodFloor.rotation.x = -Math.PI / 2;
+    woodFloor.position.set(0, 0.04, -27);
+    world.add(woodFloor);
+    // dais + thrones (east end)
+    slab(25.5, 30.5, 0, 0.45, -29.5, -24.5, darkWoodMat);
+    for (const tz of [-28.2, -25.8] ) {
+      box(1.1, 1.1, 1.1, lam(0x8a1822), 28.8, 1.0, tz, { collide: false });
+      box(1.1, 2.4, 0.25, lam(0x8a1822), 29.4, 1.65, tz, { collide: false });
+      box(1.2, 0.18, 1.2, lam(0xc9a227), 28.8, 0.55, tz, { collide: false });
+    }
+    // long banquet table + benches
+    slab(-10, 14, 0.9, 1.05, -27.8, -26.2, woodMat);
+    box(0.3, 0.9, 1.4, woodMat, -9, 0.45, -27, { collide: false });
+    box(0.3, 0.9, 1.4, woodMat, 13, 0.45, -27, { collide: false });
+    slab(-10, 14, 0.3, 0.5, -29.3, -28.8, woodMat);
+    slab(-10, 14, 0.3, 0.5, -25.2, -24.7, woodMat);
+    // the Mousetrap stage (west end)
+    slab(-30.5, -24, 0, 0.6, -30.5, -23.5, darkWoodMat);
+    // backdrop curtain
+    box(0.2, 4, 6.5, lam(0x6e1220), -30.3, 2.6, -27, { collide: false });
+    // tapestries — the "arras"
+    const tapCols = [0x5a3a52, 0x3a5a46, 0x6e3a2a, 0x3a4a6a, 0x6a5a2a];
+    tapCols.forEach((c, i) => {
+      const t = new THREE.Mesh(new THREE.PlaneGeometry(7, 4.6), lam(c));
+      t.position.set(-22 + i * 11, 4.4, -32.4);
+      world.add(t);
+    });
+    // chandeliers (always-lit candles)
+    for (const cx of [-18, 0, 18]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.09, 6, 14), darkWoodMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(cx, 6, -27);
+      world.add(ring);
+      const candles = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.18, 0.22, 10),
+        lam(0xffe0a0, { emissive: 0xffc878, emissiveIntensity: 0.85 }));
+      candles.position.set(cx, 6.15, -27);
+      world.add(candles);
+    }
+    lampPoints.push({ x: 0, y: 5.5, z: -27, color: 0xffc888, intensity: 60, range: 38, nightOnly: false });
+  }
+
+  // ── Chapel interior ────────────────────────────────────────────────────────
+  {
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(34, 11), lam(0x8a8278));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(19, 0.04, 27);
+    world.add(floor);
+    // carved oak pews (the 1582 originals survive at Kronborg)
+    for (const bx of [12, 16, 20, 24]) {
+      slab(bx - 0.35, bx + 0.35, 0.3, 1.0, 22, 26, darkWoodMat);
+      slab(bx - 0.35, bx + 0.35, 0.3, 1.0, 28, 32, darkWoodMat);
+    }
+    // altar
+    slab(32.5, 35, 0.9, 1.15, 25.5, 28.5, darkWoodMat);
+    box(0.18, 1.5, 0.18, goldMat, 33.7, 1.95, 27, { collide: false });
+    box(0.8, 0.18, 0.18, goldMat, 33.7, 2.3, 27, { collide: false });
+    for (const cz of [25.8, 28.2]) {
+      box(0.12, 0.7, 0.12, lam(0xf0e0c0, { emissive: 0xffd890, emissiveIntensity: 0.9 }), 33.7, 1.55, cz, { collide: false });
+    }
+    // gallery rail along the back (west)
+    slab(2.2, 2.6, 0, 3.2, 22, 32, darkWoodMat, { collide: false });
+    // stained-glass windows (south interior wall)
+    const glassCols = [0xc04040, 0x4060c0, 0xc0a040, 0x40a060];
+    glassCols.forEach((c, i) => {
+      const gmat = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.55 });
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 3.4), gmat);
+      w.position.set(8 + i * 7, 4.4, 32.4);
+      w.rotation.y = Math.PI;
+      world.add(w);
+    });
+    lampPoints.push({ x: 28, y: 4, z: 27, color: 0xffd8a0, intensity: 40, range: 26, nightOnly: false });
+  }
+
+  // ── casemates (under the east wing) ───────────────────────────────────────
+  {
+    const FY = -4.2, CY2 = -0.8;
+    // floor + ceiling
+    slab(26.5, 39, FY - 0.3, FY, -16, 16, stoneDarkMat, { collide: false });
+    slab(26.5, 39, CY2, CY2 + 0.4, -16, 16, stoneDarkMat, { collide: false });
+    // perimeter walls (opening on the west at the stair, z 6.5..9.5)
+    slab(26.5, 27.5, FY, CY2, -16, 6.4);
+    slab(26.5, 27.5, FY, CY2, 9.6, 16);
+    slab(38, 39, FY, CY2, -16, 16);
+    slab(26.5, 39, FY, CY2, -16, -15);
+    slab(26.5, 39, FY, CY2, 15, 16);
+    // vault pillars
+    for (const pz of [-8, 0, 8]) box(1, 3.4, 1, stoneDarkMat, 33, FY + 1.7, pz, { collide: true });
+    // stair trench: steps from courtyard (x 17 → 27.5, z 6.5..9.5)
+    const steps = 14;
+    for (let i = 0; i < steps; i++) {
+      const x0 = 17 + (10.5 / steps) * i;
+      const y = -(4.2 / steps) * (i + 1);
+      slab(x0, x0 + 10.5 / steps + 0.02, y, y + 4.2 / steps + 0.02, 6.5, 9.5, stoneDarkMat, { collide: false, shadow: false });
+    }
+    // trench side walls with a low parapet above ground
+    slab(16.6, 27.8, -4.4, 1.0, 6.1, 6.5, graniteMat);
+    slab(16.6, 27.8, -4.4, 1.0, 9.5, 9.9, graniteMat);
+    // Holger Danske — the sleeping hero
+    box(2.4, 0.8, 2.4, stoneDarkMat, 32, FY + 0.4, -2, { collide: true });           // plinth
+    const hd = lam(0x5a6258);
+    box(1.4, 1.1, 1.0, hd, 32, FY + 1.35, -2, { collide: false });                    // seated body
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 10), hd);
+    head.position.set(32, FY + 2.1, -2.25);
+    world.add(head);
+    box(0.16, 0.5, 0.16, hd, 32, FY + 2.0, -2.05, { collide: false });                // beard into the table
+    box(1.9, 0.14, 0.3, hd, 32, FY + 1.0, -1.45, { collide: false });                 // sword across the lap
+    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 12), hd);
+    shield.rotation.z = Math.PI / 2;
+    shield.position.set(31.2, FY + 1.2, -2.4);
+    world.add(shield);
+    // barrels & stores
+    for (const [bx, bz] of [[36, 12], [36.8, 10.8], [28, -12], [29, -13.2]]) {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10), woodMat);
+      b.position.set(bx, FY + 0.5, bz);
+      world.add(b);
+      addCollider(bx - 0.5, bx + 0.5, FY, FY + 1, bz - 0.5, bz + 0.5);
+    }
+    lampPoints.push({ x: 31, y: FY + 2.6, z: -2, color: 0xff9850, intensity: 22, range: 16, nightOnly: false });
+  }
+
+  // ── ramparts, parapets, ramps, cannons ─────────────────────────────────────
+  const RT = 6; // rampart top height
+  slab(-85, 85, 0, RT, -85, -71, earthMat);                  // north
+  slab(-85, 85, 0, RT, 71, 85, earthMat);                    // south
+  slab(71, 85, 0, RT, -71, 71, earthMat);                    // east
+  slab(-85, -71, 0, RT, -71, -8, earthMat);                  // west (gap for the road)
+  slab(-85, -71, 0, RT, 8, 71, earthMat);
+  // gap cheek walls
+  slab(-85, -71, 0, RT + 1.2, -8.5, -8, graniteMat);
+  slab(-85, -71, 0, RT + 1.2, 8, 8.5, graniteMat);
+
+  // outer parapet with merlons (skip the west gap)
+  function parapetRun(x0, z0, x1, z1) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const ux = (x1 - x0) / len, uz = (z1 - z0) / len;
+    // continuous breastwork
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const w = Math.abs(x1 - x0) || 0.6, d = Math.abs(z1 - z0) || 0.6;
+    box(Math.max(w, 0.6), 1.1, Math.max(d, 0.6), graniteMat, cx, RT + 0.55, cz, { collide: true });
+    for (let t = 1.5; t < len; t += 3.2) {
+      box(ux ? 1.6 : 0.7, 0.6, uz ? 1.6 : 0.7, graniteMat, x0 + ux * t, RT + 1.35, z0 + uz * t, { collide: false, shadow: false });
+    }
+  }
+  parapetRun(-84.7, -84.7, -84.7, -9);   // west outer N section
+  parapetRun(-84.7, 9, -84.7, 84.7);     // west outer S section
+  parapetRun(-84.7, -84.7, 84.7, -84.7); // north outer
+  parapetRun(-84.7, 84.7, 84.7, 84.7);   // south outer
+  parapetRun(84.7, -84.7, 84.7, 84.7);   // east outer — the gun battery
+
+  // access ramps (north & south) — walkable via groundHeightAt
+  {
+    const len = Math.hypot(23, RT);
+    const ang = Math.atan2(RT, 23);
+    box(8, 0.5, len, earthMat, 20, RT / 2 - 0.05, -59.5, { rx: ang, collide: false });
+    box(8, 0.5, len, earthMat, -20, RT / 2 - 0.05, 59.5, { rx: -ang, collide: false });
+  }
+
+  // cannons on the east battery, facing the Sound
+  for (let z = -50; z <= 50; z += 20) {
+    const g = new THREE.Group();
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 3.2, 10), lam(0x222226));
+    barrel.rotation.z = -Math.PI / 2 + 0.06;
+    barrel.position.set(0.8, 1.05, 0);
+    g.add(barrel);
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 0.9), darkWoodMat);
+    carriage.position.set(0, 0.55, 0);
+    g.add(carriage);
+    for (const s of [-0.5, 0.5]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.12, 10), darkWoodMat);
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(-0.2, 0.45, s * 0.55);
+      g.add(wheel);
+    }
+    g.position.set(82, RT, z);
+    world.add(g);
+    addCollider(80.8, 83.4, RT, RT + 1.4, z - 0.8, z + 0.8);
+  }
+  flagPole(82, 0, RT + 1.2, 7);
+
+  // ── moat bridge ───────────────────────────────────────────────────────────
+  slab(-103, -82, 0, 0.35, -4, 4, woodMat, { collide: false });
+  slab(-103, -82, 0.35, 1.45, -4.3, -4, darkWoodMat);   // railings
+  slab(-103, -82, 0.35, 1.45, 4, 4.3, darkWoodMat);
+  for (let x = -101; x <= -84; x += 4.2) {
+    box(0.5, 2.4, 0.5, darkWoodMat, x, -0.5, -4.15, { collide: false });
+    box(0.5, 2.4, 0.5, darkWoodMat, x, -0.5, 4.15, { collide: false });
+  }
+
+  // ── garden (south apron) ──────────────────────────────────────────────────
+  {
+    const hedge = lam(0x3e5e34);
+    slab(2, 22, 0, 1.1, 44, 44.6, hedge);
+    slab(2, 22, 0, 1.1, 55.4, 56, hedge);
+    slab(2, 2.6, 0, 1.1, 44, 49.5, hedge);
+    slab(2, 2.6, 0, 1.1, 52.5, 56, hedge);
+    slab(21.4, 22, 0, 1.1, 44, 49.5, hedge);
+    slab(21.4, 22, 0, 1.1, 52.5, 56, hedge);
+    // flower beds
+    const flowerCols = [0xc05070, 0xd0c050, 0x9060c0, 0xe0e0e0, 0x5080c0];
+    for (let i = 0; i < 40; i++) {
+      const fx = 4 + Math.random() * 16, fz = 45.5 + Math.random() * 9;
+      if (fx > 5 && fx < 19 && fz > 47 && fz < 53 && Math.random() < 0.5) continue; // keep paths open
+      box(0.22, 0.5, 0.22, lam(flowerCols[i % 5]), fx, 0.3, fz, { collide: false, shadow: false });
+    }
+    box(2.2, 0.5, 0.6, woodMat, 12, 0.25, 54.6, { collide: true });
+  }
+
+  // ── trees ─────────────────────────────────────────────────────────────────
+  function tree(x, z, s) {
+    s = s || 1;
+    box(0.5 * s, 3 * s, 0.5 * s, lam(0x4a3424), x, 1.5 * s, z, { collide: true });
+    const c1 = new THREE.Mesh(new THREE.SphereGeometry(2.2 * s, 8, 8), lam(0x44663a));
+    c1.position.set(x, 4.2 * s, z);
+    if (quality.shadows) c1.castShadow = true;
+    world.add(c1);
+    const c2 = new THREE.Mesh(new THREE.SphereGeometry(1.5 * s, 8, 8), lam(0x4e7040));
+    c2.position.set(x + 1.1 * s, 5.2 * s, z + 0.5 * s);
+    world.add(c2);
+  }
+  tree(-46, -30, 1.1); tree(-46, 32, 1); tree(46, -32, 0.9); tree(36, 46, 0.9);
+  tree(-120, 30, 1.2); tree(-130, 80, 1.3); tree(-40, 130, 1.2); tree(20, 120, 1.4);
+
+  // Ophelia's willow, aslant the moat
+  {
+    const x = -48, z = 103;
+    box(0.6, 4.2, 0.6, lam(0x5a4a34), x, 2.1, z, { collide: true, ry: 0.2 });
+    for (const [dx, dz, r, h] of [[0, 0, 2.6, 3.4], [1.6, 0.8, 1.8, 2.8], [-1.5, -0.6, 1.7, 2.6]]) {
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(r, h, 9), lam(0x7a9a62));
+      cap.position.set(x + dx, 5.2, z + dz);
+      world.add(cap);
+    }
+  }
+
+  // ── churchyard (south-west, outside the moat) ─────────────────────────────
+  {
+    const fence = darkWoodMat;
+    function fenceRun(x0, z0, x1, z1) { slab(Math.min(x0, x1), Math.max(x0, x1) + 0.2, 0, 0.9, Math.min(z0, z1), Math.max(z0, z1) + 0.2, fence); }
+    fenceRun(-74, 102, -64.5, 102); fenceRun(-57.5, 102, -50, 102);       // north fence with gap
+    fenceRun(-74, 118, -50, 118);
+    fenceRun(-74, 102, -74, 107.5); fenceRun(-74, 112.5, -74, 118);       // west fence with gap
+    fenceRun(-50, 102, -50, 118);
+    // gravestones
+    const gsMat = lam(0x8a8a86);
+    const places = [[-71, 105], [-67, 106.5], [-63, 104.5], [-58, 106], [-54, 105], [-70, 112], [-66.5, 113.5], [-53, 112], [-56.5, 114], [-71.5, 116], [-52, 116.5]];
+    places.forEach(([gx, gz], i) => {
+      box(0.8, 1.1, 0.22, gsMat, gx, 0.55, gz, { collide: true, ry: (i % 5 - 2) * 0.08, rz: (i % 3 - 1) * 0.05 });
+    });
+    // the open grave (Ophelia's) + spoil heap
+    const pit = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), lam(0x14100c));
+    pit.rotation.x = -Math.PI / 2;
+    pit.position.set(-62, 0.05, 110.5);
+    world.add(pit);
+    const mound = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), lam(0x4e3e2a));
+    mound.scale.set(1.4, 0.45, 0.9);
+    mound.position.set(-62, 0.18, 112.2);
+    world.add(mound);
+    // Yorick
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), lam(0xd8d0c0));
+    skull.position.set(-61, 0.16, 109.6);
+    world.add(skull);
+    // small wooden crosses
+    for (const [cx, cz] of [[-60, 113.5], [-68, 109]]) {
+      box(0.1, 1.0, 0.1, darkWoodMat, cx, 0.5, cz, { collide: false });
+      box(0.55, 0.1, 0.1, darkWoodMat, cx, 0.75, cz, { collide: false });
+    }
+  }
+
+  // ── ground height & zones ─────────────────────────────────────────────────
+  function groundHeightAt(x, z) {
+    // casemate room
+    if (x > 27.5 && x < 38 && z > -15 && z < 15) return -4.2;
+    // casemate stair trench
+    if (x >= 16.8 && x <= 27.5 && z > 6.4 && z < 9.6) {
+      const t = Math.min(1, Math.max(0, (x - 17) / 10.5));
+      return -4.2 * t;
+    }
+    // rampart access ramps
+    if (x >= 16 && x <= 24 && z <= -48 && z >= -71) return RT * Math.min(1, (-z - 48) / 23);
+    if (x >= -24 && x <= -16 && z >= 48 && z <= 71) return RT * Math.min(1, (z - 48) / 23);
+    // rampart ring (west gap at |z| < 8)
+    const ax = Math.abs(x), az = Math.abs(z);
+    if (ax <= 85 && az <= 85 && (ax >= 71 || az >= 71)) {
+      if (x <= -71 && az < 8) return 0; // the road gap
+      return RT;
+    }
+    // bridge deck
+    if (az < 4 && x >= -103 && x <= -82) return 0.35;
+    // castle island
+    if (ax <= 86 && az <= 86) return 0;
+    // outer lands (west & south); everything else is the Sound
+    if (x <= -98 || z >= 98) return 0;
+    return -1.7;
+  }
+
+  function zoneAt(x, z, y) {
+    if (y < -1.5) return 'The Casemates';
+    if (x > -31 && x < 31 && z > -32.5 && z < -21.5) return 'The Great Hall (Ballroom)';
+    if (x > 2 && x < 36 && z > 21.5 && z < 32.5) return 'The Chapel';
+    if (x > -39 && x < -25 && Math.abs(z) < 3) return 'The Dark Gate';
+    if (Math.abs(x) < 25 && Math.abs(z) < 20) return 'The Courtyard';
+    if (Math.abs(z) < 4.2 && x >= -103 && x <= -82) return 'The Bridge over the Moat';
+    if (x > 2 && x < 22 && z > 44 && z < 56) return 'The Queen’s Garden';
+    if (x > -74 && x < -50 && z > 102 && z < 118) return 'The Churchyard';
+    if (y > 4) {
+      if (x > 71) return 'The Gun Battery — “the platform”';
+      return 'The Ramparts';
+    }
+    if (Math.abs(x) <= 86 && Math.abs(z) <= 86) return 'The Castle Grounds';
+    return 'Outside the Walls — by the Øresund';
+  }
+
+  return { colliders, groundHeightAt, zoneAt, flags, lampPoints, waterMat, glassMat: EC._glassMat, lanternMat };
+};
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// characters.js — AI residents of Elsinore: bodies, schedules, scenes, speech
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+EC.createCharacters = function (THREE, scene, world) {
+  const NAV = EC.NAV;
+  const chars = [];
+  const byId = {};
+
+  // ── sprite helpers ─────────────────────────────────────────────────────────
+  function textSprite(scale) {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 192;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    sp.scale.set(scale * (512 / 192), scale, 1);
+    sp.renderOrder = 10;
+    return { sp, c, tex };
+  }
+
+  function drawName(s, name, title) {
+    const g = s.c.getContext('2d');
+    g.clearRect(0, 0, 512, 192);
+    g.font = 'bold 56px Georgia, serif';
+    g.textAlign = 'center';
+    g.lineWidth = 8; g.strokeStyle = 'rgba(0,0,0,0.75)';
+    g.strokeText(name, 256, 100);
+    g.fillStyle = '#f3e9c8';
+    g.fillText(name, 256, 100);
+    g.font = '34px Georgia, serif';
+    g.strokeText(title, 256, 150);
+    g.fillStyle = '#cdbf9a';
+    g.fillText(title, 256, 150);
+    s.tex.needsUpdate = true;
+  }
+
+  function drawBubble(s, text) {
+    const g = s.c.getContext('2d');
+    g.clearRect(0, 0, 512, 192);
+    // wrap
+    g.font = '28px Georgia, serif';
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      if (g.measureText(line + ' ' + w).width > 440 && line) { lines.push(line); line = w; }
+      else line = line ? line + ' ' + w : w;
+    }
+    lines.push(line);
+    const shown = lines.slice(0, 5);
+    if (lines.length > 5) shown[4] += ' …';
+    const hgt = shown.length * 32 + 26;
+    const top = 192 - hgt - 14;
+    g.fillStyle = 'rgba(20,16,10,0.85)';
+    g.strokeStyle = 'rgba(220,200,150,0.9)';
+    g.lineWidth = 3;
+    roundRect(g, 16, top, 480, hgt, 14);
+    g.fill(); g.stroke();
+    // tail
+    g.beginPath();
+    g.moveTo(240, top + hgt); g.lineTo(256, 190); g.lineTo(272, top + hgt);
+    g.fillStyle = 'rgba(20,16,10,0.85)';
+    g.fill();
+    g.fillStyle = '#f3ecd8';
+    g.textAlign = 'center';
+    shown.forEach((l, i) => g.fillText(l, 256, top + 38 + i * 32));
+    s.tex.needsUpdate = true;
+  }
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  // ── body builder ───────────────────────────────────────────────────────────
+  function makeBody(info) {
+    const C = info.colors;
+    const ghost = !!C.ghost;
+    const mats = [];
+    function mat(color, extra) {
+      const m = new THREE.MeshLambertMaterial(Object.assign({ color, transparent: true, opacity: 1 }, extra));
+      if (ghost) { m.emissive = new THREE.Color(0x7ab8d8); m.emissiveIntensity = 0.6; m.opacity = 0.55; }
+      mats.push(m);
+      return m;
+    }
+    const robeM = mat(C.robe), trimM = mat(C.trim), skinM = mat(0xd9b08a), hairM = mat(C.hair);
+    const g = new THREE.Group();
+    const gown = ['ophelia', 'gertrude', 'playerqueen'].includes(info.id) || C.hat === 'crown';
+
+    // legs (pivot at hip)
+    const legs = [];
+    for (const s of [-1, 1]) {
+      const piv = new THREE.Group();
+      piv.position.set(s * 0.11, 0.95, 0);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.9, 7), trimM);
+      leg.position.y = -0.45;
+      piv.add(leg);
+      g.add(piv);
+      legs.push(piv);
+    }
+    // torso / robe
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, gown ? 0.2 : 0.26, 0.72, 9), robeM);
+    torso.position.y = 1.32;
+    g.add(torso);
+    if (gown) {
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.44, 1.0, 9), robeM);
+      skirt.position.y = 0.5;
+      g.add(skirt);
+    } else {
+      const tunic = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.35, 9), robeM);
+      tunic.position.y = 0.85;
+      g.add(tunic);
+    }
+    // belt
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, 0.09, 9), trimM);
+    belt.position.y = 1.0;
+    g.add(belt);
+    // arms (pivot at shoulder)
+    const arms = [];
+    for (const s of [-1, 1]) {
+      const piv = new THREE.Group();
+      piv.position.set(s * 0.25, 1.62, 0);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.62, 7), robeM);
+      arm.position.y = -0.3;
+      piv.add(arm);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), skinM);
+      hand.position.y = -0.62;
+      piv.add(hand);
+      g.add(piv);
+      arms.push(piv);
+    }
+    // head + hair
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 10), skinM);
+    head.position.y = 1.82;
+    g.add(head);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.175, 10, 10), hairM);
+    hair.scale.set(1, 0.82, 1);
+    hair.position.set(0, 1.88, -0.03);
+    g.add(hair);
+    // hats
+    if (C.hat === 'crown') {
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.12, 9), mat(0xd8b84a, { emissive: 0x4a3808 }));
+      crown.position.y = 2.02;
+      g.add(crown);
+      for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4), mat(0xd8b84a));
+        const a = (i / 5) * Math.PI * 2;
+        spike.position.set(Math.cos(a) * 0.14, 2.12, Math.sin(a) * 0.14);
+        g.add(spike);
+      }
+    } else if (C.hat === 'cap') {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.09, 9), trimM);
+      cap.position.y = 2.0;
+      g.add(cap);
+    } else if (C.hat === 'helmet') {
+      const helm = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.9), mat(0x9aa4ae, { emissive: ghost ? 0x7ab8d8 : 0x000000 }));
+      helm.position.y = 1.86;
+      g.add(helm);
+      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.3), trimM);
+      crest.position.y = 2.05;
+      g.add(crest);
+    }
+    // props (right arm)
+    const armR = arms[1];
+    function addProp(mesh, x, y, z) { mesh.position.set(x, y, z); armR.add(mesh); }
+    switch (C.prop) {
+      case 'sword': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.85, 0.1), mat(0xb8bcc4)), 0, -0.95, 0.18); break;
+      case 'spear': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 6), mat(0x7a5a38)), 0.06, -0.45, 0);
+        addProp(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 6), mat(0xb8bcc4)), 0.06, 0.78, 0); break;
+      case 'book': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.08), mat(0x6e2a1a)), 0, -0.66, 0.12); break;
+      case 'scroll': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.34, 6), mat(0xe8e0c8)), 0, -0.66, 0.12); break;
+      case 'shovel': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), mat(0x7a5a38)), 0.05, -0.4, 0);
+        addProp(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.04), mat(0x8a8a8e)), 0.05, -1.2, 0); break;
+      case 'vial': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), mat(0x3a7a4a, { emissive: 0x1a4a2a })), 0, -0.66, 0.12); break;
+      case 'flowers':
+        for (const [c, dx] of [[0xc05070, -0.05], [0xd0c050, 0.03], [0x9060c0, 0.08]]) {
+          addProp(new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), mat(c)), dx, -0.6 - Math.abs(dx), 0.1);
+        }
+        break;
+    }
+    g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    return { group: g, legs, arms, mats };
+  }
+
+  // ── Character ──────────────────────────────────────────────────────────────
+  const WALK = 1.5, HURRY = 2.6;
+
+  class Character {
+    constructor(id) {
+      this.id = id;
+      this.info = EC.CHAR_INFO[id];
+      const b = makeBody(Object.assign({ id }, this.info));
+      this.group = b.group;
+      this.legs = b.legs;
+      this.arms = b.arms;
+      this.mats = b.mats;
+      this.baseOpacity = this.info.colors.ghost ? 0.55 : 1;
+      this.pos = new THREE.Vector3(0, 0, 0);
+      this.heading = 0;
+      this.targetHeading = 0;
+      this.path = [];
+      this.walkT = 0;
+      this.moving = false;
+      this.hurry = false;
+      this.fade = 0;            // 0 hidden … 1 shown
+      this.fadeTarget = 0;
+      this.inScene = false;
+      this.fallen = 0;          // 0 upright … 1 lying
+      this.fallenTarget = 0;
+      this.actI = -1;           // current schedule slot
+      this.pause = 0;
+      this.barkCd = 10 + Math.random() * 25;
+      this.say_t = 0;
+      this.anim = null;         // 'dig' etc.
+      this.crouch = 0;
+      this.crouchTarget = 0;
+      // hit box for tapping
+      this.hit = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.3, 1.1), new THREE.MeshBasicMaterial({ visible: false }));
+      this.hit.position.y = 1.15;
+      this.hit.userData.charId = id;
+      this.group.add(this.hit);
+      // labels
+      this.nameS = textSprite(0.5);
+      drawName(this.nameS, this.info.name, this.info.title);
+      this.nameS.sp.position.y = 2.45;
+      this.group.add(this.nameS.sp);
+      this.bubble = textSprite(1.35);
+      this.bubble.sp.position.y = 3.4;
+      this.bubble.sp.visible = false;
+      this.group.add(this.bubble.sp);
+      this.group.visible = false;
+      scene.add(this.group);
+      this.activityDesc = 'asleep within the castle';
+    }
+
+    setNode(nodeId, dx, dz) {
+      const p = NAV.nodePos(nodeId);
+      this.pos.set(p.x + (dx || 0), p.y, p.z + (dz || 0));
+      this.path = [];
+    }
+
+    say(text, dur) {
+      drawBubble(this.bubble, text);
+      this.bubble.sp.visible = true;
+      this.say_t = dur || Math.min(11, Math.max(3, text.length * 0.065));
+      this.lastLine = text;
+    }
+
+    goto(nodeId, dx, dz, hurry) {
+      const start = NAV.nearestNode(this.pos.x, this.pos.z, this.pos.y);
+      const ids = NAV.findPath(start, nodeId) || [nodeId];
+      this.path = ids.map(id => NAV.nodePos(id));
+      // drop the first waypoint if it's behind us / we're basically on it
+      if (this.path.length > 1) {
+        const p0 = this.path[0];
+        if (Math.hypot(p0.x - this.pos.x, p0.z - this.pos.z) < 1.5) this.path.shift();
+      }
+      const last = NAV.nodePos(nodeId);
+      this.path.push({ x: last.x + (dx || 0), y: last.y, z: last.z + (dz || 0) });
+      this.hurry = !!hurry;
+    }
+
+    update(dt, gameHour, playerPos, ghAt) {
+      // fade
+      this.fade += (this.fadeTarget - this.fade) * Math.min(1, dt * 2.2);
+      const vis = this.fade > 0.02;
+      this.group.visible = vis;
+      if (vis) {
+        for (const m of this.mats) m.opacity = this.baseOpacity * this.fade;
+        this.nameS.sp.material.opacity = this.fade;
+      }
+      // schedule (when not in a scene)
+      if (!this.inScene && !this.holdUntil) this.runSchedule(dt, gameHour);
+      if (this.holdUntil && performance.now() > this.holdUntil) this.holdUntil = 0;
+
+      // movement along path
+      this.moving = false;
+      if (this.path.length && this.fallen < 0.5) {
+        const t = this.path[0];
+        const dx = t.x - this.pos.x, dz = t.z - this.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 0.45) this.path.shift();
+        else {
+          const sp = (this.hurry ? HURRY : WALK) * dt;
+          this.pos.x += dx / d * Math.min(sp, d);
+          this.pos.z += dz / d * Math.min(sp, d);
+          this.targetHeading = Math.atan2(dx, dz);
+          this.moving = true;
+        }
+      }
+      this.pos.y = ghAt(this.pos.x, this.pos.z);
+      // heading smoothing
+      let dh = this.targetHeading - this.heading;
+      while (dh > Math.PI) dh -= Math.PI * 2;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      this.heading += dh * Math.min(1, dt * 7);
+
+      // pose / walk anim
+      this.walkT += dt * (this.moving ? (this.hurry ? 9 : 6.4) : 2);
+      const sw = this.moving ? Math.sin(this.walkT) * 0.55 : 0;
+      this.legs[0].rotation.x = sw;
+      this.legs[1].rotation.x = -sw;
+      let armSw = this.moving ? -sw * 0.8 : Math.sin(this.walkT * 0.4) * 0.04;
+      if (this.anim === 'dig' && !this.moving) {
+        const digT = Math.sin(this.walkT * 1.4);
+        this.arms[1].rotation.x = -0.8 + digT * 0.5;
+        this.arms[0].rotation.x = -0.6 + digT * 0.4;
+      } else if (this.fencing) {
+        const fz = Math.sin(performance.now() * 0.012 + (this.id === 'hamlet' ? 0 : Math.PI));
+        this.arms[1].rotation.x = -1.2 + fz * 0.6;
+        this.arms[0].rotation.x = 0.2;
+        this.group.position.x = this.pos.x + Math.sin(performance.now() * 0.004) * (this.id === 'hamlet' ? 0.5 : -0.5);
+      } else {
+        this.arms[0].rotation.x = armSw;
+        this.arms[1].rotation.x = -armSw;
+      }
+      // falling / crouch
+      this.fallen += (this.fallenTarget - this.fallen) * Math.min(1, dt * 3);
+      this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 4);
+      this.group.rotation.z = this.fallen * Math.PI / 2;
+      this.group.scale.y = 1 - this.crouch * 0.25;
+
+      this.group.position.set(
+        this.fencing ? this.group.position.x : this.pos.x,
+        this.pos.y + this.fallen * 0.55 + Math.abs(this.moving ? Math.sin(this.walkT) * 0.045 : 0),
+        this.pos.z);
+      this.group.rotation.y = this.heading;
+
+      // speech bubble timing & facing
+      if (this.say_t > 0) {
+        this.say_t -= dt;
+        if (this.say_t <= 0) this.bubble.sp.visible = false;
+      }
+      // ambient barks
+      if (!this.inScene && vis && playerPos) {
+        const pd = this.pos.distanceTo(playerPos);
+        if (pd < 11) {
+          // face the player a bit when idle and near
+          if (!this.moving && pd < 6) this.targetHeading = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
+          this.barkCd -= dt;
+          if (this.barkCd <= 0 && EC.BARKS[this.id]) {
+            const lines = EC.BARKS[this.id];
+            this.say(lines[Math.floor(Math.random() * lines.length)]);
+            this.barkCd = 22 + Math.random() * 30;
+          }
+        }
+      }
+    }
+
+    runSchedule(dt, gameHour) {
+      const sched = EC.SCHEDULES[this.id];
+      if (!sched) return;
+      let slot = null, idx = -1;
+      for (let i = 0; i < sched.length; i++) {
+        if (gameHour >= sched[i][0] && gameHour < sched[i][1]) { slot = sched[i][2]; idx = i; break; }
+      }
+      if (idx !== this.actI) {
+        this.actI = idx;
+        this.pause = 0;
+        if (!slot || slot.type === 'off') {
+          this.fadeTarget = 0;
+          this.activityDesc = 'withdrawn to private quarters';
+        } else {
+          this.anim = slot.anim || null;
+          if (this.fade < 0.05) {
+            // reappear directly at the activity's first node
+            const n = slot.node || slot.nodes[0];
+            this.setNode(n, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
+          }
+          this.fadeTarget = 1;
+          if (slot.type === 'idle') {
+            this.goto(slot.node, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
+            this.activityDesc = 'at ' + slot.node;
+          } else {
+            this.patrolI = 0;
+            this.goto(slot.nodes[0]);
+          }
+          this.activityDesc = {
+            idle: 'attending to affairs', wander: 'taking the air about the castle',
+            patrol: 'keeping the watch',
+          }[slot.type] || 'about the castle';
+          if (this.anim === 'dig') this.activityDesc = 'digging a grave, and singing at it';
+        }
+      }
+      if (!slot || slot.type === 'off' || this.path.length) return;
+      // arrived — decide next leg
+      if (slot.type === 'wander') {
+        this.pause -= dt;
+        if (this.pause <= 0) {
+          const n = slot.nodes[Math.floor(Math.random() * slot.nodes.length)];
+          this.goto(n, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3);
+          this.pause = 4 + Math.random() * 9;
+        }
+      } else if (slot.type === 'patrol') {
+        this.pause -= dt;
+        if (this.pause <= 0) {
+          this.patrolI = ((this.patrolI || 0) + 1) % slot.nodes.length;
+          this.goto(slot.nodes[this.patrolI]);
+          this.pause = 1.5;
+        }
+      }
+    }
+  }
+
+  for (const id of Object.keys(EC.CHAR_INFO)) {
+    const c = new Character(id);
+    chars.push(c);
+    byId[id] = c;
+  }
+  // sensible spawn points (before first schedule tick)
+  byId.gravedigger.setNode('graveyard');
+  byId.sexton2.setNode('gyB');
+  byId.ghost.setNode('rampN');
+
+  // ── scene engine ───────────────────────────────────────────────────────────
+  const sceneStates = EC.SCENES.map(s => ({ def: s, played: false, phase: 'idle', lineI: -1, lineT: 0, parts: [] }));
+  let lastHour = 0;
+  const listeners = { onSceneStart: null, onLine: null, onSceneEnd: null };
+
+  function lineDuration(text) {
+    return Math.min(13, Math.max(3, 1.2 + text.split(' ').length * 0.42));
+  }
+
+  function participants(def) {
+    return Object.keys(def.marks).filter(id => def.marks[id] && byId[id]);
+  }
+
+  function beginGather(st, snap) {
+    st.phase = 'gather';
+    st.parts = participants(st.def);
+    for (const id of st.parts) {
+      const c = byId[id];
+      c.inScene = true;
+      c.fadeTarget = 1;
+      c.fencing = false;
+      const [node, dx, dz] = st.def.marks[id];
+      if (snap || c.fade < 0.05) c.setNode(node, dx, dz);
+      else c.goto(node, dx, dz, true);
+      c.activityDesc = 'playing in “' + st.def.title + '” (' + st.def.ref + ')';
+    }
+    // the ghost hides until its cue unless it opens the scene
+    if (st.def.marks.ghost && byId.ghost && st.def.id !== 'watch') byId.ghost.fadeTarget = 0;
+    if (st.def.id === 'watch') byId.ghost.fadeTarget = 0;
+    st.gatherT = 0;
+  }
+
+  function beginPlay(st) {
+    st.phase = 'play';
+    st.lineI = -1;
+    st.lineT = 0.7;
+    if (listeners.onSceneStart) listeners.onSceneStart(st.def);
+  }
+
+  function doAction(st, action) {
+    const g = byId.ghost;
+    switch (action) {
+      case 'ghostShow': g.fadeTarget = 1; break;
+      case 'ghostWalk': g.fadeTarget = 1; g.goto('rampN', 4, -2); break;
+      case 'ghostFade': g.fadeTarget = 0; break;
+      case 'laertesExit': { const l = byId.laertes; l.goto('bridgeW', 0, 0); l.holdUntil = performance.now() + 90000; break; }
+      case 'kingFlees':
+        for (const id of ['claudius', 'gertrude', 'polonius']) {
+          const c = byId[id];
+          c.goto('cyN', (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, true);
+          c.holdUntil = performance.now() + 100000;
+        }
+        break;
+      case 'poison': byId.lucianus.crouchTarget = 1; byId.playerking.fallenTarget = 1; break;
+      case 'fence': byId.hamlet.fencing = true; byId.laertes.fencing = true; break;
+      case 'fence2': break;
+      case 'gertrudeFalls': byId.gertrude.fallenTarget = 1; break;
+      case 'laertesFalls': byId.laertes.fencing = false; byId.hamlet.fencing = false; byId.laertes.fallenTarget = 1; break;
+      case 'kingFalls': byId.claudius.fallenTarget = 1; break;
+      case 'hamletFalls': byId.hamlet.fallenTarget = 1; break;
+    }
+  }
+
+  function endScene(st) {
+    st.phase = 'idle';
+    st.played = true;
+    const fallen = st.parts.filter(id => byId[id].fallenTarget > 0 || byId[id].crouchTarget > 0);
+    for (const id of st.parts) {
+      const c = byId[id];
+      c.fencing = false;
+      if (c.fallenTarget > 0 || c.crouchTarget > 0) {
+        // the dead lie a while, then the day resets — the play is performed anew
+        setTimeout(() => { c.fallenTarget = 0; c.crouchTarget = 0; c.inScene = false; c.actI = -99; }, 45000);
+      } else {
+        c.inScene = false;
+        c.actI = -99; // force schedule re-evaluation
+      }
+    }
+    if (st.def.marks.ghost) byId.ghost.inScene = false;
+    if (listeners.onSceneEnd) listeners.onSceneEnd(st.def, fallen.length > 0);
+  }
+
+  function update(dt, gameHour, playerPos, ghAt) {
+    // new day → reset scene flags
+    if (gameHour < lastHour - 1) for (const st of sceneStates) { st.played = false; }
+    lastHour = gameHour;
+
+    for (const st of sceneStates) {
+      const def = st.def;
+      if (st.phase === 'idle') {
+        if (!st.played && gameHour >= def.hour - 0.45 && gameHour < def.hour + 0.6) beginGather(st, false);
+        else if (!st.played && gameHour >= def.hour + 0.6) st.played = true; // missed (time skipped)
+      } else if (st.phase === 'gather') {
+        st.gatherT += dt;
+        const arrived = st.parts.every(id => byId[id].path.length === 0);
+        if ((gameHour >= def.hour && (arrived || st.gatherT > 30)) || gameHour > def.hour + 0.55) beginPlay(st);
+      } else if (st.phase === 'play') {
+        st.lineT -= dt;
+        if (st.lineT <= 0) {
+          st.lineI++;
+          if (st.lineI >= def.lines.length) { endScene(st); continue; }
+          const line = def.lines[st.lineI];
+          const speaker = byId[line.who];
+          const dur = lineDuration(line.text);
+          st.lineT = dur + 0.6;
+          if (line.action) doAction(st, line.action);
+          if (speaker) {
+            speaker.say(line.text, dur);
+            // others turn toward the speaker
+            for (const id of st.parts) {
+              if (id === line.who) continue;
+              const c = byId[id];
+              if (!c.moving && c.fallen < 0.5) {
+                c.targetHeading = Math.atan2(speaker.pos.x - c.pos.x, speaker.pos.z - c.pos.z);
+              }
+            }
+            if (listeners.onLine) listeners.onLine(def, speaker, line.text);
+          }
+        }
+      }
+    }
+
+    for (const c of chars) c.update(dt, gameHour, playerPos, ghAt);
+  }
+
+  // jump straight to a scene (Playbill “Go”): returns where the player should stand
+  function jumpToScene(id) {
+    const st = sceneStates.find(s => s.def.id === id);
+    if (!st) return null;
+    for (const s2 of sceneStates) if (s2.phase !== 'idle') endScene(s2);
+    st.played = false;
+    beginGather(st, true);
+    beginPlay(st);
+    const p = NAV.nodePos(st.def.place);
+    return { def: st.def, pos: p };
+  }
+
+  function nextScene(gameHour) {
+    let best = null, bd = Infinity;
+    for (const st of sceneStates) {
+      let d = st.def.hour - gameHour;
+      if (d <= 0.02) d += 24;
+      if (d < bd) { bd = d; best = st; }
+    }
+    return best ? best.def : null;
+  }
+
+  return { chars, byId, update, jumpToScene, nextScene, listeners, sceneStates };
+};
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// controls.js — first-person walking: virtual joystick (touch), drag-look
+// (works with a touchpad: click-drag, no pointer lock), WASD/arrows, collision.
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+EC.Controls = class {
+  constructor(THREE, camera, dom, world, onTap) {
+    this.THREE = THREE;
+    this.camera = camera;
+    this.dom = dom;
+    this.world = world;
+    this.onTap = onTap;
+
+    this.pos = new THREE.Vector3(-108, 1.7, 0);
+    this.groundY = 0;
+    this.yaw = -Math.PI / 2;   // facing east, toward the castle
+    this.pitch = 0;
+    this.keys = {};
+    this.joy = { active: false, id: null, x: 0, y: 0 };
+    this.look = { id: null, lx: 0, ly: 0 };
+    this.taps = new Map();
+    this.enabled = false;
+    this.isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      this.keys[e.code] = true;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', e => { this.keys[e.code] = false; });
+    window.addEventListener('blur', () => { this.keys = {}; });
+
+    dom.addEventListener('pointerdown', e => this.pointerDown(e));
+    window.addEventListener('pointermove', e => this.pointerMove(e));
+    window.addEventListener('pointerup', e => this.pointerUp(e));
+    window.addEventListener('pointercancel', e => this.pointerUp(e, true));
+    dom.addEventListener('contextmenu', e => e.preventDefault());
+
+    this.buildJoystick();
+  }
+
+  buildJoystick() {
+    const base = document.createElement('div');
+    base.id = 'joy-base';
+    base.innerHTML = '<div id="joy-knob"></div>';
+    document.body.appendChild(base);
+    this.joyBase = base;
+    this.joyKnob = base.querySelector('#joy-knob');
+    if (!this.isTouch) base.style.display = 'none';
+
+    base.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      this.joy.active = true;
+      this.joy.id = e.pointerId;
+      base.setPointerCapture(e.pointerId);
+      this.joyMove(e);
+    });
+    base.addEventListener('pointermove', e => { if (this.joy.id === e.pointerId) this.joyMove(e); });
+    const end = e => {
+      if (this.joy.id !== e.pointerId) return;
+      this.joy.active = false; this.joy.id = null; this.joy.x = 0; this.joy.y = 0;
+      this.joyKnob.style.transform = 'translate(-50%,-50%)';
+    };
+    base.addEventListener('pointerup', end);
+    base.addEventListener('pointercancel', end);
+  }
+
+  joyMove(e) {
+    const r = this.joyBase.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let dx = (e.clientX - cx) / (r.width / 2), dy = (e.clientY - cy) / (r.height / 2);
+    const m = Math.hypot(dx, dy);
+    if (m > 1) { dx /= m; dy /= m; }
+    this.joy.x = dx; this.joy.y = dy;
+    this.joyKnob.style.transform = `translate(calc(-50% + ${dx * 38}px), calc(-50% + ${dy * 38}px))`;
+  }
+
+  pointerDown(e) {
+    if (!this.enabled) return;
+    this.taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 });
+    if (this.look.id === null) {
+      this.look.id = e.pointerId;
+      this.look.lx = e.clientX;
+      this.look.ly = e.clientY;
+    }
+  }
+
+  pointerMove(e) {
+    const tap = this.taps.get(e.pointerId);
+    if (tap) tap.moved += Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) ||
+      (Math.abs(e.clientX - tap.x) + Math.abs(e.clientY - tap.y)) * 0.1;
+    if (e.pointerId === this.look.id) {
+      const dx = e.clientX - this.look.lx, dy = e.clientY - this.look.ly;
+      this.look.lx = e.clientX; this.look.ly = e.clientY;
+      const k = this.isTouch ? 0.0042 : 0.0034;
+      this.yaw -= dx * k;
+      this.pitch -= dy * k;
+      this.pitch = Math.max(-1.25, Math.min(1.25, this.pitch));
+    }
+  }
+
+  pointerUp(e, cancel) {
+    if (e.pointerId === this.look.id) this.look.id = null;
+    const tap = this.taps.get(e.pointerId);
+    this.taps.delete(e.pointerId);
+    if (!cancel && tap && this.enabled) {
+      const dt = performance.now() - tap.t;
+      const dist = Math.hypot(e.clientX - tap.x, e.clientY - tap.y);
+      if (dt < 350 && dist < 12 && this.onTap) this.onTap(e.clientX, e.clientY);
+    }
+  }
+
+  teleport(x, z, yaw) {
+    this.pos.x = x; this.pos.z = z;
+    this.groundY = this.world.groundHeightAt(x, z);
+    this.pos.y = this.groundY + 1.7;
+    if (yaw !== undefined) this.yaw = yaw;
+    this.pitch = 0;
+  }
+
+  collide(nx, nz) {
+    // axis-aligned slide against world colliders, radius 0.42
+    const R = 0.42;
+    const py0 = this.groundY + 0.3, py1 = this.groundY + 1.8;
+    let x = nx, z = nz;
+    for (const [x0, x1, y0, y1, z0, z1] of this.world.colliders) {
+      if (y1 < py0 || y0 > py1) continue;
+      if (x + R > x0 && x - R < x1 && z + R > z0 && z - R < z1) {
+        // push out along the axis of least penetration
+        const pxd = Math.min(x + R - x0, x1 - (x - R));
+        const pzd = Math.min(z + R - z0, z1 - (z - R));
+        if (pxd < pzd) x += (x < (x0 + x1) / 2) ? -pxd : pxd;
+        else z += (z < (z0 + z1) / 2) ? -pzd : pzd;
+      }
+    }
+    return [x, z];
+  }
+
+  update(dt) {
+    if (!this.enabled) return;
+    const k = this.keys;
+    let f = 0, s = 0, turn = 0;
+    if (k.KeyW || k.ArrowUp) f += 1;
+    if (k.KeyS || k.ArrowDown) f -= 1;
+    if (k.KeyA) s -= 1;
+    if (k.KeyD) s += 1;
+    if (k.KeyQ || k.ArrowLeft) turn += 1;
+    if (k.KeyE || k.ArrowRight) turn -= 1;
+    f += -this.joy.y;
+    s += this.joy.x;
+    this.yaw += turn * 2.1 * dt;
+
+    const run = (k.ShiftLeft || k.ShiftRight) ? 2.1 : 1;
+    const mag = Math.min(1, Math.hypot(f, s));
+    if (mag > 0.01) {
+      const speed = 4.2 * run * mag * dt;
+      const ang = Math.atan2(s, f);
+      const dir = this.yaw - ang;       // forward = (-sin yaw, -cos yaw)
+      let nx = this.pos.x - Math.sin(dir) * speed;
+      let nz = this.pos.z - Math.cos(dir) * speed;
+      // ground rules: no big steps, no swimming
+      const gh = this.world.groundHeightAt(nx, nz);
+      if (Math.abs(gh - this.groundY) <= 1.0 && gh > -1.4) {
+        [nx, nz] = this.collide(nx, nz);
+        const gh2 = this.world.groundHeightAt(nx, nz);
+        if (Math.abs(gh2 - this.groundY) <= 1.0 && gh2 > -1.4) {
+          this.pos.x = nx; this.pos.z = nz;
+          this.groundY = gh2;
+        }
+      }
+      // head bob
+      this.bobT = (this.bobT || 0) + dt * 7 * run;
+    }
+    // smooth eye height
+    const eyeTarget = this.groundY + 1.7 + (mag > 0.01 ? Math.abs(Math.sin(this.bobT || 0)) * 0.05 : 0);
+    this.pos.y += (eyeTarget - this.pos.y) * Math.min(1, dt * 9);
+
+    this.camera.position.copy(this.pos);
+    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+  }
+};
+
+</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// main.js — bootstraps the world, day/night cycle, UI, and the render loop
+// ─────────────────────────────────────────────────────────────────────────────
+window.EC = window.EC || {};
+
+EC.boot = function (THREE) {
+  const $ = id => document.getElementById(id);
+
+  // ── renderer / scene / camera ──────────────────────────────────────────────
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const quality = { shadows: !isTouch, pixelCap: isTouch ? 1.35 : 1.8 };
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: $('view') });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelCap));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  if (quality.shadows) {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x9fc5e8, 60, 900);
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2200);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ── world & lights ─────────────────────────────────────────────────────────
+  const world = EC.buildWorld(THREE, scene, quality);
+
+  const hemi = new THREE.HemisphereLight(0xbed8f0, 0x4a4a3a, 0.9);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff2dc, 2.2);
+  sun.position.set(150, 200, 120);
+  scene.add(sun);
+  scene.add(sun.target);
+  if (quality.shadows) {
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera;
+    sc.left = -130; sc.right = 130; sc.top = 130; sc.bottom = -130;
+    sc.near = 10; sc.far = 700;
+    sun.shadow.bias = -0.0005;
+  }
+
+  const sunBall = new THREE.Mesh(new THREE.SphereGeometry(14, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffe9b8, fog: false }));
+  scene.add(sunBall);
+  const moonBall = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xdfe8f2, fog: false }));
+  scene.add(moonBall);
+
+  // stars
+  {
+    const n = 900, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI * 0.48 + 0.05;
+      const r = 950;
+      pos[i * 3] = Math.cos(a) * Math.cos(e) * r;
+      pos[i * 3 + 1] = Math.sin(e) * r;
+      pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfd8ea, size: 1.7, transparent: true, opacity: 0, fog: false, sizeAttenuation: false }));
+    scene.add(stars);
+  }
+
+  // point lights from the world (lanterns / interiors)
+  const lamps = world.lampPoints.map(lp => {
+    const l = new THREE.PointLight(lp.color, 0, lp.range, 1.8);
+    l.position.set(lp.x, lp.y, lp.z);
+    scene.add(l);
+    return { l, lp };
+  });
+  // the player's lantern after dark
+  const lantern = new THREE.PointLight(0xffc88a, 0, 16, 1.6);
+  scene.add(lantern);
+
+  // ── hotspots ───────────────────────────────────────────────────────────────
+  const hotTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.beginPath(); g.arc(64, 64, 52, 0, 7);
+    g.fillStyle = 'rgba(24,20,10,0.82)'; g.fill();
+    g.lineWidth = 7; g.strokeStyle = '#d8b84a'; g.stroke();
+    g.fillStyle = '#f0dfa8'; g.font = 'bold italic 78px Georgia, serif';
+    g.textAlign = 'center'; g.fillText('i', 66, 92);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const hotspots = EC.HOTSPOTS.map((h, i) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hotTex, transparent: true, depthTest: false }));
+    sp.scale.set(1.5, 1.5, 1);
+    sp.position.set(h.pos[0], h.pos[2], h.pos[1]);
+    sp.renderOrder = 9;
+    sp.userData.hotspot = i;
+    scene.add(sp);
+    return sp;
+  });
+
+  // ── characters ─────────────────────────────────────────────────────────────
+  const mgr = EC.createCharacters(THREE, scene, world);
+
+  // ── controls ───────────────────────────────────────────────────────────────
+  const raycaster = new THREE.Raycaster();
+  const controls = new EC.Controls(THREE, camera, renderer.domElement, world, onTap);
+
+  function onTap(cx, cy) {
+    if (document.body.classList.contains('ui-open')) return;
+    const ndc = new THREE.Vector2((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const targets = hotspots.concat(mgr.chars.filter(c => c.group.visible).map(c => c.hit));
+    const hits = raycaster.intersectObjects(targets, false);
+    for (const h of hits) {
+      if (h.distance > 38) break;
+      if (h.object.userData.hotspot !== undefined) { showHotspot(h.object.userData.hotspot); return; }
+      if (h.object.userData.charId) { showCharacter(h.object.userData.charId); return; }
+    }
+  }
+
+  // ── time ───────────────────────────────────────────────────────────────────
+  const SPEEDS = [0, 120, 360];     // game-seconds per real second (1× ⇒ 12-min days)
+  let speedI = 1;
+  let gameH = 11.55;                // start just before the gravediggers & Act II
+
+  function fmtTime(h) {
+    const hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 60);
+    return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  }
+
+  // ── UI: HUD, panels, cards ─────────────────────────────────────────────────
+  const ui = {
+    clock: $('clock'), zone: $('zone'), sub: $('subtitle'), toast: $('toast'),
+    card: $('card'), cardBody: $('card-body'), menu: $('menu'), compass: $('compass-n'),
+  };
+  let zoneShown = '';
+
+  $('btn-menu').onclick = () => openMenu('visit');
+  $('card-close').onclick = () => { ui.card.style.display = 'none'; document.body.classList.remove('ui-open'); };
+  $('menu-close').onclick = closeMenu;
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => openMenu(b.dataset.tab));
+  for (let i = 0; i < 3; i++) {
+    $('spd' + i).onclick = () => {
+      speedI = i;
+      document.querySelectorAll('.spd').forEach((b, j) => b.classList.toggle('on', j === speedI));
+    };
+  }
+
+  function openMenu(tab) {
+    document.body.classList.add('ui-open');
+    ui.menu.style.display = 'flex';
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    const box = $('menu-body');
+    if (tab === 'visit') {
+      box.innerHTML = '<h3>Visit a place</h3>' + EC.PLACES.map((p, i) =>
+        `<button class="row" data-place="${i}">${p.name}</button>`).join('');
+      box.querySelectorAll('[data-place]').forEach(b => b.onclick = () => {
+        const p = EC.PLACES[+b.dataset.place];
+        controls.teleport(p.pos[0], p.pos[1], p.face);
+        closeMenu();
+      });
+    } else if (tab === 'playbill') {
+      const sorted = [...EC.SCENES].sort((a, b) => a.hour - b.hour);
+      box.innerHTML = '<h3>Playbill — scenes of the day</h3><p class="hint">Every castle day, the residents perform Hamlet. “Go” jumps time and carries you to the spot.</p>' +
+        sorted.map(s =>
+          `<div class="play-row"><span class="ptime">${fmtTime(s.hour)}</span><span class="pname"><b>${s.title}</b><br><i>${s.ref}</i></span><button class="go" data-scene="${s.id}">Go</button></div>`).join('');
+      box.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => {
+        const r = mgr.jumpToScene(b.dataset.scene);
+        if (r) {
+          gameH = r.def.hour + 0.01;
+          const dx = r.pos.x, dz = r.pos.z;
+          // stand 7 m back from the scene, facing it
+          const px = dx - 7 * Math.sin(0.6), pz = dz + 7 * Math.cos(0.6);
+          controls.teleport(px, pz, Math.atan2(-(dx - px), -(dz - pz)));
+        }
+        closeMenu();
+      });
+    } else if (tab === 'people') {
+      box.innerHTML = '<h3>The residents of Elsinore</h3>' + mgr.chars.map(c =>
+        `<div class="play-row"><span class="pname"><b>${c.info.name}</b> — ${c.info.title}<br><i>${c.group.visible ? c.activityDesc : 'withdrawn (not abroad at this hour)'}</i></span>` +
+        `<button class="go" data-char="${c.id}">${c.group.visible ? 'Find' : 'About'}</button></div>`).join('');
+      box.querySelectorAll('[data-char]').forEach(b => b.onclick = () => {
+        const c = mgr.byId[b.dataset.char];
+        if (c.group.visible) {
+          const a = Math.random() * Math.PI * 2;
+          const px = c.pos.x + Math.sin(a) * 3, pz = c.pos.z + Math.cos(a) * 3;
+          controls.teleport(px, pz, Math.atan2(-(c.pos.x - px), -(c.pos.z - pz)));
+          closeMenu();
+        } else {
+          closeMenu();
+          showCharacter(c.id);
+        }
+      });
+    } else if (tab === 'about') {
+      box.innerHTML = EC.ABOUT_HTML;
+    } else if (tab === 'help') {
+      box.innerHTML = `<h3>How to explore</h3>
+        ${isTouch
+          ? '<p><b>Move:</b> left joystick.<br><b>Look:</b> drag anywhere else on the screen.<br><b>Interact:</b> tap a person or a gold ⓘ marker.</p>'
+          : '<p><b>Move:</b> W A S D (or ↑ ↓). <b>Turn:</b> Q / E or ← →. <b>Run:</b> hold Shift.<br><b>Look:</b> press and drag on the view (touchpad: click-drag — no mouse needed).<br><b>Interact:</b> click a person or a gold ⓘ marker.</p>'}
+        <p><b>Time:</b> ⏸ pauses, 1× ≈ a 12-minute day, 3× for a 4-minute day. The Ghost walks only after midnight.</p>
+        <p><b>Scenes:</b> open the <b>Playbill</b> and press “Go” to jump straight into any scene. <b>ⓘ markers</b> teach the real castle’s history.</p>
+        <p>You cannot fall from the ramparts, and the Sound is too cold to swim — walk the ramps and the bridge.</p>
+        <p class="hint">An educational walking replica of Kronborg Castle (“Elsinore”), full scale: courtyard 50×40 m, Great Hall 62 m, ramparts and moat included. All dialogue is from Shakespeare’s Hamlet.</p>`;
+    }
+  }
+
+  function closeMenu() {
+    ui.menu.style.display = 'none';
+    document.body.classList.remove('ui-open');
+  }
+
+  function showCard(html) {
+    ui.cardBody.innerHTML = html;
+    ui.card.style.display = 'block';
+    document.body.classList.add('ui-open');
+  }
+
+  function showHotspot(i) {
+    const h = EC.HOTSPOTS[i];
+    showCard(`<h3>ⓘ ${h.title}</h3><p>${h.text}</p>`);
+  }
+
+  function showCharacter(id) {
+    const c = mgr.byId[id];
+    const info = c.info;
+    showCard(`<h3>${info.name}</h3><p class="hint">${info.title} — currently ${c.group.visible ? c.activityDesc : 'withdrawn from sight'}</p>
+      <p>${info.bio}</p>
+      <p><b>Did you know?</b> ${info.facts}</p>
+      ${info.quotes.map(q => `<p class="quote">“${q}”</p>`).join('')}`);
+  }
+
+  // toast + subtitles from the scene engine
+  let toastTimer = 0;
+  function toast(html, ms) {
+    ui.toast.innerHTML = html;
+    ui.toast.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { ui.toast.style.display = 'none'; }, ms || 9000);
+  }
+
+  mgr.listeners.onSceneStart = def => {
+    const p = EC.NAV.nodePos(def.place);
+    const far = controls.pos.distanceTo(new THREE.Vector3(p.x, p.y + 1.7, p.z)) > 32;
+    toast(`<b>Now playing: ${def.title}</b><br><i>${def.ref}</i>` +
+      (far ? ` <button id="toast-go">Watch</button>` : ''), 12000);
+    const btn = $('toast-go');
+    if (btn) btn.onclick = () => {
+      const px = p.x - 6, pz = p.z + 5;
+      controls.teleport(px, pz, Math.atan2(-(p.x - px), -(p.z - pz)));
+      ui.toast.style.display = 'none';
+    };
+  };
+  let subTimer = 0;
+  mgr.listeners.onLine = (def, speaker, text) => {
+    if (controls.pos.distanceTo(speaker.pos) > 30) return;
+    ui.sub.innerHTML = `<b>${speaker.info.name.toUpperCase()}</b> — ${text}`;
+    ui.sub.style.display = 'block';
+    clearTimeout(subTimer);
+    subTimer = setTimeout(() => { ui.sub.style.display = 'none'; }, Math.min(12000, 2500 + text.length * 55));
+  };
+  mgr.listeners.onSceneEnd = (def, deaths) => {
+    if (deaths) toast('<i>“The rest is silence.” — and yet, at Elsinore, the play is performed anew each day…</i>', 10000);
+  };
+
+  // ── intro ──────────────────────────────────────────────────────────────────
+  $('intro-controls').innerHTML = isTouch
+    ? 'Left joystick to walk · drag to look around · tap people and ⓘ markers'
+    : 'WASD / arrows to walk · click-drag to look (touchpad friendly) · Q/E turn · Shift run · click people and ⓘ markers';
+  $('start').onclick = () => {
+    $('intro').style.display = 'none';
+    controls.enabled = true;
+    toast('<b>Welcome to Elsinore.</b><br>Cross the bridge and enter through the Dark Gate. The court is about its day — open ☰ for the Playbill.', 11000);
+  };
+
+  // ── sky / day-night ────────────────────────────────────────────────────────
+  const skyDay = new THREE.Color(0x9fc5e8), skyNight = new THREE.Color(0x070d1d),
+    skyDawn = new THREE.Color(0xd9966a), tmp = new THREE.Color(), tmp2 = new THREE.Color();
+  const waterDay = new THREE.Color(0x2e4a5e), waterNight = new THREE.Color(0x0a1420);
+
+  function updateSky() {
+    const th = (gameH - 6) / 12 * Math.PI;          // 0 at 06:00, π at 18:00
+    const alt = Math.sin(th);
+    const day = Math.max(0, Math.min(1, alt * 1.7 + 0.12));
+    const dawn = Math.max(0, 1 - Math.abs(alt) * 4) * (day > 0.02 ? 1 : 0.4);
+
+    tmp.copy(skyNight).lerp(skyDay, day).lerp(skyDawn, dawn * 0.55);
+    scene.background = scene.background || new THREE.Color();
+    scene.background.copy(tmp);
+    scene.fog.color.copy(tmp);
+    scene.fog.far = 350 + day * 600;
+
+    const cx = Math.cos(th), sy = Math.sin(th);
+    sunBall.position.set(controls.pos.x + cx * 800, sy * 600, controls.pos.z + 350);
+    sunBall.visible = sy > -0.05;
+    moonBall.position.set(controls.pos.x - cx * 750, Math.max(80, -sy * 550), controls.pos.z + 300);
+    moonBall.visible = sy < 0.1;
+
+    if (sy > 0) {
+      sun.color.setHex(0xfff2dc);
+      tmp2.set(0xff9a50);
+      sun.color.lerp(tmp2, dawn * 0.7);
+      sun.intensity = 0.4 + day * 2.0;
+      sun.position.set(cx * 300, Math.max(30, sy * 400), 200);
+    } else {
+      sun.color.setHex(0x8aa4cc);                    // moonlight
+      sun.intensity = 0.35;
+      sun.position.set(-cx * 300, Math.max(60, -sy * 350), 180);
+    }
+    hemi.intensity = 0.25 + day * 0.85;
+    stars.material.opacity = Math.max(0, Math.min(1, -alt * 2.2));
+    world.waterMat.color.copy(waterNight).lerp(waterDay, day);
+
+    const night = 1 - day;
+    world.glassMat.emissiveIntensity = night * 0.85;
+    world.lanternMat.emissiveIntensity = night * 1.0;
+    for (const { l, lp } of lamps) l.intensity = lp.nightOnly ? lp.intensity * night : lp.intensity;
+    lantern.intensity = 14 * night;
+    return day;
+  }
+
+  // ── main loop ──────────────────────────────────────────────────────────────
+  const clock = new THREE.Clock();
+  let zoneT = 0;
+
+  function loop() {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.05, clock.getDelta());
+    gameH = (gameH + dt * SPEEDS[speedI] / 3600) % 24;
+
+    controls.update(dt);
+    mgr.update(dt, gameH, controls.pos, world.groundHeightAt);
+    updateSky();
+
+    // flags wave
+    const t = performance.now() * 0.001;
+    for (const f of world.flags) {
+      f.rotation.y = Math.sin(t * 2.2 + f.position.x) * 0.18;
+      f.scale.y = 1 + Math.sin(t * 3.1) * 0.03;
+    }
+    // hotspot bob
+    for (let i = 0; i < hotspots.length; i++) {
+      hotspots[i].position.y = EC.HOTSPOTS[i].pos[2] + Math.sin(t * 1.8 + i) * 0.12;
+    }
+    // lantern follows the player
+    lantern.position.set(controls.pos.x, controls.pos.y + 0.4, controls.pos.z);
+
+    // HUD
+    ui.clock.textContent = (gameH >= 6 && gameH < 18 ? '☀ ' : '☾ ') + fmtTime(gameH);
+    ui.compass.style.transform = `rotate(${controls.yaw * 180 / Math.PI}deg)`;
+    zoneT -= dt;
+    if (zoneT <= 0) {
+      zoneT = 0.5;
+      const z = world.zoneAt(controls.pos.x, controls.pos.z, controls.pos.y - 1.7);
+      if (z !== zoneShown) {
+        zoneShown = z;
+        ui.zone.textContent = z;
+        ui.zone.classList.remove('pop');
+        void ui.zone.offsetWidth;
+        ui.zone.classList.add('pop');
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+  loop();
+};
+
+</script>
+<script>
+  window.addEventListener('error', function (e) {
+    var el = document.getElementById('err');
+    el.style.display = 'block';
+    el.textContent = 'Error: ' + (e.message || e.reason) + (e.filename ? '\n' + e.filename + ':' + e.lineno : '');
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var el = document.getElementById('err');
+    el.style.display = 'block';
+    el.textContent = 'Failed to load the 3D engine. Check your internet connection (Three.js is fetched from a CDN), then reload.\n' + e.reason;
+  });
+</script>
+<script type="module">
+  // Three.js from CDN (with fallback). Local scripts above work from file:// too.
+  const sources = [
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+    'https://unpkg.com/three@0.160.0/build/three.module.js',
+  ];
+  (async () => {
+    let THREE = null, lastErr = null;
+    for (const src of sources) {
+      try { THREE = await import(src); break; }
+      catch (e) { lastErr = e; }
+    }
+    if (!THREE) throw lastErr || new Error('Could not load Three.js');
+    EC.boot(THREE);
+  })();
+</script>
+</body>
+</html>
