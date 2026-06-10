@@ -66,7 +66,20 @@ EC.buildWorld = function (THREE, scene, quality) {
   }, 14, 11);
   const cobbleMat = new THREE.MeshLambertMaterial({ map: cobbleTex });
 
-  const grassMat = lam(0x5d7350);
+  // mottled grass texture (island UVs are in metres → tiles every ~4 m)
+  const grassTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#5d7350'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 800; i++) {
+      const v = Math.random();
+      g.fillStyle = `rgba(${70 + v * 55 | 0},${105 + v * 45 | 0},${55 + v * 35 | 0},0.5)`;
+      g.fillRect(Math.random() * s, Math.random() * s, 2 + Math.random() * 5, 2 + Math.random() * 4);
+    }
+  }, 0.25, 0.25);
+  const grassMat = new THREE.MeshLambertMaterial({ map: grassTex, color: 0xc2cdb0 });
+  const grassFarTex = grassTex.clone();
+  grassFarTex.repeat.set(110, 110);
+  grassFarTex.needsUpdate = true;
+  const grassFarMat = new THREE.MeshLambertMaterial({ map: grassFarTex, color: 0xb2bda0 });
   const earthMat = lam(0x6c7a55);
   const graniteMat = lam(0x6d6d6d);
   const roofMat = new THREE.MeshLambertMaterial({ color: 0x3e8a72, side: THREE.DoubleSide }); // copper green
@@ -121,7 +134,16 @@ EC.buildWorld = function (THREE, scene, quality) {
   // ── ground, water, lands ───────────────────────────────────────────────────
   // the Sound (one big water plane; the moat shares its level — at Kronborg the
   // moats connect to the sea)
-  const waterMat = new THREE.MeshLambertMaterial({ color: 0x2e4a5e, transparent: true, opacity: 0.92 });
+  const waveTex = canvasTex(256, (g, s) => {
+    g.fillStyle = '#7e9aaa'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 130; i++) {
+      g.strokeStyle = `rgba(${200 + Math.random() * 40 | 0},${215 + Math.random() * 30 | 0},225,${0.10 + Math.random() * 0.15})`;
+      g.lineWidth = 1 + Math.random() * 2;
+      const y = Math.random() * s, x = Math.random() * s, w = 14 + Math.random() * 36;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 3, x + w, y); g.stroke();
+    }
+  }, 90, 90);
+  const waterMat = new THREE.MeshLambertMaterial({ color: 0x3e6276, map: waveTex, transparent: true, opacity: 0.94 });
   const water = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), waterMat);
   water.rotation.x = -Math.PI / 2;
   water.position.y = -1.7;
@@ -148,8 +170,8 @@ EC.buildWorld = function (THREE, scene, quality) {
   }
 
   // outer lands: west bank and south bank (the sea takes north & east)
-  slab(-500, -98, -2.5, 0, -500, 500, grassMat, { collide: false, shadow: false });
-  slab(-98, 500, -2.5, 0, 98, 500, grassMat, { collide: false, shadow: false });
+  slab(-500, -98, -2.5, 0, -500, 500, grassFarMat, { collide: false, shadow: false });
+  slab(-98, 500, -2.5, 0, 98, 500, grassFarMat, { collide: false, shadow: false });
 
   // Sweden on the horizon (Helsingborg is ~4 km across the Sound)
   box(80, 22, 900, lam(0x46586a), 470, 6, -150, { shadow: false });
@@ -303,9 +325,10 @@ EC.buildWorld = function (THREE, scene, quality) {
     rowAlong(-21, 20, 21, 20, 0, -1, (x) => x > 4.5 && x < 11.5);
     rowAlong(-25, -16, -25, 16, 1, 0, (x, z) => Math.abs(z) < 4.5);
     rowAlong(25, -16, 25, 16, -1, 0, (x, z) => Math.abs(z - 8) < 2.5);
-    const frameGeo = new THREE.BoxGeometry(1.7, 2.7, 0.18);
-    const glassGeo = new THREE.BoxGeometry(1.35, 2.35, 0.14);
-    const frameMat = lam(0xe2d6b8);
+    // glass is deeper than the frame so it shows through as a visible pane
+    const frameGeo = new THREE.BoxGeometry(1.7, 2.7, 0.16);
+    const glassGeo = new THREE.BoxGeometry(1.42, 2.42, 0.34);
+    const frameMat = lam(0xd6c8a4);
     const glassMat = new THREE.MeshLambertMaterial({ color: 0x222c38, emissive: 0xffb45e, emissiveIntensity: 0 });
     const fi = new THREE.InstancedMesh(frameGeo, frameMat, slots.length);
     const gi = new THREE.InstancedMesh(glassGeo, glassMat, slots.length);
@@ -620,6 +643,216 @@ EC.buildWorld = function (THREE, scene, quality) {
     }
   }
 
+  // ── architectural detail: dormers, chimneys, ridge caps, string courses ───
+  const flameMat = new THREE.MeshLambertMaterial({ color: 0x55300e, emissive: 0xff8a30, emissiveIntensity: 0 });
+  {
+    const dormerBody = new THREE.BoxGeometry(1.6, 2.0, 1.5);
+    const dormerWin = new THREE.PlaneGeometry(0.9, 1.2);
+    function dormer(x, z, ry) {
+      const b = new THREE.Mesh(dormerBody, wallMat);
+      b.position.set(x, 17.3, z);
+      b.rotation.y = ry;
+      world.add(b);
+      const cap = roofPrism(1.9, 1.7, 0.9, x, 18.3, z, ry);
+      const w = new THREE.Mesh(dormerWin, EC._glassMat);
+      w.position.set(x + Math.sin(ry) * 0.78, 17.5, z + Math.cos(ry) * 0.78);
+      w.rotation.y = ry;
+      world.add(w);
+    }
+    // north & south wings (outer + courtyard slopes)
+    for (let x = -30; x <= 30; x += 10) {
+      dormer(x, -32.4, Math.PI);  dormer(x, -21.6, 0);
+      dormer(x, 32.4, 0);         dormer(x, 21.6, Math.PI);
+    }
+    // west & east wings
+    for (let z = -13.5; z <= 13.5; z += 9) {
+      dormer(-37.4, z, -Math.PI / 2); dormer(-26.6, z, Math.PI / 2);
+      dormer(37.4, z, Math.PI / 2);   dormer(26.6, z, -Math.PI / 2);
+    }
+    // chimneys along the ridges
+    const brickMat = lam(0x8a4a3a);
+    function chimney(x, z) {
+      box(1.3, 3.0, 1.3, brickMat, x, 24.3, z, { collide: false });
+      box(1.7, 0.35, 1.7, lam(0xe6dcc2), x, 25.9, z, { collide: false, shadow: false });
+    }
+    chimney(-20, -27); chimney(2, -27); chimney(20, -27);
+    chimney(-20, 27); chimney(14, 27); chimney(28, 27);
+    chimney(-32, -9); chimney(-32, 9); chimney(32, -9); chimney(32, 9);
+    // ridge caps + gilt finials at the gable ends
+    const capMat = lam(0x57a98a);
+    box(78, 0.32, 0.55, capMat, 0, 23.1, -27, { collide: false, shadow: false });
+    box(78, 0.32, 0.55, capMat, 0, 23.1, 27, { collide: false, shadow: false });
+    box(0.55, 0.32, 40, capMat, -32, 23.1, 0, { collide: false, shadow: false });
+    box(0.55, 0.32, 40, capMat, 32, 23.1, 0, { collide: false, shadow: false });
+    const finMat = lam(0xd8b84a, { emissive: 0x554008 });
+    for (const [fx, fz] of [[-38.6, -27], [38.6, -27], [-38.6, 27], [38.6, 27], [-32, -19.6], [-32, 19.6], [32, -19.6], [32, 19.6]]) {
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), finMat);
+      f.position.set(fx, 23.5, fz);
+      world.add(f);
+    }
+    // string course (mid-height sandstone band on the outer facades)
+    for (const r of [[-39.25, 39.25, -34.25, -33.75], [-39.25, 39.25, 33.75, 34.25], [-39.25, -38.75, -34.25, 34.25], [38.75, 39.25, -34.25, 34.25]]) {
+      slab(r[0], r[1], 7.5, 7.9, r[2], r[3], lam(0xe0d4b6), { collide: false, shadow: false });
+    }
+  }
+
+  // ── heraldic banners & torches in the courtyard ────────────────────────────
+  {
+    const bannerTex = canvasTex(128, (g, s) => {
+      g.fillStyle = '#a01420'; g.fillRect(0, 0, s, s);
+      g.strokeStyle = '#d8b84a'; g.lineWidth = 7; g.strokeRect(5, 5, s - 10, s - 10);
+      g.fillStyle = '#d8b84a';
+      // three stylised crowns
+      for (const [cx, cy] of [[64, 32], [40, 74], [88, 74]]) {
+        g.fillRect(cx - 14, cy, 28, 10);
+        for (const dx of [-11, 0, 11]) {
+          g.beginPath(); g.moveTo(cx + dx - 4, cy); g.lineTo(cx + dx, cy - 13); g.lineTo(cx + dx + 4, cy); g.fill();
+        }
+      }
+      // hearts of the Danish arms
+      g.fillStyle = '#e8e0d0';
+      for (const [hx, hy] of [[28, 38], [100, 38], [64, 104]]) {
+        g.beginPath(); g.arc(hx - 3, hy, 4, 0, 7); g.arc(hx + 3, hy, 4, 0, 7);
+        g.moveTo(hx - 7, hy + 1); g.lineTo(hx, hy + 11); g.lineTo(hx + 7, hy + 1); g.fill();
+      }
+    });
+    const bannerMat = new THREE.MeshLambertMaterial({ map: bannerTex, side: THREE.DoubleSide });
+    function banner(x, z, ry, w, h) {
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(w || 1.7, h || 3.4), bannerMat);
+      b.position.set(x, 9, z);
+      b.rotation.y = ry;
+      world.add(b);
+      box(w ? w + 0.4 : 2.1, 0.12, 0.12, darkWoodMat, x, 10.8, z, { collide: false, shadow: false, ry });
+    }
+    banner(-9, -19.75, 0); banner(9, -19.75, 0);
+    banner(-9, 19.75, Math.PI); banner(15, 19.75, Math.PI);
+    banner(-24.75, -9, Math.PI / 2); banner(-24.75, 9, Math.PI / 2);
+    banner(24.75, -9, -Math.PI / 2); banner(24.75, 13, -Math.PI / 2);
+    // shields over the hall and chapel doors
+    const shield1 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), bannerMat);
+    shield1.position.set(0, 6.0, -19.9); world.add(shield1);
+    const shield2 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), bannerMat);
+    shield2.position.set(8, 6.0, 19.9); shield2.rotation.y = Math.PI; world.add(shield2);
+
+    function torch(x, z, ry) {
+      const stick = box(0.09, 0.8, 0.09, darkWoodMat, x, 3.1, z, { collide: false, shadow: false, rx: 0.45, ry });
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 7), flameMat);
+      fl.position.set(x - Math.sin(ry) * 0.3, 3.62, z - Math.cos(ry) * 0.3);
+      world.add(fl);
+    }
+    torch(-6, -19.8, Math.PI); torch(6, -19.8, Math.PI);
+    torch(-6, 19.8, 0); torch(14, 19.8, 0);
+    torch(-24.8, -12, -Math.PI / 2); torch(-24.8, 12, -Math.PI / 2);
+    torch(24.8, -12, Math.PI / 2); torch(24.8, 16, Math.PI / 2);
+    torch(-34, -2.8, 0); torch(-30, 2.8, Math.PI);     // gate tunnel
+    lampPoints.push({ x: -32, y: 3.6, z: 0, color: 0xff9850, intensity: 16, range: 12, nightOnly: false });
+  }
+
+  // ── wooden doors & surrounds ──────────────────────────────────────────────
+  {
+    const doorMat = lam(0x4e3018);
+    const jamb = lam(0xe0d4b6);
+    // great hall double doors (open against the inner wall) + surround
+    box(1.9, 4.6, 0.14, doorMat, -2.97, 2.3, -21.6, { collide: false });
+    box(1.9, 4.6, 0.14, doorMat, 2.97, 2.3, -21.6, { collide: false });
+    box(0.5, 5.4, 0.6, jamb, -2.3, 2.7, -20.6, { collide: false });
+    box(0.5, 5.4, 0.6, jamb, 2.3, 2.7, -20.6, { collide: false });
+    box(5.1, 0.5, 0.6, jamb, 0, 5.35, -20.6, { collide: false });
+    // chapel doors + surround
+    box(1.9, 4.6, 0.14, doorMat, 5.03, 2.3, 21.7, { collide: false });
+    box(1.9, 4.6, 0.14, doorMat, 10.97, 2.3, 21.7, { collide: false });
+    box(0.5, 5.4, 0.6, jamb, 5.7, 2.7, 20.6, { collide: false });
+    box(0.5, 5.4, 0.6, jamb, 10.3, 2.7, 20.6, { collide: false });
+    box(5.1, 0.5, 0.6, jamb, 8, 5.35, 20.6, { collide: false });
+    // the Dark Gate's oak leaves, swung open against the tunnel walls
+    box(2.6, 4.9, 0.16, doorMat, -36.6, 2.45, -2.8, { collide: false });
+    box(2.6, 4.9, 0.16, doorMat, -36.6, 2.45, 2.8, { collide: false });
+  }
+
+  // ── courtyard life: cart, barrels, crates ─────────────────────────────────
+  {
+    // hay cart by the gate
+    const cx = -19, cz = 9;
+    box(3.0, 0.3, 1.7, woodMat, cx, 1.0, cz, { collide: false });
+    addCollider(cx - 1.7, cx + 1.9, 0, 1.6, cz - 1, cz + 1);
+    for (const [dx, dz] of [[-0.9, -0.95], [-0.9, 0.95], [1.1, -0.95], [1.1, 0.95]]) {
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.12, 10), darkWoodMat);
+      wh.rotation.x = Math.PI / 2;
+      wh.position.set(cx + dx, 0.55, cz + dz);
+      world.add(wh);
+    }
+    const hay = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), lam(0xb0973f));
+    hay.scale.set(1.4, 0.6, 0.75);
+    hay.position.set(cx, 1.5, cz);
+    world.add(hay);
+    box(0.1, 0.1, 1.6, woodMat, cx - 2.1, 0.75, cz - 0.6, { collide: false, rx: 0.5 });
+    box(0.1, 0.1, 1.6, woodMat, cx - 2.1, 0.75, cz + 0.6, { collide: false, rx: 0.5 });
+    // barrels & crates by the east wing
+    for (const [bx, bz] of [[21.5, -16.5], [22.5, -15.4], [21.2, -14.6]]) {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.0, 10), woodMat);
+      b.position.set(bx, 0.5, bz);
+      world.add(b);
+    }
+    addCollider(20.6, 23.1, 0, 1, -17.1, -14);
+    box(0.9, 0.9, 0.9, lam(0x8a6a42), -21.5, 0.45, -16, { collide: true });
+    box(0.7, 0.7, 0.7, lam(0x7a5c38), -21.4, 1.25, -16.1, { collide: false });
+    box(0.8, 0.8, 0.8, lam(0x8a6a42), 18, 0.4, 17.5, { collide: true });
+  }
+
+  // ── carpets ───────────────────────────────────────────────────────────────
+  {
+    const carpet = lam(0x7a2026);
+    function rug(x0, x1, z0, z1, y) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), carpet);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+      world.add(m);
+    }
+    rug(-0.9, 0.9, -26.2, -21.5, 0.07);   // hall: door → centre
+    rug(-0.9, 25.6, -27.9, -26.1, 0.08);  // hall: centre → dais
+    rug(7.2, 8.8, 21.5, 27.8, 0.07);      // chapel: door → aisle
+    rug(7.2, 32.4, 26.2, 27.8, 0.08);     // chapel: aisle → altar
+  }
+
+  // ── merchant ships on the Sound (the Sound Dues trade) ────────────────────
+  const ships = [];
+  {
+    const sailMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d0, side: THREE.DoubleSide });
+    function ship(x, z, speed) {
+      const g = new THREE.Group();
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 1.8, 10), darkWoodMat);
+      hull.position.y = 0.3;
+      g.add(hull);
+      const bow = new THREE.Mesh(new THREE.ConeGeometry(1.45, 2.6, 4), darkWoodMat);
+      bow.rotation.x = Math.PI / 2;
+      bow.rotation.y = Math.PI / 4;
+      bow.position.set(0, 0.3, 6.2);
+      g.add(bow);
+      const stern = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 1.6), woodMat);
+      stern.position.set(0, 1.7, -4.4);
+      g.add(stern);
+      for (const mz of [1.8, -1.8]) {
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 9, 6), darkWoodMat);
+        mast.position.set(0, 5.2, mz);
+        g.add(mast);
+        const sail = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 4.6), sailMat);
+        sail.position.set(0, 5.6, mz - 0.25);
+        g.add(sail);
+      }
+      const pennant = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.5), new THREE.MeshLambertMaterial({ color: 0xa01420, side: THREE.DoubleSide }));
+      pennant.position.set(0.55, 9.6, 1.8);
+      g.add(pennant);
+      g.position.set(x, -1.7, z);
+      g.rotation.y = speed < 0 ? Math.PI : 0;
+      world.add(g);
+      ships.push({ g, speed });
+    }
+    ship(165, -150, 2.6);
+    ship(255, 120, -2.2);
+    ship(330, -40, 1.8);
+    ship(140, 230, -2.9);
+  }
+
   // ── ground height & zones ─────────────────────────────────────────────────
   function groundHeightAt(x, z) {
     // casemate room
@@ -664,5 +897,5 @@ EC.buildWorld = function (THREE, scene, quality) {
     return 'Outside the Walls — by the Øresund';
   }
 
-  return { colliders, groundHeightAt, zoneAt, flags, lampPoints, waterMat, glassMat: EC._glassMat, lanternMat };
+  return { colliders, groundHeightAt, zoneAt, flags, lampPoints, waterMat, waveTex, ships, flameMat, glassMat: EC._glassMat, lanternMat };
 };

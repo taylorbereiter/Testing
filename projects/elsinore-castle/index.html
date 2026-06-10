@@ -21,6 +21,8 @@
   #clock { min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; }
   .spd { cursor: pointer; opacity: 0.55; border: 1px solid rgba(216,184,74,0.35); }
   .spd.on { opacity: 1; border-color: var(--gold); }
+  #btn-info { cursor: pointer; color: var(--gold); }
+  #btn-info.dim { opacity: 0.35; }
   #btn-menu { margin-left: auto; cursor: pointer; font-size: 19px; padding: 6px 14px; }
   #compass { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; padding: 0; overflow: hidden; }
@@ -113,6 +115,7 @@
   <button class="chip spd on" id="spd1">1×</button>
   <button class="chip spd" id="spd2">3×</button>
   <div class="chip" id="compass"><span id="compass-n">N</span></div>
+  <button class="chip" id="btn-info" title="show/hide info markers">ⓘ</button>
   <button class="chip" id="btn-menu">☰ Guide</button>
 </div>
 <div id="zone"></div>

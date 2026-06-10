@@ -14,6 +14,8 @@ EC.boot = function (THREE) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.18;
   if (quality.shadows) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -81,6 +83,48 @@ EC.boot = function (THREE) {
   const lantern = new THREE.PointLight(0xffc88a, 0, 16, 1.6);
   scene.add(lantern);
 
+  // ── clouds & gulls ─────────────────────────────────────────────────────────
+  const cloudMat = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const rg = g.createRadialGradient(64, 64, 8, 64, 64, 62);
+    rg.addColorStop(0, 'rgba(255,255,255,0.85)');
+    rg.addColorStop(0.6, 'rgba(255,255,255,0.4)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c);
+    return new THREE.SpriteMaterial({ map: t, transparent: true, opacity: 0.55, depthWrite: false, fog: false });
+  })();
+  const clouds = [];
+  for (let i = 0; i < 14; i++) {
+    const sp = new THREE.Sprite(cloudMat);
+    const s = 90 + Math.random() * 180;
+    sp.scale.set(s, s * (0.35 + Math.random() * 0.2), 1);
+    sp.position.set((Math.random() - 0.5) * 1500, 170 + Math.random() * 120, (Math.random() - 0.5) * 1500);
+    sp.renderOrder = -1;
+    scene.add(sp);
+    clouds.push(sp);
+  }
+  const gulls = [];
+  {
+    const wingMat = new THREE.MeshBasicMaterial({ color: 0xf2f2ee, side: THREE.DoubleSide });
+    const wingGeo = new THREE.PlaneGeometry(0.85, 0.22);
+    for (let i = 0; i < 7; i++) {
+      const g = new THREE.Group();
+      const wl = new THREE.Mesh(wingGeo, wingMat); wl.position.x = -0.42; g.add(wl);
+      const wr = new THREE.Mesh(wingGeo, wingMat); wr.position.x = 0.42; g.add(wr);
+      scene.add(g);
+      gulls.push({
+        g, wl, wr,
+        cx: 60 + Math.random() * 90, cz: -90 + Math.random() * 160,
+        r: 14 + Math.random() * 26, h: 14 + Math.random() * 14,
+        a: Math.random() * 7, sp: 0.25 + Math.random() * 0.3, ph: Math.random() * 7,
+      });
+    }
+  }
+
   // ── hotspots ───────────────────────────────────────────────────────────────
   const hotTex = (() => {
     const c = document.createElement('canvas');
@@ -95,15 +139,20 @@ EC.boot = function (THREE) {
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
+  // markers are occluded by walls, fade with distance, and can be toggled off
+  let showHotspots = true;
   const hotspots = EC.HOTSPOTS.map((h, i) => {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hotTex, transparent: true, depthTest: false }));
-    sp.scale.set(1.5, 1.5, 1);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: hotTex, transparent: true, depthTest: true }));
+    sp.scale.set(1.25, 1.25, 1);
     sp.position.set(h.pos[0], h.pos[2], h.pos[1]);
-    sp.renderOrder = 9;
     sp.userData.hotspot = i;
     scene.add(sp);
     return sp;
   });
+  $('btn-info').onclick = () => {
+    showHotspots = !showHotspots;
+    $('btn-info').classList.toggle('dim', !showHotspots);
+  };
 
   // ── characters ─────────────────────────────────────────────────────────────
   const mgr = EC.createCharacters(THREE, scene, world);
@@ -310,17 +359,19 @@ EC.boot = function (THREE) {
       sun.intensity = 0.4 + day * 2.0;
       sun.position.set(cx * 300, Math.max(30, sy * 400), 200);
     } else {
-      sun.color.setHex(0x8aa4cc);                    // moonlight
-      sun.intensity = 0.35;
+      sun.color.setHex(0x93acd4);                    // moonlight
+      sun.intensity = 0.6;
       sun.position.set(-cx * 300, Math.max(60, -sy * 350), 180);
     }
-    hemi.intensity = 0.25 + day * 0.85;
+    hemi.intensity = 0.35 + day * 0.78;
     stars.material.opacity = Math.max(0, Math.min(1, -alt * 2.2));
     world.waterMat.color.copy(waterNight).lerp(waterDay, day);
 
     const night = 1 - day;
     world.glassMat.emissiveIntensity = night * 0.85;
     world.lanternMat.emissiveIntensity = night * 1.0;
+    world.flameMat.emissiveIntensity = 0.15 + night * 0.95;
+    cloudMat.opacity = 0.12 + day * 0.45;
     for (const { l, lp } of lamps) l.intensity = lp.nightOnly ? lp.intensity * night : lp.intensity;
     lantern.intensity = 14 * night;
     return day;
@@ -345,9 +396,37 @@ EC.boot = function (THREE) {
       f.rotation.y = Math.sin(t * 2.2 + f.position.x) * 0.18;
       f.scale.y = 1 + Math.sin(t * 3.1) * 0.03;
     }
-    // hotspot bob
+    // hotspots: bob, distance fade, toggle
     for (let i = 0; i < hotspots.length; i++) {
-      hotspots[i].position.y = EC.HOTSPOTS[i].pos[2] + Math.sin(t * 1.8 + i) * 0.12;
+      const sp = hotspots[i];
+      const d = controls.pos.distanceTo(sp.position);
+      const op = showHotspots ? Math.max(0, Math.min(1, (52 - d) / 14)) * 0.95 : 0;
+      sp.visible = op > 0.03;
+      if (sp.visible) {
+        sp.material.opacity = op;
+        sp.position.y = EC.HOTSPOTS[i].pos[2] + Math.sin(t * 1.8 + i) * 0.12;
+      }
+    }
+    // ships sail the Sound; the water glitters
+    for (const s of world.ships) {
+      s.g.position.z += s.speed * dt;
+      if (s.g.position.z > 420) s.g.position.z = -420;
+      if (s.g.position.z < -420) s.g.position.z = 420;
+      s.g.rotation.z = Math.sin(t * 0.9 + s.g.position.x) * 0.025;
+    }
+    world.waveTex.offset.x = (t * 0.004) % 1;
+    world.waveTex.offset.y = (t * 0.0023) % 1;
+    // clouds drift; gulls wheel over the Sound
+    for (const c of clouds) {
+      c.position.x += dt * 4;
+      if (c.position.x - controls.pos.x > 850) c.position.x -= 1700;
+    }
+    for (const gu of gulls) {
+      gu.a += dt * gu.sp;
+      gu.g.position.set(gu.cx + Math.cos(gu.a) * gu.r, gu.h + Math.sin(t * 0.7 + gu.ph) * 2.2, gu.cz + Math.sin(gu.a) * gu.r);
+      gu.g.rotation.y = -gu.a;
+      const flap = Math.sin(t * 9 + gu.ph) * 0.55;
+      gu.wl.rotation.y = flap; gu.wr.rotation.y = -flap;
     }
     // lantern follows the player
     lantern.position.set(controls.pos.x, controls.pos.y + 0.4, controls.pos.z);
