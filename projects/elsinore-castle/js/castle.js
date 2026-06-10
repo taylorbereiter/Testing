@@ -91,6 +91,8 @@ EC.buildWorld = function (THREE, scene, quality) {
   const darkWoodMat = lam(0x4a3220);
   const stoneDarkMat = lam(0x4a4a4e);
   const goldMat = lam(0xc9a227, { emissive: 0x3a2c08 });
+  // torch flames — emissive intensity is animated (flicker, stronger at night)
+  const flameMat = new THREE.MeshLambertMaterial({ color: 0x55300e, emissive: 0xff8a30, emissiveIntensity: 0 });
 
   function box(w, h, d, mat, x, y, z, opts) {
     opts = opts || {};
@@ -422,10 +424,63 @@ EC.buildWorld = function (THREE, scene, quality) {
 
   // ── Great Hall interior ────────────────────────────────────────────────────
   {
-    const woodFloor = new THREE.Mesh(new THREE.PlaneGeometry(62, 11), lam(0x7a5a38));
+    // plank floor
+    const plankTex = canvasTex(256, (g, s) => {
+      g.fillStyle = '#7a5a38'; g.fillRect(0, 0, s, s);
+      for (let y = 0; y < s; y += 21) {
+        const v = -14 + Math.random() * 28 | 0;
+        g.fillStyle = `rgb(${122 + v},${90 + v},${56 + v})`;
+        g.fillRect(0, y, s, 19);
+        g.strokeStyle = 'rgba(40,26,14,0.6)'; g.lineWidth = 1.5;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(s, y); g.stroke();
+        for (let i = 0; i < 5; i++) {
+          g.strokeStyle = 'rgba(60,42,22,0.3)';
+          const gx = Math.random() * s;
+          g.beginPath(); g.moveTo(gx, y + 2); g.lineTo(gx + 30, y + 17); g.stroke();
+        }
+      }
+    }, 14, 2.5);
+    const woodFloor = new THREE.Mesh(new THREE.PlaneGeometry(62, 11), new THREE.MeshLambertMaterial({ map: plankTex }));
     woodFloor.rotation.x = -Math.PI / 2;
     woodFloor.position.set(0, 0.04, -27);
     world.add(woodFloor);
+    // beamed ceiling
+    for (let bx = -28; bx <= 28; bx += 7) {
+      box(0.45, 0.5, 11, darkWoodMat, bx, 7.7, -27, { collide: false, shadow: false });
+    }
+    box(62, 0.4, 0.45, darkWoodMat, 0, 7.78, -27, { collide: false, shadow: false });
+    // wainscot panelling
+    const panelMat = lam(0x553c24);
+    box(62, 1.7, 0.1, panelMat, 0, 0.85, -32.38, { collide: false, shadow: false });
+    box(28.4, 1.7, 0.1, panelMat, -16.8, 0.85, -21.62, { collide: false, shadow: false });
+    box(28.4, 1.7, 0.1, panelMat, 16.8, 0.85, -21.62, { collide: false, shadow: false });
+    box(0.1, 1.7, 11, panelMat, -30.94, 0.85, -27, { collide: false, shadow: false });
+    box(0.1, 1.7, 11, panelMat, 30.94, 0.85, -27, { collide: false, shadow: false });
+    // wall sconces with flames
+    for (const sx of [-24, -8, 8, 24]) {
+      for (const [sz, fz] of [[-32.3, -32.2], [-21.7, -21.8]]) {
+        box(0.12, 0.3, 0.12, darkWoodMat, sx, 3.0, sz, { collide: false, shadow: false });
+        const fl = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.4, 7), flameMat);
+        fl.position.set(sx, 3.35, fz);
+        world.add(fl);
+      }
+    }
+    // table runner + candelabra
+    const runner = new THREE.Mesh(new THREE.PlaneGeometry(23, 0.95), lam(0x7a2026));
+    runner.rotation.x = -Math.PI / 2;
+    runner.position.set(2, 1.06, -27);
+    world.add(runner);
+    const candleM = lam(0xf0e0c0, { emissive: 0xffd890, emissiveIntensity: 0.9 });
+    for (const cx of [-6, 2, 10]) {
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.06, 0.3, 6), lam(0x8a7030));
+      stem.position.set(cx, 1.2, -27);
+      world.add(stem);
+      for (const dz of [-0.12, 0, 0.12]) {
+        const cdl = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 5), candleM);
+        cdl.position.set(cx, 1.42, -27 + dz);
+        world.add(cdl);
+      }
+    }
     // dais + thrones (east end)
     slab(25.5, 30.5, 0, 0.45, -29.5, -24.5, darkWoodMat);
     for (const tz of [-28.2, -25.8] ) {
@@ -484,6 +539,32 @@ EC.buildWorld = function (THREE, scene, quality) {
     }
     // gallery rail along the back (west)
     slab(2.2, 2.6, 0, 3.2, 22, 32, darkWoodMat, { collide: false });
+    // pale vaulted ceiling with ribs
+    const vault = new THREE.Mesh(new THREE.PlaneGeometry(34, 11), lam(0xd6d0c0));
+    vault.rotation.x = Math.PI / 2;
+    vault.position.set(19, 7.92, 27);
+    world.add(vault);
+    const ribMat = lam(0xc4bca8);
+    for (const rx of [9, 15, 21, 27]) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(5.5, 0.12, 5, 12, Math.PI), ribMat);
+      rib.rotation.y = Math.PI / 2;
+      rib.scale.y = 0.44;
+      rib.position.set(rx, 5.55, 27);
+      world.add(rib);
+    }
+    // gold altar frontal & kneeling cushion
+    const frontal = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.0), lam(0xc9a227, { emissive: 0x2a2006 }));
+    frontal.rotation.y = -Math.PI / 2;
+    frontal.position.set(32.42, 0.62, 27);
+    world.add(frontal);
+    box(1.2, 0.14, 0.55, lam(0x7a2026), 31.3, 0.07, 27, { collide: false, shadow: false });
+    // chapel sconces
+    for (const sx of [14, 26]) {
+      box(0.12, 0.3, 0.12, darkWoodMat, sx, 3.0, 21.7, { collide: false, shadow: false });
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.4, 7), flameMat);
+      fl.position.set(sx, 3.35, 21.8);
+      world.add(fl);
+    }
     // stained-glass windows (south interior wall)
     const glassCols = [0xc04040, 0x4060c0, 0xc0a040, 0x40a060];
     glassCols.forEach((c, i) => {
@@ -541,6 +622,13 @@ EC.buildWorld = function (THREE, scene, quality) {
       addCollider(bx - 0.5, bx + 0.5, FY, FY + 1, bz - 0.5, bz + 0.5);
     }
     lampPoints.push({ x: 31, y: FY + 2.6, z: -2, color: 0xff9850, intensity: 22, range: 16, nightOnly: false });
+    // wall torches by the stair and the far end
+    for (const [tx, tz] of [[27.9, 10.5], [37.6, -12]]) {
+      box(0.12, 0.3, 0.12, darkWoodMat, tx, FY + 2.0, tz, { collide: false, shadow: false });
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.4, 7), flameMat);
+      fl.position.set(tx, FY + 2.35, tz);
+      world.add(fl);
+    }
   }
 
   // ── ramparts, parapets, ramps, cannons ─────────────────────────────────────
@@ -700,7 +788,6 @@ EC.buildWorld = function (THREE, scene, quality) {
   }
 
   // ── architectural detail: dormers, chimneys, ridge caps, string courses ───
-  const flameMat = new THREE.MeshLambertMaterial({ color: 0x55300e, emissive: 0xff8a30, emissiveIntensity: 0 });
   {
     const dormerBody = new THREE.BoxGeometry(1.6, 2.0, 1.5);
     const dormerWin = new THREE.PlaneGeometry(0.9, 1.2);

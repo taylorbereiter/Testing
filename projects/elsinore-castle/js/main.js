@@ -7,10 +7,19 @@ EC.boot = function (THREE) {
   const $ = id => document.getElementById(id);
 
   // ── renderer / scene / camera ──────────────────────────────────────────────
+  // graphics scale for mixed (student) devices: low = no AA/shadows @1x,
+  // medium = AA, blob shadows only, high = + real shadow map
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  const quality = { shadows: !isTouch, pixelCap: isTouch ? 1.35 : 1.8 };
+  let qSaved = null;
+  try { qSaved = localStorage.getItem('ec-quality'); } catch (e) { /* private mode */ }
+  const qLevel = ['low', 'medium', 'high'].includes(qSaved) ? qSaved : (isTouch ? 'medium' : 'high');
+  const quality = {
+    level: qLevel,
+    shadows: qLevel === 'high',
+    pixelCap: { low: 1, medium: 1.4, high: 1.8 }[qLevel],
+  };
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: $('view') });
+  const renderer = new THREE.WebGLRenderer({ antialias: qLevel !== 'low', canvas: $('view') });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -257,8 +266,17 @@ EC.boot = function (THREE) {
         <p><b>Time:</b> ⏸ pauses, 1× ≈ a 12-minute day, 3× for a 4-minute day. The Ghost walks only after midnight.</p>
         <p><b>Sound:</b> 🔊 toggles the soundscape — coastal wind and waves, gulls, footsteps, the castle bell (twelve tolls at midnight), evening lute music in the Great Hall, and something colder when the Ghost is near.</p>
         <p><b>Scenes:</b> open the <b>Playbill</b> and press “Go” to jump straight into any scene. <b>ⓘ markers</b> teach the real castle’s history.</p>
+        <p><b>Graphics:</b> currently <b>${quality.level}</b> — choose for this device (reloads):
+          <button class="go qbtn" data-q="low">Low</button>
+          <button class="go qbtn" data-q="medium">Medium</button>
+          <button class="go qbtn" data-q="high">High</button><br>
+          <span class="hint">Low for older laptops/tablets (no shadows or antialiasing), Medium for most devices, High adds full sun shadows.</span></p>
         <p>You cannot fall from the ramparts, and the Sound is too cold to swim — walk the ramps and the bridge.</p>
         <p class="hint">An educational walking replica of Kronborg Castle (“Elsinore”), full scale: courtyard 50×40 m, Great Hall 62 m, ramparts and moat included. All dialogue is from Shakespeare’s Hamlet.</p>`;
+      box.querySelectorAll('.qbtn').forEach(b => b.onclick = () => {
+        try { localStorage.setItem('ec-quality', b.dataset.q); } catch (e) { /* private mode */ }
+        location.reload();
+      });
     }
   }
 
@@ -391,10 +409,13 @@ EC.boot = function (THREE) {
     const night = 1 - day;
     world.glassMat.emissiveIntensity = night * 0.85;
     world.lanternMat.emissiveIntensity = night * 1.0;
-    world.flameMat.emissiveIntensity = 0.15 + night * 0.95;
+    // candle / torch flicker
+    const now = performance.now();
+    const flick = 0.88 + 0.12 * Math.sin(now * 0.0117) * Math.sin(now * 0.0063 + 2.1);
+    world.flameMat.emissiveIntensity = (0.2 + night * 0.95) * flick;
     cloudMat.opacity = 0.12 + day * 0.45;
-    for (const { l, lp } of lamps) l.intensity = lp.nightOnly ? lp.intensity * night : lp.intensity;
-    lantern.intensity = 14 * night;
+    for (const { l, lp } of lamps) l.intensity = (lp.nightOnly ? lp.intensity * night : lp.intensity) * flick;
+    lantern.intensity = 14 * night * flick;
     return day;
   }
 

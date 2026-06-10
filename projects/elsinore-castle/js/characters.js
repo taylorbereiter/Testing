@@ -80,6 +80,26 @@ EC.createCharacters = function (THREE, scene, world) {
   }
 
   // ── body builder ───────────────────────────────────────────────────────────
+  // soft blob shadow shared by all characters (cheap on weak devices)
+  const blobTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const rg = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+    rg.addColorStop(0, 'rgba(0,0,0,0.42)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const blobMat = new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false });
+  const blobGeo = new THREE.PlaneGeometry(1.25, 1.25);
+
+  const CAPES = { hamlet: 0x0d0d13, claudius: 0x49101c, horatio: 0x453626, marcellus: 0x333d47, barnardo: 0x2e3842, francisco: 0x36404a, ghost: 0x86b8d0 };
+  const NO_RUFF = ['ghost', 'gravedigger', 'sexton2', 'marcellus', 'barnardo', 'francisco', 'lucianus', 'playerking'];
+  const BEARDS = ['claudius', 'polonius', 'gravedigger', 'ghost', 'playerking'];
+  const FEMALE = ['ophelia', 'gertrude', 'playerqueen'];
+
   function makeBody(info) {
     const C = info.colors;
     const ghost = !!C.ghost;
@@ -90,102 +110,204 @@ EC.createCharacters = function (THREE, scene, world) {
       mats.push(m);
       return m;
     }
-    const robeM = mat(C.robe), trimM = mat(C.trim), skinM = mat(0xd9b08a), hairM = mat(C.hair);
+    // slight skin-tone variation per character
+    let hash = 0;
+    for (const ch of info.id) hash = (hash * 31 + ch.charCodeAt(0)) % 97;
+    const skin = new THREE.Color(0xd9b08a).offsetHSL(0, 0, (hash / 97 - 0.5) * 0.1);
+    const robeM = mat(C.robe), trimM = mat(C.trim), skinM = mat(skin.getHex()), hairM = mat(C.hair);
+    const bootM = mat(0x2a2018);
     const g = new THREE.Group();
-    const gown = ['ophelia', 'gertrude', 'playerqueen'].includes(info.id) || C.hat === 'crown';
+    const gown = FEMALE.includes(info.id);
 
-    // legs (pivot at hip)
+    // legs with boots (pivot at hip)
     const legs = [];
     for (const s of [-1, 1]) {
       const piv = new THREE.Group();
       piv.position.set(s * 0.11, 0.95, 0);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.9, 7), trimM);
-      leg.position.y = -0.45;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.082, 0.62, 7), trimM);
+      leg.position.y = -0.31;
       piv.add(leg);
+      const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.084, 0.094, 0.32, 7), bootM);
+      boot.position.y = -0.78;
+      piv.add(boot);
+      const toe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.15), bootM);
+      toe.position.set(0, -0.9, 0.08);
+      piv.add(toe);
       g.add(piv);
       legs.push(piv);
     }
-    // torso / robe
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, gown ? 0.2 : 0.26, 0.72, 9), robeM);
-    torso.position.y = 1.32;
-    g.add(torso);
+    // dress / doublet
     if (gown) {
-      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.44, 1.0, 9), robeM);
-      skirt.position.y = 0.5;
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.47, 1.08, 10), robeM);
+      skirt.position.y = 0.56;
       g.add(skirt);
+      const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.465, 0.48, 0.09, 10), trimM);
+      hem.position.y = 0.07;
+      g.add(hem);
     } else {
-      const tunic = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.35, 9), robeM);
-      tunic.position.y = 0.85;
-      g.add(tunic);
+      const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.285, 0.4, 9), robeM);
+      lower.position.y = 1.0;
+      g.add(lower);
     }
-    // belt
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, 0.09, 9), trimM);
-    belt.position.y = 1.0;
+    // torso, braid, belt
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.62, 9), robeM);
+    torso.position.y = 1.46;
+    g.add(torso);
+    const braid = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.5, 0.03), trimM);
+    braid.position.set(0, 1.46, 0.225);
+    g.add(braid);
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.25, 0.08, 9), bootM);
+    belt.position.y = 1.14;
     g.add(belt);
-    // arms (pivot at shoulder)
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.03), trimM);
+    buckle.position.set(0, 1.14, 0.24);
+    g.add(buckle);
+    // shoulders
+    for (const s of [-1, 1]) {
+      const sh = new THREE.Mesh(new THREE.SphereGeometry(0.095, 7, 7), robeM);
+      sh.position.set(s * 0.23, 1.75, 0);
+      g.add(sh);
+    }
+    // cape (princes, the king, scholars and the watch)
+    if (CAPES[info.id] !== undefined) {
+      const capeM = mat(CAPES[info.id], { side: THREE.DoubleSide });
+      const cape = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.44, 1.15, 8, 1, true, Math.PI / 2, Math.PI), capeM);
+      cape.position.set(0, 1.2, -0.04);
+      g.add(cape);
+    }
+    // arms with a natural elbow bend (pivot at shoulder; props ride the forearm)
     const arms = [];
+    let propRoot = null;
     for (const s of [-1, 1]) {
       const piv = new THREE.Group();
-      piv.position.set(s * 0.25, 1.62, 0);
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.62, 7), robeM);
-      arm.position.y = -0.3;
-      piv.add(arm);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), skinM);
-      hand.position.y = -0.62;
-      piv.add(hand);
+      piv.position.set(s * 0.26, 1.72, 0);
+      piv.rotation.z = s * -0.07;
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.057, 0.34, 7), robeM);
+      upper.position.y = -0.17;
+      piv.add(upper);
+      const elbow = new THREE.Group();
+      elbow.position.y = -0.34;
+      elbow.rotation.x = -0.5;
+      const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.3, 7), robeM);
+      fore.position.y = -0.15;
+      elbow.add(fore);
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.064, 0.06, 7), trimM);
+      cuff.position.y = -0.28;
+      elbow.add(cuff);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 6, 6), skinM);
+      hand.position.y = -0.34;
+      elbow.add(hand);
+      piv.add(elbow);
       g.add(piv);
       arms.push(piv);
+      if (s === 1) propRoot = elbow;
     }
-    // head + hair
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 10), skinM);
-    head.position.y = 1.82;
+    // ruff collar — the Elizabethan signature (Hamlet's is mourning-dark)
+    if (!NO_RUFF.includes(info.id)) {
+      const ruff = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.05, 6, 12),
+        mat(info.id === 'hamlet' ? 0x383841 : 0xeae4d4));
+      ruff.rotation.x = Math.PI / 2;
+      ruff.position.y = 1.87;
+      g.add(ruff);
+    }
+    // neck, head, eyes
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.14, 7), skinM);
+    neck.position.y = 1.9;
+    g.add(neck);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.155, 10, 10), skinM);
+    head.position.y = 2.04;
     g.add(head);
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.175, 10, 10), hairM);
-    hair.scale.set(1, 0.82, 1);
-    hair.position.set(0, 1.88, -0.03);
-    g.add(hair);
+    const eyeM = mat(0x241a12);
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 5, 5), eyeM);
+      eye.position.set(s * 0.055, 2.06, 0.135);
+      g.add(eye);
+    }
+    // hair
+    if (gown) {
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.163, 10, 8), hairM);
+      top.scale.set(1, 0.92, 1);
+      top.position.set(0, 2.09, -0.015);
+      g.add(top);
+      const back = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.5, 8), hairM);
+      back.position.set(0, 1.82, -0.1);
+      g.add(back);
+    } else {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.163, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.8), hairM);
+      cap.position.set(0, 2.06, -0.01);
+      g.add(cap);
+      const nape = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), hairM);
+      nape.scale.set(1, 0.7, 0.7);
+      nape.position.set(0, 1.99, -0.09);
+      g.add(nape);
+    }
+    if (BEARDS.includes(info.id)) {
+      const beard = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.24, 7), hairM);
+      beard.rotation.x = Math.PI;
+      beard.position.set(0, 1.9, 0.09);
+      g.add(beard);
+    }
     // hats
     if (C.hat === 'crown') {
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.12, 9), mat(0xd8b84a, { emissive: 0x4a3808 }));
-      crown.position.y = 2.02;
-      g.add(crown);
+      const goldM = mat(0xd8b84a, { emissive: ghost ? 0x7ab8d8 : 0x4a3808 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.032, 6, 12), goldM);
+      band.rotation.x = Math.PI / 2;
+      band.position.y = 2.17;
+      g.add(band);
       for (let i = 0; i < 5; i++) {
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4), mat(0xd8b84a));
         const a = (i / 5) * Math.PI * 2;
-        spike.position.set(Math.cos(a) * 0.14, 2.12, Math.sin(a) * 0.14);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.1, 4), goldM);
+        spike.position.set(Math.cos(a) * 0.13, 2.25, Math.sin(a) * 0.13);
         g.add(spike);
       }
+      const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.025, 5, 5), mat(0xa01828, { emissive: 0x400810 }));
+      jewel.position.set(0, 2.17, 0.14);
+      g.add(jewel);
     } else if (C.hat === 'cap') {
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.09, 9), trimM);
-      cap.position.y = 2.0;
-      g.add(cap);
+      const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.165, 0.09, 9), trimM);
+      capTop.position.y = 2.18;
+      g.add(capTop);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 10), trimM);
+      brim.position.y = 2.13;
+      g.add(brim);
     } else if (C.hat === 'helmet') {
-      const helm = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.9), mat(0x9aa4ae, { emissive: ghost ? 0x7ab8d8 : 0x000000 }));
-      helm.position.y = 1.86;
-      g.add(helm);
-      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.3), trimM);
-      crest.position.y = 2.05;
+      const metalM = mat(0x9aa4ae);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.168, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.9), metalM);
+      dome.position.y = 2.07;
+      g.add(dome);
+      const brim = new THREE.Mesh(new THREE.ConeGeometry(0.215, 0.07, 12), metalM);
+      brim.position.y = 2.05;
+      g.add(brim);
+      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.1, 0.3), trimM);
+      crest.position.y = 2.24;
       g.add(crest);
     }
-    // props (right arm)
-    const armR = arms[1];
-    function addProp(mesh, x, y, z) { mesh.position.set(x, y, z); armR.add(mesh); }
+    // props ride the right forearm
+    function addProp(mesh, x, y, z) { mesh.position.set(x, y, z); propRoot.add(mesh); }
     switch (C.prop) {
-      case 'sword': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.85, 0.1), mat(0xb8bcc4)), 0, -0.95, 0.18); break;
-      case 'spear': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 6), mat(0x7a5a38)), 0.06, -0.45, 0);
-        addProp(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 6), mat(0xb8bcc4)), 0.06, 0.78, 0); break;
-      case 'book': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.08), mat(0x6e2a1a)), 0, -0.66, 0.12); break;
-      case 'scroll': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.34, 6), mat(0xe8e0c8)), 0, -0.66, 0.12); break;
-      case 'shovel': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), mat(0x7a5a38)), 0.05, -0.4, 0);
-        addProp(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.04), mat(0x8a8a8e)), 0.05, -1.2, 0); break;
-      case 'vial': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), mat(0x3a7a4a, { emissive: 0x1a4a2a })), 0, -0.66, 0.12); break;
+      case 'sword': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.8, 0.09), mat(0xb8bcc4)), 0, -0.62, 0.05);
+        addProp(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.04), mat(0x8a7030)), 0, -0.36, 0.05); break;
+      case 'spear': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 2.3, 6), mat(0x7a5a38)), 0.05, -0.1, 0);
+        addProp(new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.24, 6), mat(0xb8bcc4)), 0.05, 1.08, 0); break;
+      case 'book': addProp(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.07), mat(0x6e2a1a)), 0, -0.38, 0.1); break;
+      case 'scroll': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.32, 6), mat(0xe8e0c8)), 0, -0.38, 0.1); break;
+      case 'shovel': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 1.4, 6), mat(0x7a5a38)), 0.05, -0.55, 0);
+        addProp(new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.25, 0.035), mat(0x8a8a8e)), 0.05, -1.28, 0); break;
+      case 'vial': addProp(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.13, 6), mat(0x3a7a4a, { emissive: 0x1a4a2a })), 0, -0.38, 0.1); break;
       case 'flowers':
         for (const [c, dx] of [[0xc05070, -0.05], [0xd0c050, 0.03], [0x9060c0, 0.08]]) {
-          addProp(new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), mat(c)), dx, -0.6 - Math.abs(dx), 0.1);
+          addProp(new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), mat(c)), dx, -0.34 - Math.abs(dx) * 0.6, 0.1);
         }
         break;
     }
     g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    // soft ground blob (ghosts cast none, naturally)
+    if (!ghost) {
+      const blob = new THREE.Mesh(blobGeo, blobMat);
+      blob.rotation.x = -Math.PI / 2;
+      blob.position.y = 0.045;
+      g.add(blob);
+    }
     return { group: g, legs, arms, mats };
   }
 
@@ -229,10 +351,10 @@ EC.createCharacters = function (THREE, scene, world) {
       // labels
       this.nameS = textSprite(0.5);
       drawName(this.nameS, this.info.name, this.info.title);
-      this.nameS.sp.position.y = 2.45;
+      this.nameS.sp.position.y = 2.62;
       this.group.add(this.nameS.sp);
       this.bubble = textSprite(1.35);
-      this.bubble.sp.position.y = 3.4;
+      this.bubble.sp.position.y = 3.5;
       this.bubble.sp.visible = false;
       this.group.add(this.bubble.sp);
       this.group.visible = false;
