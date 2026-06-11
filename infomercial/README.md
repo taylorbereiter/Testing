@@ -1,5 +1,15 @@
 # AI Knowledge-Work Infomercial (30s)
 
+Two versions live here:
+
+- **v2 (`render2.py` → `ai_knowledge_work_30s_v2.mp4`)** — Anthropic-inspired
+  design language: warm cream paper, Lora serif headlines with italic coral
+  emphasis, soft-shadow cards, hand-drawn underlines, film grain, a coral
+  full-bleed closer with wipe transitions, 2x supersampled rendering, and a
+  felt-piano score with FFT convolution reverb.
+- **v1 (`render.py` → `ai_knowledge_work_30s.mp4`)** — the original dark
+  motion-graphics version.
+
 A 30-second motion-graphics infomercial showcasing what current-generation AI
 can do for knowledge work, made for a school-administration audience.
 
