@@ -1,11 +1,9 @@
 name: Deploy Subscription Radar to GitHub Pages
 
+# Manual trigger only until GitHub Pages is available for this repo
+# (private repos need a paid plan, or make the repo public). Once Pages is
+# enabled, run this from the Actions tab — or restore the push trigger.
 on:
-  push:
-    branches: [main, claude/iphone-app-cloud-deploy-t9bw45]
-    paths:
-      - "projects/subscription-radar/**"
-      - ".github/workflows/deploy-subscription-radar.yml"
   workflow_dispatch:
 
 permissions:
