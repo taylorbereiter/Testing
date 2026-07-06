@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#02060e">
+<title>FATHOM — an echolocation dive</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #02060e;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  #game {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+'use strict';
+
+// ============================================================
+// FATHOM — an echolocation dive
+// Tap: sonar ping (reveals the world... and gives you away)
+// Hold & drag: thrust
+// ============================================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- utilities ----------
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+
+// Seeded RNG (mulberry32)
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 1D value noise with smooth interpolation, deterministic per seed
+function makeNoise(seed) {
+  const cache = new Map();
+  const rand = (i) => {
+    if (!cache.has(i)) {
+      const r = mulberry32((seed * 374761393 + i * 668265263) | 0)();
+      cache.set(i, r);
+    }
+    return cache.get(i);
+  };
+  return function(x) {
+    const i = Math.floor(x);
+    const f = x - i;
+    const u = f * f * (3 - 2 * f);
+    return lerp(rand(i), rand(i + 1), u) * 2 - 1; // -1..1
+  };
+}
+
+// ---------- audio (procedural, WebAudio) ----------
+const AudioSys = {
+  ctx: null, master: null, droneGain: null, muted: false, started: false,
+  init() {
+    if (this.started) return;
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.muted ? 0 : 0.5;
+      this.master.connect(this.ctx.destination);
+      // ambient drone: two detuned low oscillators + slow LFO
+      const drone = this.ctx.createGain();
+      drone.gain.value = 0.05;
+      const o1 = this.ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 52;
+      const o2 = this.ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 52.7;
+      const lfo = this.ctx.createOscillator(); lfo.frequency.value = 0.07;
+      const lfoG = this.ctx.createGain(); lfoG.gain.value = 0.025;
+      lfo.connect(lfoG); lfoG.connect(drone.gain);
+      o1.connect(drone); o2.connect(drone);
+      drone.connect(this.master);
+      o1.start(); o2.start(); lfo.start();
+      this.droneGain = drone;
+      this.started = true;
+    } catch (e) { /* audio unavailable — play silent */ }
+  },
+  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.value = m ? 0 : 0.5;
+    try { localStorage.setItem('fathom_muted', m ? '1' : '0'); } catch (e) {}
+  },
+  blip(freq, dur, type, vol, slideTo) {
+    if (!this.started || this.muted) return;
+    try {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+      g.gain.setValueAtTime(vol || 0.15, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.master);
+      o.start(t); o.stop(t + dur + 0.05);
+    } catch (e) {}
+  },
+  noise(dur, vol) {
+    if (!this.started || this.muted) return;
+    try {
+      const t = this.ctx.currentTime;
+      const len = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const g = this.ctx.createGain(); g.gain.value = vol || 0.2;
+      const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400;
+      src.connect(f); f.connect(g); g.connect(this.master);
+      src.start(t);
+    } catch (e) {}
+  },
+  ping() { this.blip(1400, 0.35, 'sine', 0.12, 220); },
+  echo() { this.blip(880, 0.5, 'sine', 0.05, 440); },
+  collect() { this.blip(1046, 0.12, 'triangle', 0.12); this.blip(1568, 0.2, 'triangle', 0.1); },
+  air() { this.blip(523, 0.3, 'sine', 0.12, 784); },
+  hurt() { this.noise(0.35, 0.35); this.blip(110, 0.3, 'sawtooth', 0.15, 55); },
+  alert() { this.blip(196, 0.5, 'sawtooth', 0.06, 98); },
+  death() { this.noise(0.8, 0.4); this.blip(220, 1.2, 'sine', 0.2, 40); },
+  milestone() { this.blip(659, 0.25, 'sine', 0.1); this.blip(988, 0.4, 'sine', 0.08); },
+};
+
+function vibrate(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+
+// ---------- biomes ----------
+// depth in meters (world y / 10)
+const BIOMES = [
+  { at: 0,    name: 'THE SHALLOWS',   hue: 190, wallSat: 70 },
+  { at: 400,  name: 'TWILIGHT REACH', hue: 215, wallSat: 65 },
+  { at: 900,  name: 'MIDNIGHT ZONE',  hue: 255, wallSat: 60 },
+  { at: 1500, name: 'THE TRENCH',     hue: 290, wallSat: 55 },
+  { at: 2200, name: 'HADAL DEEP',     hue: 340, wallSat: 60 },
+  { at: 3000, name: 'THE UNNAMED',    hue: 10,  wallSat: 70 },
+];
+function biomeAt(m) {
+  let b = BIOMES[0];
+  for (const bb of BIOMES) if (m >= bb.at) b = bb;
+  return b;
+}
+function biomeHue(m) {
+  // smooth hue blend between biome boundaries
+  for (let i = BIOMES.length - 1; i >= 0; i--) {
+    if (m >= BIOMES[i].at) {
+      const cur = BIOMES[i];
+      const next = BIOMES[i + 1];
+      if (!next) return cur.hue;
+      const t = clamp((m - cur.at) / (next.at - cur.at), 0, 1);
+      // blend only near the end of the band
+      const tt = clamp((t - 0.75) * 4, 0, 1);
+      return lerp(cur.hue, next.hue, tt);
+    }
+  }
+  return BIOMES[0].hue;
+}
+
+// ---------- game state ----------
+const G = {
+  state: 'title',        // title | playing | dead
+  seed: 0,
+  rng: null,
+  noiseC: null, noiseW: null, noiseCh: null,
+  sub: null,
+  camY: 0,
+  pings: [],
+  entities: [],          // pearls, mines, jellies, airPockets, flora
+  anglers: [],
+  particles: [],
+  wallVis: new Map(),    // sampleIndex -> {l, r}
+  floraLit: new Set(),
+  chunksGen: new Set(),
+  depth: 0,              // meters
+  maxDepth: 0,
+  pearls: 0,
+  oxygen: 100,
+  hull: 3,
+  invuln: 0,
+  pingCooldown: 0,
+  shake: 0,
+  vignette: 0,           // red flash
+  time: 0,
+  runTime: 0,
+  biomeName: '',
+  biomeToast: 0,
+  toastText: '',
+  toast: 0,
+  deathCause: '',
+  best: { depth: 0, pearls: 0 },
+  paused: false,
+  titlePingT: 0,
+  lastMilestone: 0,
+};
+
+try {
+  G.best.depth = parseInt(localStorage.getItem('fathom_best_depth') || '0', 10) || 0;
+  G.best.pearls = parseInt(localStorage.getItem('fathom_best_pearls') || '0', 10) || 0;
+  AudioSys.muted = localStorage.getItem('fathom_muted') === '1';
+} catch (e) {}
+
+// ---------- world geometry ----------
+const SAMPLE = 8;          // wall sample spacing (world px)
+const CHUNK = 600;         // chunk height (world px)
+const M = 10;              // world px per meter
+
+function corridorAt(y) {
+  // centerline and width of the descending corridor at world y
+  const m = y / M;
+  const cx = W / 2 + G.noiseC(y * 0.0016) * W * 0.30 + G.noiseC(y * 0.006 + 500) * W * 0.06;
+  const narrowing = clamp(m / 2600, 0, 1) * 55;
+  let width = 165 - narrowing + G.noiseW(y * 0.004) * 45;
+  // occasional chambers
+  const ch = G.noiseCh(y * 0.0011);
+  if (ch > 0.45) width += (ch - 0.45) * 480;
+  width = clamp(width, 62, 460);
+  return { cx, width, left: cx - width / 2, right: cx + width / 2 };
+}
+
+function genChunk(ci) {
+  if (G.chunksGen.has(ci)) return;
+  G.chunksGen.add(ci);
+  if (ci < 0) return;
+  const y0 = ci * CHUNK;
+  const rand = mulberry32((G.seed ^ (ci * 2654435761)) | 0);
+  const m = y0 / M;
+  const diff = clamp(m / 2500, 0, 1); // 0..1 difficulty
+
+  // pearls
+  const nPearls = 2 + Math.floor(rand() * 3);
+  for (let i = 0; i < nPearls; i++) {
+    const y = y0 + rand() * CHUNK;
+    const c = corridorAt(y);
+    G.entities.push({ type: 'pearl', x: lerp(c.left + 18, c.right - 18, rand()), y, r: 7, vis: 0, phase: rand() * TAU, dead: false });
+  }
+  // air pockets — rarer as you go deeper
+  if (rand() < 0.85 - diff * 0.35) {
+    const y = y0 + rand() * CHUNK;
+    const c = corridorAt(y);
+    G.entities.push({ type: 'air', x: lerp(c.left + 26, c.right - 26, rand()), y, r: 16, vis: 0, phase: rand() * TAU, dead: false });
+  }
+  // mines
+  const nMines = Math.floor(rand() * (1.2 + diff * 3.4)) + (m > 250 ? 1 : 0);
+  for (let i = 0; i < nMines; i++) {
+    const y = y0 + rand() * CHUNK;
+    const c = corridorAt(y);
+    if (c.width < 85) continue; // keep tight passages fair
+    G.entities.push({ type: 'mine', x: lerp(c.left + 22, c.right - 22, rand()), y, r: 11, vis: 0, phase: rand() * TAU, dead: false, driftA: rand() * TAU });
+  }
+  // jellies
+  const nJelly = m > 120 ? Math.floor(rand() * (1 + diff * 2.5)) : 0;
+  for (let i = 0; i < nJelly; i++) {
+    const y = y0 + rand() * CHUNK;
+    const c = corridorAt(y);
+    G.entities.push({ type: 'jelly', x: lerp(c.left + 20, c.right - 20, rand()), y, r: 13, vis: 0, phase: rand() * TAU, dead: false, vx: 0, vy: 0, homeX: 0 });
+  }
+  // bioluminescent flora on walls (permanent landmarks once pinged)
+  const nFlora = 3 + Math.floor(rand() * 4);
+  for (let i = 0; i < nFlora; i++) {
+    const y = y0 + rand() * CHUNK;
+    const c = corridorAt(y);
+    const side = rand() < 0.5 ? -1 : 1;
+    const x = side < 0 ? c.left + 4 : c.right - 4;
+    G.entities.push({ type: 'flora', x, y, r: 3 + rand() * 3, vis: 0, lit: false, phase: rand() * TAU, hueShift: rand() * 60 - 30, dead: false });
+  }
+  // anglerfish — the deep hunters
+  const anglerChance = m < 300 ? 0 : clamp(0.25 + diff * 0.6, 0, 0.85);
+  if (rand() < anglerChance && G.anglers.length < 3) {
+    const y = y0 + CHUNK * 0.5 + rand() * CHUNK * 0.4;
+    const c = corridorAt(y);
+    G.anglers.push({
+      x: c.cx, y, vx: 0, vy: 0, r: 17,
+      state: 'wander', stateT: 0, targetX: c.cx, targetY: y,
+      vis: 0, phase: rand() * TAU, retreat: 0,
+      speed: 42 + diff * 55,
+    });
+  }
+}
+
+// ---------- ping / reveal ----------
+const PING_SPEED = 340;
+const PING_MAXR = 560;
+const REVEAL_BAND = 26;
+
+function emitPing(x, y, silent) {
+  G.pings.push({ x, y, r: 6, maxR: PING_MAXR, echoed: false });
+  if (!silent) {
+    AudioSys.ping();
+    vibrate(10);
+    // anglers hear it
+    for (const a of G.anglers) {
+      if (dist(a.x, a.y, x, y) < 900) {
+        a.state = 'alerted';
+        a.stateT = 5;
+        a.targetX = x; a.targetY = y;
+      }
+    }
+  }
+}
+
+function revealWalls(px, py, r) {
+  const lo = Math.floor((py - r - REVEAL_BAND) / SAMPLE);
+  const hi = Math.ceil((py + r + REVEAL_BAND) / SAMPLE);
+  for (let i = lo; i <= hi; i++) {
+    const y = i * SAMPLE;
+    if (y < 0) continue;
+    const c = corridorAt(y);
+    const dl = dist(px, py, c.left, y);
+    const dr = dist(px, py, c.right, y);
+    let e = G.wallVis.get(i);
+    const inBandL = dl < r && dl > r - REVEAL_BAND;
+    const inBandR = dr < r && dr > r - REVEAL_BAND;
+    if (inBandL || inBandR) {
+      if (!e) { e = { l: 0, r: 0 }; G.wallVis.set(i, e); }
+      if (inBandL) e.l = 1;
+      if (inBandR) e.r = 1;
+    }
+  }
+}
+
+function revealNear(px, py, r, amount) {
+  // constant soft reveal near the sub
+  const lo = Math.floor((py - r) / SAMPLE);
+  const hi = Math.ceil((py + r) / SAMPLE);
+  for (let i = lo; i <= hi; i++) {
+    const y = i * SAMPLE;
+    if (y < 0) continue;
+    const c = corridorAt(y);
+    let e = G.wallVis.get(i);
+    const dl = dist(px, py, c.left, y);
+    const dr = dist(px, py, c.right, y);
+    if (dl < r || dr < r) {
+      if (!e) { e = { l: 0, r: 0 }; G.wallVis.set(i, e); }
+      if (dl < r) e.l = Math.max(e.l, amount * (1 - dl / r));
+      if (dr < r) e.r = Math.max(e.r, amount * (1 - dr / r));
+    }
+  }
+}
+
+// ---------- particles ----------
+function spawnParticles(x, y, n, opts) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU;
+    const sp = (opts.speed || 40) * (0.3 + Math.random() * 0.7);
+    G.particles.push({
+      x, y,
+      vx: Math.cos(a) * sp + (opts.vx || 0),
+      vy: Math.sin(a) * sp + (opts.vy || 0),
+      life: 1, decay: opts.decay || 1.4,
+      size: (opts.size || 2) * (0.5 + Math.random()),
+      hue: opts.hue !== undefined ? opts.hue : 190,
+      sat: opts.sat !== undefined ? opts.sat : 80,
+    });
+  }
+}
+
+// ---------- run lifecycle ----------
+function startRun() {
+  G.state = 'playing';
+  G.seed = (Math.random() * 1e9) | 0;
+  G.rng = mulberry32(G.seed);
+  G.noiseC = makeNoise(G.seed + 1);
+  G.noiseW = makeNoise(G.seed + 2);
+  G.noiseCh = makeNoise(G.seed + 3);
+  const c0 = corridorAt(120);
+  G.sub = { x: c0.cx, y: 120, vx: 0, vy: 14, r: 9, angle: Math.PI / 2 };
+  G.camY = 0;
+  G.pings = [];
+  G.entities = [];
+  G.anglers = [];
+  G.particles = [];
+  G.wallVis = new Map();
+  G.chunksGen = new Set();
+  G.depth = 0; G.maxDepth = 0;
+  G.pearls = 0;
+  G.oxygen = 100;
+  G.hull = 3;
+  G.invuln = 0;
+  G.pingCooldown = 0;
+  G.shake = 0; G.vignette = 0;
+  G.runTime = 0;
+  G.lastMilestone = 0;
+  G.biomeName = '';
+  G.deathCause = '';
+  for (let ci = 0; ci < 4; ci++) genChunk(ci);
+  // opening ping so the player isn't lost
+  emitPing(G.sub.x, G.sub.y, true);
+  AudioSys.init();
+  AudioSys.resume();
+}
+
+function die(cause) {
+  if (G.state !== 'playing') return;
+  G.state = 'dead';
+  G.deathCause = cause;
+  AudioSys.death();
+  vibrate([60, 40, 120]);
+  G.shake = 18;
+  spawnParticles(G.sub.x, G.sub.y, 40, { speed: 90, hue: 15, size: 3, decay: 0.7 });
+  const d = Math.floor(G.maxDepth);
+  if (d > G.best.depth) {
+    G.best.depth = d;
+    try { localStorage.setItem('fathom_best_depth', String(d)); } catch (e) {}
+  }
+  if (G.pearls > G.best.pearls) {
+    G.best.pearls = G.pearls;
+    try { localStorage.setItem('fathom_best_pearls', String(G.pearls)); } catch (e) {}
+  }
+}
+
+function hurt(dmg, cause, kx, ky) {
+  if (G.invuln > 0 || G.state !== 'playing') return;
+  G.hull -= dmg;
+  G.invuln = 1.6;
+  G.vignette = 1;
+  G.shake = 10;
+  AudioSys.hurt();
+  vibrate(60);
+  G.sub.vx += kx || 0;
+  G.sub.vy += ky || 0;
+  spawnParticles(G.sub.x, G.sub.y, 14, { speed: 70, hue: 15, size: 2.5, decay: 1.1 });
+  if (G.hull <= 0) die(cause);
+}
+
+// ---------- input ----------
+const input = {
+  active: false, id: null,
+  startX: 0, startY: 0, curX: 0, curY: 0,
+  startT: 0, moved: false,
+};
+
+function onDown(x, y, id) {
+  AudioSys.init(); AudioSys.resume();
+  if (G.state === 'title') { startRun(); return; }
+  if (G.state === 'dead') {
+    if (G.time - deadAt > 0.8) { G.state = 'title'; }
+    return;
+  }
+  // UI buttons (top-right): pause / mute
+  if (y < 64 && x > W - 120) {
+    if (x > W - 60) { G.paused = !G.paused; }
+    else { AudioSys.setMuted(!AudioSys.muted); }
+    return;
+  }
+  if (G.paused) { G.paused = false; return; }
+  input.active = true; input.id = id;
+  input.startX = x; input.startY = y;
+  input.curX = x; input.curY = y;
+  input.startT = performance.now();
+  input.moved = false;
+}
+function onMove(x, y, id) {
+  if (!input.active || id !== input.id) return;
+  input.curX = x; input.curY = y;
+  if (dist(x, y, input.startX, input.startY) > 14) input.moved = true;
+}
+function onUp(x, y, id) {
+  if (!input.active || id !== input.id) return;
+  input.active = false;
+  const dt = performance.now() - input.startT;
+  if (!input.moved && dt < 260 && G.state === 'playing' && !G.paused) {
+    // tap → ping
+    if (G.pingCooldown <= 0) {
+      emitPing(G.sub.x, G.sub.y);
+      G.pingCooldown = 0.7;
+    }
+  }
+}
+
+canvas.addEventListener('pointerdown', e => { e.preventDefault(); onDown(e.clientX, e.clientY, e.pointerId); }, { passive: false });
+canvas.addEventListener('pointermove', e => { e.preventDefault(); onMove(e.clientX, e.clientY, e.pointerId); }, { passive: false });
+canvas.addEventListener('pointerup', e => { e.preventDefault(); onUp(e.clientX, e.clientY, e.pointerId); }, { passive: false });
+canvas.addEventListener('pointercancel', e => { input.active = false; }, { passive: true });
+
+// keyboard fallback (desktop testing)
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === ' ') {
+    if (G.state === 'title') startRun();
+    else if (G.state === 'dead') G.state = 'title';
+    else if (G.state === 'playing' && G.pingCooldown <= 0) { emitPing(G.sub.x, G.sub.y); G.pingCooldown = 0.7; }
+    e.preventDefault();
+  }
+  if (e.key === 'p') G.paused = !G.paused;
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+let deadAt = 0;
+
+// ---------- update ----------
+function update(dt) {
+  G.time += dt;
+  if (G.state === 'title') {
+    G.titlePingT -= dt;
+    if (G.titlePingT <= 0) { G.titlePingT = 2.2; }
+    return;
+  }
+  if (G.state === 'dead') {
+    // let particles & pings finish
+    updatePings(dt);
+    updateParticles(dt);
+    decayWalls(dt);
+    G.shake = Math.max(0, G.shake - dt * 30);
+    G.vignette = Math.max(0, G.vignette - dt * 1.2);
+    return;
+  }
+  if (G.paused) return;
+
+  G.runTime += dt;
+  const sub = G.sub;
+
+  // --- thrust ---
+  let tx = 0, ty = 0;
+  if (input.active && input.moved) {
+    const dx = input.curX - input.startX;
+    const dy = input.curY - input.startY;
+    const d = Math.hypot(dx, dy);
+    const mag = clamp(d / 70, 0, 1);
+    tx = (dx / (d || 1)) * mag;
+    ty = (dy / (d || 1)) * mag;
+  }
+  // keyboard
+  if (keys['ArrowLeft'] || keys['a']) tx -= 1;
+  if (keys['ArrowRight'] || keys['d']) tx += 1;
+  if (keys['ArrowUp'] || keys['w']) ty -= 1;
+  if (keys['ArrowDown'] || keys['s']) ty += 1;
+  const tmag = Math.hypot(tx, ty);
+  if (tmag > 1) { tx /= tmag; ty /= tmag; }
+
+  const ACCEL = 260;
+  sub.vx += tx * ACCEL * dt;
+  sub.vy += ty * ACCEL * dt;
+  // gentle sink + water drag
+  sub.vy += 6 * dt;
+  const drag = Math.pow(0.35, dt);
+  sub.vx *= drag; sub.vy *= drag;
+  const sp = Math.hypot(sub.vx, sub.vy);
+  const MAXSP = 190;
+  if (sp > MAXSP) { sub.vx *= MAXSP / sp; sub.vy *= MAXSP / sp; }
+  sub.x += sub.vx * dt;
+  sub.y += sub.vy * dt;
+  if (sp > 8) sub.angle = Math.atan2(sub.vy, sub.vx);
+
+  // thruster bubbles
+  if (tmag > 0.15 && Math.random() < 0.6) {
+    spawnParticles(sub.x - Math.cos(sub.angle) * 10, sub.y - Math.sin(sub.angle) * 10, 1,
+      { speed: 20, vx: -tx * 40, vy: -ty * 40, size: 1.6, decay: 1.6, hue: 195, sat: 40 });
+  }
+
+  // --- wall collision ---
+  const c = corridorAt(sub.y);
+  if (sub.x - sub.r < c.left) {
+    const impact = Math.abs(sub.vx);
+    sub.x = c.left + sub.r;
+    sub.vx = Math.abs(sub.vx) * 0.4;
+    if (impact > 120) hurt(1, 'crushed against the rock', 40, 0);
+    else revealNear(sub.x, sub.y, 50, 0.7);
+  }
+  if (sub.x + sub.r > c.right) {
+    const impact = Math.abs(sub.vx);
+    sub.x = c.right - sub.r;
+    sub.vx = -Math.abs(sub.vx) * 0.4;
+    if (impact > 120) hurt(1, 'crushed against the rock', -40, 0);
+    else revealNear(sub.x, sub.y, 50, 0.7);
+  }
+  // ceiling of the sea
+  if (sub.y < 60) { sub.y = 60; sub.vy = Math.abs(sub.vy) * 0.3; }
+
+  // --- depth / oxygen ---
+  G.depth = sub.y / M;
+  G.maxDepth = Math.max(G.maxDepth, G.depth);
+  const o2rate = 1.15 + clamp(G.depth / 3000, 0, 1) * 0.55;
+  G.oxygen -= o2rate * dt;
+  if (G.oxygen <= 0) { G.oxygen = 0; die('the air ran out'); }
+
+  // biome transitions
+  const b = biomeAt(G.depth);
+  if (b.name !== G.biomeName) {
+    G.biomeName = b.name;
+    G.biomeToast = 3.2;
+    if (G.depth > 10) AudioSys.milestone();
+  }
+  if (G.biomeToast > 0) G.biomeToast -= dt;
+  if (G.toast > 0) G.toast -= dt;
+
+  // milestone every 250m
+  const ms = Math.floor(G.maxDepth / 250);
+  if (ms > G.lastMilestone) {
+    G.lastMilestone = ms;
+    vibrate(15);
+  }
+
+  // --- chunk generation ---
+  const curChunk = Math.floor(sub.y / CHUNK);
+  for (let ci = curChunk; ci <= curChunk + 3; ci++) genChunk(ci);
+  // cull far-behind entities & wall samples
+  if (G.entities.length > 400) {
+    G.entities = G.entities.filter(e => e.y > sub.y - 1600 && !e.dead);
+  }
+
+  // --- camera ---
+  const targetCam = sub.y - H * 0.38;
+  G.camY = lerp(G.camY, targetCam, 1 - Math.pow(0.02, dt));
+
+  // --- pings & reveal ---
+  G.pingCooldown = Math.max(0, G.pingCooldown - dt);
+  updatePings(dt);
+  revealNear(sub.x, sub.y, 64, 0.35);
+  decayWalls(dt);
+
+  // --- entities ---
+  for (const e of G.entities) {
+    if (e.dead) continue;
+    e.vis = Math.max(0, e.vis - dt * 0.22);
+    if (e.type === 'flora' && e.lit) e.vis = Math.max(e.vis, 0.55);
+    // near-sub soft reveal
+    const dSub = dist(e.x, e.y, sub.x, sub.y);
+    if (dSub < 80) e.vis = Math.max(e.vis, 0.5 * (1 - dSub / 80) + 0.25);
+
+    if (e.type === 'pearl') {
+      e.phase += dt * 2;
+      if (dSub < e.r + sub.r + 4) {
+        e.dead = true;
+        G.pearls++;
+        G.oxygen = Math.min(100, G.oxygen + 6);
+        AudioSys.collect();
+        vibrate(20);
+        spawnParticles(e.x, e.y, 12, { speed: 55, size: 2, hue: 180, sat: 30, decay: 1.2 });
+        G.toastText = '+ pearl';
+        G.toast = 1.2;
+      }
+    } else if (e.type === 'air') {
+      e.phase += dt * 1.5;
+      if (dSub < e.r + sub.r + 6) {
+        e.dead = true;
+        G.oxygen = Math.min(100, G.oxygen + 45);
+        AudioSys.air();
+        vibrate([15, 30, 15]);
+        spawnParticles(e.x, e.y, 20, { speed: 45, size: 2.5, hue: 150, sat: 70, decay: 1.0 });
+        G.toastText = '+ oxygen';
+        G.toast = 1.2;
+      }
+    } else if (e.type === 'mine') {
+      e.phase += dt;
+      e.x += Math.sin(G.time * 0.5 + e.driftA) * 3 * dt;
+      if (dSub < e.r + sub.r + 3) {
+        e.dead = true;
+        spawnParticles(e.x, e.y, 30, { speed: 120, size: 3, hue: 20, sat: 90, decay: 0.9 });
+        emitPing(e.x, e.y, true); // explosion reveals surroundings
+        hurt(1, 'hit a mine', (sub.x - e.x) * 6, (sub.y - e.y) * 6);
+      }
+    } else if (e.type === 'jelly') {
+      e.phase += dt * 1.8;
+      const pulse = Math.max(0, Math.sin(e.phase));
+      e.vy = -8 + pulse * -14 + 10;
+      e.vx = Math.sin(e.phase * 0.31 + e.y * 0.01) * 12;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt * 0.4;
+      const cc = corridorAt(e.y);
+      e.x = clamp(e.x, cc.left + e.r, cc.right - e.r);
+      if (dSub < e.r + sub.r) {
+        hurt(1, 'stung by a jelly', (sub.x - e.x) * 8, (sub.y - e.y) * 8);
+      }
+    } else if (e.type === 'flora') {
+      e.phase += dt;
+    }
+  }
+  G.entities = G.entities.filter(e => !e.dead);
+
+  // --- anglers ---
+  for (const a of G.anglers) {
+    a.phase += dt;
+    a.vis = Math.max(0, a.vis - dt * 0.25);
+    a.stateT -= dt;
+    a.retreat = Math.max(0, a.retreat - dt);
+    const dSub = dist(a.x, a.y, sub.x, sub.y);
+    if (dSub < 90) a.vis = Math.max(a.vis, 0.7 * (1 - dSub / 90) + 0.2);
+
+    if (a.retreat > 0) {
+      // swim away after biting
+      const dx = a.x - sub.x, dy = a.y - sub.y, d = Math.hypot(dx, dy) || 1;
+      a.vx = lerp(a.vx, (dx / d) * a.speed, dt * 2);
+      a.vy = lerp(a.vy, (dy / d) * a.speed, dt * 2);
+    } else if (a.state === 'alerted' && a.stateT > 0) {
+      const dx = a.targetX - a.x, dy = a.targetY - a.y, d = Math.hypot(dx, dy) || 1;
+      const spd = a.speed * 1.5;
+      a.vx = lerp(a.vx, (dx / d) * spd, dt * 2.5);
+      a.vy = lerp(a.vy, (dy / d) * spd, dt * 2.5);
+      if (d < 30) { a.state = 'wander'; a.stateT = 2; }
+      // if it gets close to the sub while alerted, switch to hunt
+      if (dSub < 150) { a.state = 'hunt'; a.stateT = 3.5; AudioSys.alert(); }
+    } else if (a.state === 'hunt' && a.stateT > 0) {
+      const dx = sub.x - a.x, dy = sub.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const spd = a.speed * 1.9;
+      a.vx = lerp(a.vx, (dx / d) * spd, dt * 3);
+      a.vy = lerp(a.vy, (dy / d) * spd, dt * 3);
+      if (d > 320) { a.state = 'wander'; a.stateT = 2; }
+    } else {
+      // wander
+      if (a.stateT <= 0) {
+        a.stateT = 2 + Math.random() * 3;
+        const cc = corridorAt(a.y + (Math.random() - 0.5) * 300);
+        a.targetX = lerp(cc.left + 30, cc.right - 30, Math.random());
+        a.targetY = a.y + (Math.random() - 0.4) * 260;
+      }
+      const dx = a.targetX - a.x, dy = a.targetY - a.y, d = Math.hypot(dx, dy) || 1;
+      a.vx = lerp(a.vx, (dx / d) * a.speed * 0.5, dt * 1.5);
+      a.vy = lerp(a.vy, (dy / d) * a.speed * 0.5, dt * 1.5);
+      a.state = 'wander';
+    }
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    const cc = corridorAt(a.y);
+    a.x = clamp(a.x, cc.left + a.r, cc.right - a.r);
+
+    // bite
+    if (dSub < a.r + sub.r && a.retreat <= 0) {
+      hurt(2, 'taken by the angler', (sub.x - a.x) * 10, (sub.y - a.y) * 10);
+      a.retreat = 3;
+      a.state = 'wander'; a.stateT = 2;
+    }
+  }
+  // cull anglers far above
+  G.anglers = G.anglers.filter(a => a.y > sub.y - 1400 && a.y < sub.y + 2200);
+
+  updateParticles(dt);
+  G.invuln = Math.max(0, G.invuln - dt);
+  G.shake = Math.max(0, G.shake - dt * 30);
+  G.vignette = Math.max(0, G.vignette - dt * 1.4);
+}
+
+function updatePings(dt) {
+  for (const p of G.pings) {
+    p.r += PING_SPEED * dt;
+    revealWalls(p.x, p.y, p.r);
+    for (const e of G.entities) {
+      if (e.dead) continue;
+      const d = dist(p.x, p.y, e.x, e.y);
+      if (d < p.r && d > p.r - REVEAL_BAND) {
+        e.vis = 1;
+        if (e.type === 'flora' && !e.lit) { e.lit = true; }
+      }
+    }
+    for (const a of G.anglers) {
+      const d = dist(p.x, p.y, a.x, a.y);
+      if (d < p.r && d > p.r - REVEAL_BAND) a.vis = 1;
+    }
+    if (!p.echoed && p.r > 130) { p.echoed = true; AudioSys.echo(); }
+  }
+  G.pings = G.pings.filter(p => p.r < p.maxR);
+}
+
+function decayWalls(dt) {
+  const dec = dt * 0.16;
+  for (const [k, e] of G.wallVis) {
+    e.l = Math.max(0, e.l - dec);
+    e.r = Math.max(0, e.r - dec);
+    if (e.l <= 0.004 && e.r <= 0.004) G.wallVis.delete(k);
+  }
+}
+
+function updateParticles(dt) {
+  for (const p of G.particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= Math.pow(0.2, dt);
+    p.vy *= Math.pow(0.2, dt);
+    p.vy -= 12 * dt; // bubbles rise
+    p.life -= p.decay * dt;
+  }
+  G.particles = G.particles.filter(p => p.life > 0);
+}
+
+// ---------- render ----------
+function render() {
+  const hue = biomeHue(G.depth);
+  // background — near-black with the faintest biome tint
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, `hsl(${hue}, 45%, ${G.state === 'title' ? 5 : 3.2}%)`);
+  bg.addColorStop(1, `hsl(${hue}, 55%, 1.6%)`);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (G.state === 'title') { renderTitle(); return; }
+
+  ctx.save();
+  // screen shake
+  if (G.shake > 0.3) {
+    ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+  }
+  ctx.translate(0, -G.camY);
+
+  const sub = G.sub;
+
+  // --- walls ---
+  const wallHue = hue;
+  const lo = Math.floor(G.camY / SAMPLE) - 4;
+  const hi = Math.ceil((G.camY + H) / SAMPLE) + 4;
+  // connect visible neighbouring samples with lines for solidity
+  ctx.lineCap = 'round';
+  let prev = null; // {y, lx, rx, l, r}
+  for (let i = lo; i <= hi; i++) {
+    const e = G.wallVis.get(i);
+    const y = i * SAMPLE;
+    if (!e || y < 0) { prev = null; continue; }
+    const c = corridorAt(y);
+    if (prev) {
+      const lAvg = (prev.l + e.l) / 2;
+      if (lAvg > 0.01) {
+        ctx.strokeStyle = `hsla(${wallHue}, 70%, 62%, ${lAvg * 0.85})`;
+        ctx.lineWidth = 2 + lAvg * 1.5;
+        ctx.beginPath(); ctx.moveTo(prev.lx, prev.y); ctx.lineTo(c.left, y); ctx.stroke();
+      }
+      const rAvg = (prev.r + e.r) / 2;
+      if (rAvg > 0.01) {
+        ctx.strokeStyle = `hsla(${wallHue}, 70%, 62%, ${rAvg * 0.85})`;
+        ctx.lineWidth = 2 + rAvg * 1.5;
+        ctx.beginPath(); ctx.moveTo(prev.rx, prev.y); ctx.lineTo(c.right, y); ctx.stroke();
+      }
+    }
+    // soft glow dots
+    if (e.l > 0.02) {
+      ctx.fillStyle = `hsla(${wallHue}, 80%, 70%, ${e.l * 0.25})`;
+      ctx.beginPath(); ctx.arc(c.left, y, 4 + e.l * 3, 0, TAU); ctx.fill();
+    }
+    if (e.r > 0.02) {
+      ctx.fillStyle = `hsla(${wallHue}, 80%, 70%, ${e.r * 0.25})`;
+      ctx.beginPath(); ctx.arc(c.right, y, 4 + e.r * 3, 0, TAU); ctx.fill();
+    }
+    prev = { y, lx: c.left, rx: c.right, l: e.l, r: e.r };
+  }
+
+  // --- entities ---
+  for (const e of G.entities) {
+    if (e.y < G.camY - 60 || e.y > G.camY + H + 60) continue;
+    const v = e.vis;
+    if (v <= 0.01) continue;
+    if (e.type === 'pearl') {
+      const s = 1 + Math.sin(e.phase) * 0.15;
+      ctx.fillStyle = `hsla(185, 30%, 92%, ${v})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.55 * s, 0, TAU); ctx.fill();
+      ctx.fillStyle = `hsla(185, 60%, 80%, ${v * 0.35})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 1.6 * s, 0, TAU); ctx.fill();
+    } else if (e.type === 'air') {
+      const s = 1 + Math.sin(e.phase) * 0.12;
+      ctx.strokeStyle = `hsla(150, 85%, 65%, ${v * 0.9})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * s, 0, TAU); ctx.stroke();
+      ctx.fillStyle = `hsla(150, 85%, 70%, ${v * 0.18})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 1.5 * s, 0, TAU); ctx.fill();
+      // little bubbles inside
+      for (let k = 0; k < 3; k++) {
+        const bx = e.x + Math.sin(e.phase * 1.3 + k * 2.1) * 6;
+        const by = e.y + Math.cos(e.phase * 0.9 + k * 1.7) * 6;
+        ctx.fillStyle = `hsla(150, 80%, 85%, ${v * 0.7})`;
+        ctx.beginPath(); ctx.arc(bx, by, 1.6, 0, TAU); ctx.fill();
+      }
+    } else if (e.type === 'mine') {
+      ctx.fillStyle = `hsla(8, 90%, 55%, ${v * 0.85})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.7, 0, TAU); ctx.fill();
+      // spikes
+      ctx.strokeStyle = `hsla(8, 90%, 60%, ${v * 0.9})`;
+      ctx.lineWidth = 2;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * TAU + e.phase * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(e.x + Math.cos(a) * e.r * 0.7, e.y + Math.sin(a) * e.r * 0.7);
+        ctx.lineTo(e.x + Math.cos(a) * e.r * 1.25, e.y + Math.sin(a) * e.r * 1.25);
+        ctx.stroke();
+      }
+      // blinking core
+      const blink = (Math.sin(G.time * 6 + e.driftA) + 1) / 2;
+      ctx.fillStyle = `hsla(0, 100%, 70%, ${v * blink})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, 2.5, 0, TAU); ctx.fill();
+    } else if (e.type === 'jelly') {
+      const pulse = 1 + Math.max(0, Math.sin(e.phase)) * 0.25;
+      ctx.fillStyle = `hsla(300, 75%, 70%, ${v * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * pulse, Math.PI, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `hsla(300, 80%, 78%, ${v * 0.7})`;
+      ctx.lineWidth = 1.5;
+      for (let k = 0; k < 4; k++) {
+        const tx = e.x - e.r * 0.6 + (k / 3) * e.r * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(tx, e.y);
+        ctx.quadraticCurveTo(tx + Math.sin(e.phase * 2 + k) * 5, e.y + 10, tx + Math.sin(e.phase * 2 + k + 1) * 7, e.y + 18);
+        ctx.stroke();
+      }
+    } else if (e.type === 'flora') {
+      const pulse = 0.7 + Math.sin(e.phase * 1.4) * 0.3;
+      const fh = (hue + 130 + e.hueShift) % 360;
+      ctx.fillStyle = `hsla(${fh}, 90%, 68%, ${v * pulse * 0.9})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * pulse, 0, TAU); ctx.fill();
+      ctx.fillStyle = `hsla(${fh}, 90%, 68%, ${v * pulse * 0.18})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 3.2 * pulse, 0, TAU); ctx.fill();
+    }
+  }
+
+  // --- anglers ---
+  for (const a of G.anglers) {
+    if (a.y < G.camY - 80 || a.y > G.camY + H + 80) continue;
+    // the lure is ALWAYS faintly visible — your only warning
+    const lureP = 0.5 + Math.sin(a.phase * 3) * 0.5;
+    const dir = Math.atan2(a.vy, a.vx);
+    const lx = a.x + Math.cos(dir) * (a.r + 14);
+    const ly = a.y + Math.sin(dir) * (a.r + 14) - 6;
+    ctx.fillStyle = `hsla(55, 100%, 75%, ${0.25 + lureP * 0.45})`;
+    ctx.beginPath(); ctx.arc(lx, ly, 2.2 + lureP * 1.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = `hsla(55, 100%, 75%, ${(0.25 + lureP * 0.45) * 0.2})`;
+    ctx.beginPath(); ctx.arc(lx, ly, 9 + lureP * 5, 0, TAU); ctx.fill();
+
+    const v = a.vis;
+    if (v > 0.01) {
+      const hunting = a.state === 'hunt' || a.state === 'alerted';
+      const bodyHue = hunting ? 5 : 265;
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(dir);
+      // body
+      ctx.fillStyle = `hsla(${bodyHue}, 60%, 40%, ${v * 0.8})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, a.r * 1.25, a.r * 0.85, 0, 0, TAU);
+      ctx.fill();
+      // jaw
+      ctx.strokeStyle = `hsla(${bodyHue}, 80%, 65%, ${v})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(a.r * 1.1, -a.r * 0.35);
+      ctx.lineTo(a.r * 0.2, 0);
+      ctx.lineTo(a.r * 1.1, a.r * 0.35);
+      ctx.stroke();
+      // teeth
+      ctx.fillStyle = `hsla(0, 0%, 95%, ${v})`;
+      for (let k = 0; k < 4; k++) {
+        const txx = a.r * (0.35 + k * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(txx, -a.r * 0.3 + k * 2);
+        ctx.lineTo(txx + 3, -a.r * 0.1 + k * 2);
+        ctx.lineTo(txx - 3, -a.r * 0.05 + k * 2);
+        ctx.closePath(); ctx.fill();
+      }
+      // eye
+      ctx.fillStyle = `hsla(55, 100%, 80%, ${v})`;
+      ctx.beginPath(); ctx.arc(-a.r * 0.2, -a.r * 0.3, 2.5, 0, TAU); ctx.fill();
+      // tail fin
+      ctx.fillStyle = `hsla(${bodyHue}, 60%, 35%, ${v * 0.7})`;
+      ctx.beginPath();
+      ctx.moveTo(-a.r * 1.1, 0);
+      ctx.lineTo(-a.r * 1.8, -a.r * 0.6);
+      ctx.lineTo(-a.r * 1.8, a.r * 0.6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // --- pings ---
+  for (const p of G.pings) {
+    const fade = 1 - p.r / p.maxR;
+    ctx.strokeStyle = `hsla(${hue}, 90%, 75%, ${fade * 0.5})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = `hsla(${hue}, 90%, 85%, ${fade * 0.15})`;
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0, p.r - 6), 0, TAU); ctx.stroke();
+  }
+
+  // --- particles ---
+  for (const p of G.particles) {
+    ctx.fillStyle = `hsla(${p.hue}, ${p.sat}%, 70%, ${p.life * 0.7})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, TAU); ctx.fill();
+  }
+
+  // --- sub ---
+  const flicker = G.invuln > 0 ? (Math.sin(G.time * 30) > 0 ? 0.35 : 1) : 1;
+  ctx.save();
+  ctx.translate(sub.x, sub.y);
+  // ambient glow bubble
+  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 55);
+  glow.addColorStop(0, `hsla(${hue}, 80%, 75%, ${0.14 * flicker})`);
+  glow.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 55, 0, TAU); ctx.fill();
+  ctx.rotate(sub.angle);
+  // hull
+  ctx.fillStyle = `hsla(${hue}, 45%, 78%, ${0.95 * flicker})`;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 6.5, 0, 0, TAU);
+  ctx.fill();
+  // cockpit window
+  ctx.fillStyle = `hsla(${hue}, 90%, 55%, ${0.9 * flicker})`;
+  ctx.beginPath(); ctx.arc(4, 0, 3, 0, TAU); ctx.fill();
+  // tail
+  ctx.fillStyle = `hsla(${hue}, 45%, 68%, ${0.85 * flicker})`;
+  ctx.beginPath();
+  ctx.moveTo(-9, 0); ctx.lineTo(-15, -5); ctx.lineTo(-15, 5);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.restore(); // camera
+
+  // --- joystick indicator ---
+  if (input.active && input.moved && G.state === 'playing' && !G.paused) {
+    ctx.strokeStyle = 'hsla(0, 0%, 100%, 0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(input.startX, input.startY, 34, 0, TAU); ctx.stroke();
+    const dx = input.curX - input.startX, dy = input.curY - input.startY;
+    const d = Math.hypot(dx, dy) || 1;
+    const kx = input.startX + (dx / d) * Math.min(d, 48);
+    const ky = input.startY + (dy / d) * Math.min(d, 48);
+    ctx.fillStyle = 'hsla(0, 0%, 100%, 0.3)';
+    ctx.beginPath(); ctx.arc(kx, ky, 12, 0, TAU); ctx.fill();
+  }
+
+  renderHUD(hue);
+
+  if (G.state === 'dead') renderDeath();
+}
+
+function renderHUD(hue) {
+  const safeTop = 12;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+
+  // depth
+  ctx.font = '600 26px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = 'hsla(0, 0%, 100%, 0.85)';
+  ctx.fillText(`${Math.floor(G.depth)}m`, W / 2, safeTop + 6);
+
+  // oxygen bar
+  const barW = Math.min(W * 0.5, 240);
+  const bx = W / 2 - barW / 2, by = safeTop + 40;
+  ctx.fillStyle = 'hsla(0, 0%, 100%, 0.12)';
+  ctx.beginPath(); ctx.roundRect(bx, by, barW, 6, 3); ctx.fill();
+  const o2c = G.oxygen > 35 ? `hsla(165, 80%, 55%, 0.9)` : `hsla(8, 90%, 55%, ${0.6 + Math.sin(G.time * 8) * 0.35})`;
+  ctx.fillStyle = o2c;
+  ctx.beginPath(); ctx.roundRect(bx, by, barW * (G.oxygen / 100), 6, 3); ctx.fill();
+  ctx.font = '500 10px ui-monospace, monospace';
+  ctx.fillStyle = 'hsla(0, 0%, 100%, 0.4)';
+  ctx.fillText('O₂', W / 2, by + 10);
+
+  // hull pips (left)
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i < G.hull ? `hsla(${hue}, 80%, 65%, 0.9)` : 'hsla(0, 0%, 100%, 0.12)';
+    ctx.beginPath(); ctx.arc(24 + i * 18, safeTop + 18, 5, 0, TAU); ctx.fill();
+  }
+  // pearls (left, below hull)
+  ctx.textAlign = 'left';
+  ctx.font = '600 14px ui-monospace, monospace';
+  ctx.fillStyle = 'hsla(185, 40%, 85%, 0.8)';
+  ctx.fillText(`◉ ${G.pearls}`, 18, safeTop + 34);
+
+  // mute + pause buttons (top-right)
+  ctx.textAlign = 'center';
+  ctx.font = '16px system-ui, sans-serif';
+  ctx.fillStyle = 'hsla(0, 0%, 100%, 0.4)';
+  ctx.fillText(AudioSys.muted ? '🔇' : '🔊', W - 90, safeTop + 8);
+  ctx.fillText(G.paused ? '▶' : '❚❚', W - 36, safeTop + 8);
+
+  // ping cooldown hint
+  if (G.pingCooldown > 0 && G.state === 'playing') {
+    ctx.strokeStyle = 'hsla(0, 0%, 100%, 0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(W / 2, H - 46, 10, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - G.pingCooldown / 0.7));
+    ctx.stroke();
+  }
+
+  // biome toast
+  if (G.biomeToast > 0) {
+    const a = Math.min(1, G.biomeToast) * Math.min(1, (3.2 - G.biomeToast) * 2);
+    ctx.font = '600 20px ui-monospace, monospace';
+    ctx.fillStyle = `hsla(${hue}, 70%, 80%, ${a * 0.9})`;
+    ctx.fillText(G.biomeName, W / 2, H * 0.24);
+    ctx.font = '400 11px ui-monospace, monospace';
+    ctx.fillStyle = `hsla(${hue}, 50%, 80%, ${a * 0.5})`;
+    ctx.fillText(`— ${Math.floor(G.depth)}m —`, W / 2, H * 0.24 + 26);
+  }
+  // pickup toast
+  if (G.toast > 0) {
+    ctx.font = '500 13px ui-monospace, monospace';
+    ctx.fillStyle = `hsla(165, 70%, 75%, ${Math.min(1, G.toast)})`;
+    ctx.fillText(G.toastText, W / 2, H * 0.32);
+  }
+
+  // red vignette when hurt / low oxygen
+  const vig = Math.max(G.vignette, G.oxygen < 25 ? (0.25 + Math.sin(G.time * 4) * 0.12) : 0);
+  if (vig > 0.01) {
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
+    vg.addColorStop(0, 'hsla(0, 0%, 0%, 0)');
+    vg.addColorStop(1, `hsla(0, 90%, 40%, ${vig * 0.45})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // paused overlay
+  if (G.paused) {
+    ctx.fillStyle = 'hsla(220, 50%, 3%, 0.72)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = '600 24px ui-monospace, monospace';
+    ctx.fillStyle = 'hsla(0, 0%, 100%, 0.9)';
+    ctx.fillText('PAUSED', W / 2, H / 2 - 20);
+    ctx.font = '400 13px ui-monospace, monospace';
+    ctx.fillStyle = 'hsla(0, 0%, 100%, 0.5)';
+    ctx.fillText('tap anywhere to resume', W / 2, H / 2 + 14);
+  }
+}
+
+function renderTitle() {
+  const t = G.time;
+  const cx = W / 2, cy = H * 0.42;
+
+  // ambient title ping
+  const pr = Math.max(0, ((t % 2.2) / 2.2) * 300);
+  ctx.strokeStyle = `hsla(195, 90%, 70%, ${(1 - pr / 300) * 0.35})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy + 40, pr, 0, TAU); ctx.stroke();
+
+  // drifting motes
+  for (let i = 0; i < 24; i++) {
+    const mx = ((i * 127.3 + t * (4 + (i % 5))) % (W + 40)) - 20;
+    const my = (i * 61.7) % H;
+    ctx.fillStyle = `hsla(195, 60%, 75%, ${0.05 + (i % 3) * 0.03})`;
+    ctx.beginPath(); ctx.arc(mx, my, 1 + (i % 3) * 0.6, 0, TAU); ctx.fill();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `200 ${Math.min(54, W * 0.115)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.fillStyle = 'hsla(195, 70%, 88%, 0.95)';
+  ctx.fillText('F A T H O M', cx, cy - 60);
+  ctx.font = '400 13px ui-monospace, monospace';
+  ctx.fillStyle = 'hsla(195, 50%, 75%, 0.55)';
+  ctx.fillText('an echolocation dive', cx, cy - 24);
+
+  // how to play
+  ctx.font = '400 14px ui-monospace, monospace';
+  ctx.fillStyle = 'hsla(0, 0%, 100%, 0.65)';
+  ctx.fillText('TAP — sonar ping', cx, cy + 60);
+  ctx.fillText('HOLD + DRAG — thrust', cx, cy + 86);
+  ctx.font = '400 12px ui-monospace, monospace';
+  ctx.fillStyle = 'hsla(8, 70%, 70%, 0.7)';
+  ctx.fillText('…but sound carries in the deep', cx, cy + 118);
+
+  // best
+  if (G.best.depth > 0) {
+    ctx.font = '400 12px ui-monospace, monospace';
+    ctx.fillStyle = 'hsla(0, 0%, 100%, 0.4)';
+    ctx.fillText(`best descent  ${G.best.depth}m   ·   pearls  ${G.best.pearls}`, cx, cy + 156);
+  }
+
+  // pulse CTA
+  const pulse = 0.55 + Math.sin(t * 2.4) * 0.3;
+  ctx.font = '600 16px ui-monospace, monospace';
+  ctx.fillStyle = `hsla(195, 80%, 80%, ${pulse})`;
+  ctx.fillText('tap to dive', cx, H * 0.82);
+  ctx.textBaseline = 'top';
+}
+
+function renderDeath() {
+  const since = G.time - deadAt;
+  const a = clamp(since * 1.2, 0, 0.8);
+  ctx.fillStyle = `hsla(230, 60%, 2%, ${a})`;
+  ctx.fillRect(0, 0, W, H);
+  if (since < 0.4) return;
+  const fa = clamp((since - 0.4) * 1.5, 0, 1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const cx = W / 2, cy = H * 0.4;
+  ctx.font = `200 ${Math.min(34, W * 0.072)}px ui-monospace, monospace`;
+  ctx.fillStyle = `hsla(8, 60%, 70%, ${fa * 0.95})`;
+  ctx.fillText('THE DEEP KEEPS YOU', cx, cy - 60);
+  ctx.font = '400 14px ui-monospace, monospace';
+  ctx.fillStyle = `hsla(0, 0%, 100%, ${fa * 0.6})`;
+  ctx.fillText(G.deathCause, cx, cy - 22);
+
+  ctx.font = '600 24px ui-monospace, monospace';
+  ctx.fillStyle = `hsla(195, 70%, 85%, ${fa * 0.95})`;
+  ctx.fillText(`${Math.floor(G.maxDepth)}m`, cx, cy + 30);
+  ctx.font = '400 13px ui-monospace, monospace';
+  ctx.fillStyle = `hsla(0, 0%, 100%, ${fa * 0.55})`;
+  const newBest = Math.floor(G.maxDepth) >= G.best.depth && G.best.depth > 0;
+  ctx.fillText(newBest ? '★ deepest descent ★' : `best  ${G.best.depth}m`, cx, cy + 60);
+  ctx.fillText(`pearls  ${G.pearls}   ·   ${Math.floor(G.runTime)}s below`, cx, cy + 84);
+
+  if (since > 0.8) {
+    const pulse = 0.5 + Math.sin(G.time * 2.4) * 0.3;
+    ctx.font = '600 15px ui-monospace, monospace';
+    ctx.fillStyle = `hsla(195, 80%, 80%, ${pulse})`;
+    ctx.fillText('tap to surface', cx, H * 0.78);
+  }
+  ctx.textBaseline = 'top';
+}
+
+// track when death happened for animation
+let lastState = 'title';
+
+// ---------- main loop ----------
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  dt = clamp(dt, 0, 0.05); // clamp for tab switches & first-frame timing
+  if (G.state === 'dead' && lastState !== 'dead') deadAt = G.time;
+  lastState = G.state;
+  update(dt);
+  render();
+}
+requestAnimationFrame(frame);
+
+// roundRect polyfill for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+
+// debug/testing handle (harmless in production)
+window.__FATHOM = G;
+
+})();
+</script>
+</body>
+</html>
