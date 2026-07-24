@@ -108,12 +108,13 @@ const VIEW_H = canvas.height;  // 240
 const TILE = 16;
 const COLS_VISIBLE = Math.ceil(VIEW_W / TILE);
 
-// Fit the stage into the window while preserving aspect ratio (integer-ish scale).
+// Fit the stage into the window while preserving aspect ratio. Allow scaling BELOW
+// 1x so the 400px-wide canvas is never clipped on narrow (portrait phone) viewports.
 function resize() {
   const stage = document.getElementById("stage");
   const maxW = window.innerWidth - 8;
   const maxH = window.innerHeight - 8;
-  const scale = Math.max(1, Math.min(maxW / VIEW_W, maxH / VIEW_H));
+  const scale = Math.max(0.2, Math.min(maxW / VIEW_W, maxH / VIEW_H));
   stage.style.width  = Math.floor(VIEW_W * scale) + "px";
   stage.style.height = Math.floor(VIEW_H * scale) + "px";
 }
@@ -159,23 +160,29 @@ window.addEventListener("keydown", (e) => {
   ensureAudio();
   const a = KEYMAP[e.code];
   if (a) {
-    if (!e.repeat) {
+    // Only latch a jump/fire while actually playing, so a press during pause / title /
+    // game-over can't be stashed and fired on the first resumed frame.
+    if (!e.repeat && state === "playing") {
       if (a === "jump") jumpQueued = true;
       if (a === "run")  fireQueued = true;
     }
     keys[a] = true;
     e.preventDefault();
   }
-  if (e.code === "KeyP") togglePause();
-  if (e.code === "KeyM") toggleMute();
-  if (e.code === "Enter") startEdge = true;
+  // These are one-shot toggles: ignore OS key auto-repeat so holding the key can't
+  // machine-gun pause/mute.
+  if (!e.repeat) {
+    if (e.code === "KeyP") togglePause();
+    if (e.code === "KeyM") toggleMute();
+    if (e.code === "Enter") startEdge = true;
+  }
   if (e.code === "Space" || e.code === "Enter") e.preventDefault();
 });
 window.addEventListener("keyup", (e) => {
   const a = KEYMAP[e.code];
   if (a) { keys[a] = false; e.preventDefault(); }
 });
-window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; jumpQueued = false; fireQueued = false; });
 
 let startEdge = false;
 
@@ -186,7 +193,7 @@ let startEdge = false;
   if (isTouch) touch.classList.add("on");
   document.querySelectorAll("#touch .btn").forEach((btn) => {
     const k = btn.getAttribute("data-k");
-    const on  = (e) => { e.preventDefault(); ensureAudio(); keys[k] = true; startEdge = true; if (k==="jump") jumpQueued=true; if (k==="run") fireQueued=true; btn.classList.add("pressed"); };
+    const on  = (e) => { e.preventDefault(); ensureAudio(); keys[k] = true; startEdge = true; if (state === "playing") { if (k==="jump") jumpQueued=true; if (k==="run") fireQueued=true; } btn.classList.add("pressed"); };
     const off = (e) => { e.preventDefault(); keys[k] = false; btn.classList.remove("pressed"); };
     btn.addEventListener("touchstart", on, {passive:false});
     btn.addEventListener("touchend", off, {passive:false});
@@ -348,10 +355,11 @@ function makeLevel() {
   // Pit 169-170
   coin(169, BR-2); coin(170, BR-2);
 
-  // Big staircase (final challenge), ascending to 5
-  for (let s=0;s<6;s++) for (let r=0;r<=s;r++) set(176+s, GROUND_TOP-1-r, "S");
-  for (let s=0;s<6;s++) for (let r=0;r<=(5-s);r++) set(184+s, GROUND_TOP-1-r, "S");
-  goomba(178); koopa(188);
+  // Big staircase (final challenge): a solid 6-high pyramid — the descending ramp starts
+  // adjacent to the peak (col 182) so there is no deep pocket to fall into and get stuck.
+  for (let s=0;s<6;s++) for (let r=0;r<=s;r++) set(176+s, GROUND_TOP-1-r, "S");     // up:   cols 176-181
+  for (let s=0;s<6;s++) for (let r=0;r<=(5-s);r++) set(182+s, GROUND_TOP-1-r, "S"); // down: cols 182-187
+  goomba(174); koopa(190);  // on flat ground before/after the pyramid, not embedded in a riser
 
   // Approach to flag
   for (let c=192;c<=205;c++) { grid[13][c]="X"; grid[14][c]="X"; } // solid run-up
@@ -557,12 +565,14 @@ function updatePlayer() {
   collideY(p);
   if (p.onGround) p.coyote = 0.08;
 
-  // Block bump on ceiling
+  // Block bump on ceiling. Prefer the player's center column, but if that column is
+  // empty (an off-center head-bonk), bump the column collideY actually hit (p.ceilCol),
+  // so a glancing hit still dispenses/breaks the block that stopped the player.
   if (p.hitCeil) {
     SFX.bump();
-    // choose the tile above player's horizontal center
     const centerCol = Math.floor((p.x + p.w/2) / TILE);
-    bumpBlock(centerCol, p.ceilRow);
+    const bumpCol = isSolid(centerCol, p.ceilRow) ? centerCol : p.ceilCol;
+    bumpBlock(bumpCol, p.ceilRow);
   }
 
   // fell in a pit
@@ -574,9 +584,9 @@ function updatePlayer() {
 function bumpBlock(col, row) {
   const ch = tileChar(col, row);
   const key = col + "," + row;
-  if (ch === "?" || ch === "U") {
+  if (ch === "?") {
     const item = spawnBlockItems[key] || "coin";
-    grid[row][col] = "U"; // used block (still solid)
+    grid[row][col] = "U"; // used block (still solid, but now inert)
     delete spawnBlockItems[key];
     if (item === "coin") {
       giveCoin();
@@ -587,6 +597,9 @@ function bumpBlock(col, row) {
       spawnPowerup(item, col*TILE, row*TILE);
     }
     // little bounce visual
+    breaks.push({ type:"bounce", col, row, t:0 });
+  } else if (ch === "U") {
+    // already spent: inert bump feedback only, never dispenses again
     breaks.push({ type:"bounce", col, row, t:0 });
   } else if (ch === "B") {
     if (player.power > 0) {
@@ -679,6 +692,11 @@ function collectPowerup(u) {
 
 // ---------- Enemies update ----------
 function updateEnemies() {
+  // Snapshot the player's fall state ONCE per frame. A stomp bounces the player (vy goes
+  // negative), so reading live p.vy per-enemy would make a second enemy under the same
+  // feet register as a side hit. These cached values keep every co-stomped enemy a stomp.
+  player.stompFalling = player.vy > 0;
+  player.stompBottom = (player.y + player.h) - player.vy * dt;
   for (const e of enemies) {
     if (e.dead) { e.deadT = (e.deadT||0) + dt; continue; }
     e.animTime += dt;
@@ -765,9 +783,9 @@ function interactPlayerEnemy(e) {
   // Star power: destroy enemy
   if (p.starTime > 0) { flipEnemy(e); addScore(200); floater(e.x, e.y, "200"); return; }
 
-  const falling = p.vy > 0;
-  const pBottomPrev = (p.y + p.h) - p.vy*dt;
-  const stomped = falling && (pBottomPrev <= e.y + 6);
+  // Use the per-frame snapshot (not live p.vy) so a prior stomp's bounce this frame
+  // doesn't turn a second enemy under the feet into a side hit.
+  const stomped = p.stompFalling && (p.stompBottom <= e.y + 6);
 
   if (e.kind === "goomba") {
     if (stomped) {
@@ -1327,6 +1345,7 @@ function star(cx, cy, r) {
 
 function drawEnemies() {
   for (const e of enemies) {
+    if (e.dead) continue;   // dead-but-retained (e.g. a squashed goomba) must not re-draw as a live sprite
     const sx = Math.round(e.x - cam.x), sy = Math.round(e.y);
     ctx.save();
     if (e.flip) { ctx.translate(sx + e.w/2, sy + e.h/2); ctx.scale(1, -1); ctx.translate(-(sx+e.w/2), -(sy+e.h/2)); }
